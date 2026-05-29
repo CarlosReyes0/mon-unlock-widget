@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MON unlock widget — demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" src="/src/index.ts"></script>
+  </head>
+  <body class="min-h-screen bg-stone-50 text-stone-900 antialiased">
+    <div class="mx-auto max-w-2xl px-6 py-12">
+      <header class="mb-8">
+        <p class="text-xs font-semibold uppercase tracking-widest text-violet-600">Embed demo</p>
+        <h1 class="mt-2 font-serif text-3xl font-semibold">MON unlock widget</h1>
+        <p class="mt-2 text-stone-600">
+          Copy the embed block from <code class="rounded bg-stone-200 px-1">examples/embed.html</code> —
+          no coding required.
+        </p>
+      </header>
+
+      <mon-unlock
+        article-id="founder-manifesto"
+        title="Why Every Founder Should Own Their Reader Relationship"
+        author="Your Name"
+        price="5"
+        theme="light"
+      >
+        <div slot="teaser">
+          Platforms take 30% and your audience isn't yours. Micropayments with one embed change
+          the math for indie publishers.
+
+          This preview is free — the rest unlocks with MON…
+        </div>
+        <div slot="body">
+          Platforms take 30% and your audience isn't yours. Micropayments with one embed change the
+          math for indie publishers.
+
+          When you publish on someone else's turf, you're renting attention. Algorithm changes or
+          policy updates can cut you off overnight.
+
+          MON unlocks let readers pay per article while you keep the relationship. The widget
+          pastes into any website — no app store, no platform lock-in.
+
+          This section only appears after unlock. In the live product, readers pay MON from their
+          wallet; this demo simulates that step.
+        </div>
+      </mon-unlock>
+    </div>
+  </body>
+</html>

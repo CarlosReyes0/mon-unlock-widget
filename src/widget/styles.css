@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/* Hide embed content until unlocked (lives in page HTML, not shown twice) */
+mon-unlock [slot="teaser"],
+mon-unlock [slot="body"] {
+  display: none !important;
+}
+
+@theme {
+  --font-serif: "Literata", "Georgia", serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+:host,
+mon-unlock {
+  display: block;
+  font-family: var(--font-sans);
+}
+
+.mon-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  max-width: 42rem;
+}
+
+.mon-card.dark {
+  border-color: #27272a;
+  background: #18181b;
+  color: #fafafa;
+}
+
+.mon-teaser {
+  font-family: var(--font-serif);
+  line-height: 1.7;
+  color: #374151;
+}
+
+.mon-card.dark .mon-teaser {
+  color: #d4d4d8;
+}
+
+.mon-fade {
+  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  max-height: 8rem;
+  overflow: hidden;
+}
+
+.mon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.12s, filter 0.12s;
+}
+
+.mon-btn-primary {
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  color: white;
+}
+
+.mon-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.mon-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mon-body {
+  font-family: var(--font-serif);
+  line-height: 1.75;
+  font-size: 1.0625rem;
+}
+
+.mon-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7c3aed;
+}

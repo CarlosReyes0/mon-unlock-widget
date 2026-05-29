@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My article</title>
+
+    <!-- Step 1: Add these two lines once per site (host the files from npm run build → dist/) -->
+    <link rel="stylesheet" href="../dist/mon-unlock.css" />
+    <script type="module" src="../dist/mon-unlock.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body style="font-family: system-ui; max-width: 40rem; margin: 2rem auto; padding: 0 1rem">
+    <h1 style="font-size: 1.5rem">My blog</h1>
+    <p style="color: #666">Paste the block below for each paid article. No JavaScript needed.</p>
+
+    <!-- Step 2: Copy this block per article — edit the text between the tags -->
+    <mon-unlock
+      article-id="my-first-paid-post"
+      title="Your article headline"
+      author="Your name"
+      price="5"
+      theme="light"
+    >
+      <div slot="teaser">
+        Write 1–3 paragraphs that everyone can read for free. End with a hook so people want to
+        unlock the rest.
+      </div>
+      <div slot="body">
+        Paste your full article here. Readers only see this after they connect a wallet and unlock
+        (MON payment coming soon; demo unlocks on connect).
+      </div>
+    </mon-unlock>
+  </body>
+</html>

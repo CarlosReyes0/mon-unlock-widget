@@ -1,0 +1,34 @@
+{
+  "name": "@mon/unlock-widget",
+  "version": "0.1.0",
+  "description": "Embeddable MON paywall — paste HTML, no code required",
+  "type": "module",
+  "main": "./dist/mon-unlock.umd.cjs",
+  "module": "./dist/mon-unlock.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/mon-unlock.js",
+      "require": "./dist/mon-unlock.umd.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./style.css": "./dist/mon-unlock.css"
+  },
+  "files": ["dist", "examples"],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build --mode lib",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "lit": "^3.3.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^25.9.1",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}
