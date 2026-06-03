@@ -4,6 +4,10 @@ Embeddable paywall for **non-technical publishers**. Paste HTML on WordPress, We
 
 Readers connect a wallet and unlock the full article with **MON** (demo simulates payment until the token is live).
 
+**What to build next:** see **[FOCUS.md](./FOCUS.md)** (Phase 1: onchain MON → Phase 2: embed generator).
+
+**Smart contract:** [`contracts/`](./contracts/) — `ArticleUnlock.sol` (Foundry). Run `forge test` in `contracts/`.
+
 ## Try the demo locally
 
 ```bash

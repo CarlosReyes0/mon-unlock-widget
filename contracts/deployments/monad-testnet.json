@@ -1,0 +1,11 @@
+{
+  "network": "monad-testnet",
+  "chainId": 10143,
+  "rpcUrl": "https://testnet-rpc.monad.xyz",
+  "explorer": "https://testnet.monadvision.com",
+  "contract": "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D",
+  "deployedAt": "2026-06-02T22:53:00Z",
+  "articleId": "0x25d8c11df1079f1c920ba86e42c2ef4ef229c37724808daa7acf37744b6c7d29",
+  "publisher": "0x5594d76928c4974AE77387882Cf9099c375e307b",
+  "notes": "Deployed via forge script. Screenshot saved in docs/deployments/"
+}
