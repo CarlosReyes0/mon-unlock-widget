@@ -17,6 +17,22 @@ npm run dev
 
 Open the URL shown in the terminal.
 
+## Live testnet demo
+
+https://mon-unlock-widget-production.up.railway.app
+
+Pages:
+- `/` – Homepage
+- `/demo.html` – Full interactive testnet demo (real MON payments)
+- `/embed-example.html` – Clean copy-paste embed reference
+
+Or run locally:
+
+```bash
+npm run build
+# serve the root folder
+```
+
 ## Embed on your site (copy & paste)
 
 ### Once per website
