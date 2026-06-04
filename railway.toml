@@ -1,5 +1,5 @@
 [build]
-buildCommand = "npm run build"
+builder = "dockerfile"
 
 [deploy]
-startCommand = "caddy run --config /app/Caddyfile --adapter caddyfile"
+healthcheckPath = "/"
