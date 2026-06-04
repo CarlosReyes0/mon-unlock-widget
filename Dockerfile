@@ -21,5 +21,5 @@ RUN npm install -g http-server
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/demo.html ./demo.html
 
-# Serve the current directory; --proxy falls back to demo.html for unknown paths
-CMD ["sh", "-c", "http-server . -p ${PORT:-8080} --proxy http://localhost:${PORT:-8080}/demo.html"]
+# Serve the current directory with index.html as default and directory listings disabled; --proxy falls back to demo.html for unknown paths
+CMD ["sh", "-c", "http-server . -p ${PORT:-8080} -d false --proxy http://localhost:${PORT:-8080}/demo.html"]
