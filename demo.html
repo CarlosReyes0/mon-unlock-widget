@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MON unlock widget — demo</title>
+    <link rel="stylesheet" href="/dist/mon-unlock.css" />
+    <script type="module" src="/dist/mon-unlock.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        min-height: 100vh;
+        background-color: #fafaf9;
+        color: #1c1917;
+        -webkit-font-smoothing: antialiased;
+        margin: 0;
+      }
+      .container {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+      }
+      header {
+        margin-bottom: 2rem;
+      }
+      .label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #7c3aed;
+      }
+      h1 {
+        margin: 0.5rem 0 0;
+        font-family: "Literata", Georgia, serif;
+        font-size: 1.875rem;
+        font-weight: 600;
+      }
+      .subtitle {
+        margin: 0.5rem 0 0;
+        color: #57534e;
+      }
+      code {
+        background: #e7e5e4;
+        border-radius: 0.25rem;
+        padding: 0 0.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <p class="label">Embed demo</p>
+        <h1>MON unlock widget</h1>
+        <p class="subtitle">
+          Copy the embed block from <code>examples/embed.html</code> —
+          no coding required.
+        </p>
+      </header>
+
+      <mon-unlock
+        article-id="founder-manifesto"
+        title="Why Every Founder Should Own Their Reader Relationship"
+        author="Your Name"
+        price="5"
+        theme="light"
+        unlock-contract="0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D"
+      >
+        <div slot="teaser">
+          Platforms take 30% and your audience isn't yours. Micropayments with one embed change
+          the math for indie publishers.
+
+          This preview is free — the rest unlocks with MON…
+        </div>
+        <div slot="body">
+          Platforms take 30% and your audience isn't yours. Micropayments with one embed change the
+          math for indie publishers.
+
+          When you publish on someone else's turf, you're renting attention. Algorithm changes or
+          policy updates can cut you off overnight.
+
+          MON unlocks let readers pay per article while you keep the relationship. The widget
+          pastes into any website — no app store, no platform lock-in.
+
+          This section only appears after unlock. In the live product, readers pay MON from their
+          wallet; this demo simulates that step.
+        </div>
+      </mon-unlock>
+    </div>
+  </body>
+</html>
