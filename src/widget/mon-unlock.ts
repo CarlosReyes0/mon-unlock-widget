@@ -194,7 +194,21 @@ export class MonUnlock extends LitElement {
       this.wallet = s;
 
       const address = s.address!;
-      if (!this.unlockService.hasAccess(this.article.id, address)) {
+
+      // Decide whether payment is needed.
+      // On-chain mode: authoritative check against the contract.
+      // Demo mode: check local cache only.
+      let needsPayment: boolean;
+      if (this.isOnchain) {
+        needsPayment = !(await (this.unlockService as OnchainUnlockService).checkOnchainAccess(
+          this.article.id,
+          address
+        ));
+      } else {
+        needsPayment = !this.unlockService.hasAccess(this.article.id, address);
+      }
+
+      if (needsPayment) {
         const record = await this.unlockService.unlock(this.article.id, address, this.article.priceMon);
         if (record.txHash) this.txHash = record.txHash;
         this.emit("mon:unlocked", { article: this.article, record });
@@ -272,7 +286,7 @@ export class MonUnlock extends LitElement {
                     <button
                       class="mon-btn mon-btn-primary"
                       ?disabled=${this.loading}
-                      @click=${this.connect}
+                      @click=${() => this.connect()}
                     >
                       ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
                     </button>
