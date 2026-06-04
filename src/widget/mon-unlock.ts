@@ -4,6 +4,7 @@ import { classMap } from "lit/directives/class-map.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import {
   UnlockService,
+  OnchainUnlockService,
   WalletManager,
   formatMon,
   parseMonAmount,
@@ -29,15 +30,19 @@ export class MonUnlock extends LitElement {
   /** Price in MON, e.g. "5" or "0.5" */
   @property({ type: String }) price = "1";
   @property({ type: String }) theme: "light" | "dark" = "light";
+  /** Contract address on Monad testnet (enables real on-chain payments) */
+  @property({ type: String, attribute: "unlock-contract" }) unlockContract = "";
 
   @state() private article: Article | null = null;
   @state() private wallet: WalletState = { connected: false, address: null };
   @state() private unlocked = false;
   @state() private loading = false;
   @state() private error: string | null = null;
+  @state() private txHash: string | null = null;
 
   private walletManager = new WalletManager();
-  private unlockService = new UnlockService();
+  private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
+  private isOnchain = false;
   private unsubWallet?: () => void;
 
   override createRenderRoot() {
@@ -48,6 +53,12 @@ export class MonUnlock extends LitElement {
     super.connectedCallback();
     this.unsubWallet = this.walletManager.subscribe((s) => {
       this.wallet = s;
+      // Re-check access (local cache or on-chain) whenever wallet changes
+      if (this.isOnchain) {
+        void this.verifyOnchain();
+      } else {
+        this.checkAccess();
+      }
     });
     this.loadArticle();
   }
@@ -116,7 +127,21 @@ export class MonUnlock extends LitElement {
       publishedAt: new Date().toISOString(),
     };
 
+    // Switch to on-chain service if contract address is provided
+    if (this.unlockContract?.trim()) {
+      this.isOnchain = true;
+      this.unlockService = new OnchainUnlockService(this.unlockContract.trim() as `0x${string}`);
+    } else {
+      this.isOnchain = false;
+      this.unlockService = new UnlockService();
+    }
+
     this.checkAccess();
+
+    // Phase 1.3: if we already have a wallet and on-chain mode, verify immediately
+    if (this.isOnchain && this.wallet.address) {
+      void this.verifyOnchain();
+    }
   }
 
   private checkAccess() {
@@ -125,6 +150,29 @@ export class MonUnlock extends LitElement {
       return;
     }
     this.unlocked = this.unlockService.hasAccess(this.article.id, this.wallet.address);
+  }
+
+  /** Phase 1.3: verify on-chain when a contract address is configured.
+   *  Always authoritative: sets unlocked based on chain result (true or false).
+   */
+  private async verifyOnchain() {
+    if (!this.isOnchain || !this.article?.id || !this.wallet.address) {
+      this.unlocked = false;
+      this.txHash = null;
+      return;
+    }
+
+    const onchain = await (this.unlockService as OnchainUnlockService).checkOnchainAccess(
+      this.article.id,
+      this.wallet.address
+    );
+
+    this.unlocked = onchain;
+    if (onchain) {
+      this.txHash = null; // confirmed via chain, original tx unknown here
+    } else {
+      this.txHash = null;
+    }
   }
 
   private emit(name: string, detail: unknown) {
@@ -139,17 +187,26 @@ export class MonUnlock extends LitElement {
 
     this.loading = true;
     this.error = null;
+    this.txHash = null;
+
     try {
       const s = await this.walletManager.connect();
       this.wallet = s;
 
       const address = s.address!;
       if (!this.unlockService.hasAccess(this.article.id, address)) {
-        const record = await this.unlockService.unlock(this.article.id, address);
+        const record = await this.unlockService.unlock(this.article.id, address, this.article.priceMon);
+        if (record.txHash) this.txHash = record.txHash;
         this.emit("mon:unlocked", { article: this.article, record });
       }
 
       this.unlocked = true;
+
+      // Phase 1.3: double-check on-chain after a fresh payment
+      if (this.isOnchain) {
+        await this.verifyOnchain();
+      }
+
       this.emit("mon:connected", s);
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Could not connect wallet.";
@@ -195,6 +252,9 @@ export class MonUnlock extends LitElement {
                 <div class="mon-body text-stone-800 dark:text-zinc-200">${unsafeHTML(a.body)}</div>
                 <p class="mt-6 text-xs text-stone-400">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
+                  ${this.txHash
+                    ? html`· <a href="https://testnet.monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
+                    : nothing}
                 </p>
               `
             : html`
@@ -204,7 +264,9 @@ export class MonUnlock extends LitElement {
                     Unlock for <span class="text-violet-700 dark:text-violet-300">${price} MON</span>
                   </p>
                   <p class="mt-1 text-xs text-stone-500">
-                    Demo: connect wallet to read the rest (payment simulated).
+                    ${this.isOnchain
+                      ? "Pay with MON on Monad testnet. Connect wallet to continue."
+                      : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">
                     <button

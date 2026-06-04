@@ -13,7 +13,9 @@ export interface UnlockRecord {
   articleId: string;
   wallet: string;
   unlockedAt: number;
-  mode: "demo";
+  mode: "demo" | "onchain";
+  /** Transaction hash when mode is "onchain" */
+  txHash?: string;
 }
 
 export interface WalletState {

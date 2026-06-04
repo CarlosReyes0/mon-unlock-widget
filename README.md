@@ -2,7 +2,7 @@
 
 Embeddable paywall for **non-technical publishers**. Paste HTML on WordPress, Webflow, Notion export, or any site — **no JavaScript required**.
 
-Readers connect a wallet and unlock the full article with **MON** (demo simulates payment until the token is live).
+Readers connect a wallet and unlock the full article with **MON** on Monad testnet.
 
 **What to build next:** see **[FOCUS.md](./FOCUS.md)** (Phase 1: onchain MON → Phase 2: embed generator).
 
@@ -55,6 +55,7 @@ Copy `examples/embed.html` or use this block. **Only edit the parts in ALL CAPS:
 | `title` | Headline |
 | `author` | Your name or publication |
 | `price` | MON price (e.g. `5` or `0.25`) |
+| `unlock-contract` | Contract address on Monad testnet (enables real payments) |
 | `slot="teaser"` | Free preview |
 | `slot="body"` | Paid content |
 
@@ -66,10 +67,11 @@ npm run build
 
 Output: `dist/mon-unlock.js` and `dist/mon-unlock.css`.
 
-## Demo behavior
+## Behavior
 
-- **Connect wallet to unlock** — payment is simulated (no MON transferred yet).
-- No MetaMask in dev? Still works with a demo wallet.
+- **Connect wallet to unlock** — real MON payment on Monad testnet when `unlock-contract` is provided.
+- Without `unlock-contract` the widget falls back to demo mode (localStorage only).
+- No MetaMask in dev? Falls back to a demo wallet for local testing.
 
 ## Events (optional, for developers)
 
