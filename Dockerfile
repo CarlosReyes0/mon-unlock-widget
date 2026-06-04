@@ -20,9 +20,6 @@ RUN npm install -g http-server
 # Copy built assets and the demo entry point
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/demo.html ./demo.html
-COPY --from=builder /app/examples ./examples
-
-EXPOSE 8080
 
 # Serve the current directory; --proxy falls back to demo.html for unknown paths
-CMD ["http-server", ".", "-p", "8080", "--proxy", "http://localhost:8080/demo.html"]
+CMD ["sh", "-c", "http-server . -p ${PORT:-8080} --proxy http://localhost:${PORT:-8080}/demo.html"]
