@@ -1,17 +1,28 @@
+# ── Build stage ──────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
+
 WORKDIR /app
 
-COPY package*.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
+
 COPY . .
 RUN npm run build
 
+# ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM node:20-alpine
+
 WORKDIR /app
 
-RUN npm install -g serve
+# Install a lightweight static file server
+RUN npm install -g http-server
 
+# Copy built assets and the demo entry point
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/demo.html /app/index.html /app/embed-example.html ./
+COPY --from=builder /app/demo.html ./demo.html
+COPY --from=builder /app/examples ./examples
 
-CMD ["serve", "-s", "demo.html", "-l", "8080"]
+EXPOSE 8080
+
+# Serve the current directory; --proxy falls back to demo.html for unknown paths
+CMD ["http-server", ".", "-p", "8080", "--proxy", "http://localhost:8080/demo.html"]

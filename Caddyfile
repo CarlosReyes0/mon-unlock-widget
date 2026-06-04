@@ -1,0 +1,11 @@
+:{$PORT:80} {
+	root * /app
+	file_server
+
+	# Serve demo.html for requests to /
+	@root path /
+	rewrite @root /demo.html
+
+	# Fallback: serve demo.html for any path that doesn't match a real file
+	try_files {path} /demo.html
+}
