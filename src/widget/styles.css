@@ -115,6 +115,7 @@ mon-unlock {
 
 .mon-card h1,
 .mon-card .mon-body,
+.mon-card p.mt-2,
 .mon-card p.mt-6 {
   color: #000 !important;
 }
@@ -126,6 +127,7 @@ mon-unlock {
 
 .mon-card.dark h1,
 .mon-card.dark .mon-body,
+.mon-card.dark p.mt-2,
 .mon-card.dark p.mt-6 {
   color: #fff !important;
 }
