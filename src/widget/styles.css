@@ -47,6 +47,23 @@ mon-unlock {
   overflow: hidden;
 }
 
+.mon-title-box {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  color: #ededed;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.mon-card:not(.dark) .mon-title-box {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #1e2937;
+}
+
 .mon-btn {
   display: inline-flex;
   align-items: center;
