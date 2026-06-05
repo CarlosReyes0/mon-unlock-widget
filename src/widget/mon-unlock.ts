@@ -263,9 +263,9 @@ export class MonUnlock extends LitElement {
 
           ${this.unlocked
             ? html`
-                <div class="mon-title-box mb-6 whitespace-pre-wrap" style="color:#000">${a.teaser}</div>
-                <div class="mon-body" style="color:#000">${unsafeHTML(a.body)}</div>
-                <p class="mt-6 text-xs" style="color:#000">
+                <div class="mb-6 whitespace-pre-wrap text-base" style="color:#000">${a.teaser}</div>
+                <div class="mon-body text-black">${unsafeHTML(a.body)}</div>
+                <p class="mt-6 text-xs text-black">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
                   ${this.txHash
                     ? html`· <a href="https://testnet.monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
