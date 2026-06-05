@@ -207,10 +207,15 @@
 
         pane.appendChild(widget);
 
-        // Force teaser to render at the same size and color as body text (pure black, normal weight)
-        // while keeping the widget interactive.
+        // Force all primary content text to pure black in the Live Preview
+        // (title, teaser, body, unlock status). This overrides Tailwind gray classes.
         const override = document.createElement("style");
         override.textContent = `
+          #previewPane mon-unlock h1,
+          #previewPane mon-unlock .mon-body,
+          #previewPane mon-unlock p.mt-6 {
+            color: #000 !important;
+          }
           #previewPane mon-unlock [slot="teaser"] {
             font-family: var(--font-sans) !important;
             font-size: 1rem !important;
