@@ -15,7 +15,7 @@
       .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
       .badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 9999px; }
       h1 { font-size: 2rem; font-weight: 800; margin: 0; }
-      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+      .grid { display: grid; grid-template-columns: minmax(380px, 420px) 1fr; gap: 2rem; align-items: start; }
       @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
       .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.5rem; }
       @media (prefers-color-scheme: dark) { .card { background: #111; border-color: #27272a; } }
@@ -96,10 +96,9 @@
           </div>
         </div>
 
-        <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center;">
+        <div style="margin-top: 1.5rem;">
           <button class="btn btn-primary" id="copyFull">Copy full embed block</button>
-          <button class="btn btn-secondary" id="copyScripts">Copy script tags only</button>
-          <span id="copyStatus" class="copy-success" style="display:none;">Copied!</span>
+          <span id="copyStatus" class="copy-success" style="display:none; margin-left:0.75rem;">Copied!</span>
         </div>
       </div>
 
@@ -192,7 +191,9 @@
         widget.setAttribute("title", v.title);
         widget.setAttribute("author", v.author);
         widget.setAttribute("price", v.price);
-        widget.setAttribute("unlock-contract", CONTRACT);
+        // Note: intentionally NOT setting unlock-contract so the preview uses
+        // the simulated UnlockService (localStorage). Real on-chain payments
+        // are tested on the /demo.html page.
 
         const teaserSlot = document.createElement("div");
         teaserSlot.setAttribute("slot", "teaser");
@@ -263,13 +264,6 @@ ${bodyEsc}
         document.getElementById("copyFull").addEventListener("click", () => {
           const code = document.getElementById("outputCode").textContent;
           copy(code, "copyFull");
-        });
-
-        document.getElementById("copyScripts").addEventListener("click", () => {
-          const v = getValues();
-          const scripts = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>`;
-          copy(scripts, "copyScripts");
         });
 
         document.getElementById("resetDraft").addEventListener("click", () => {
