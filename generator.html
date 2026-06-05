@@ -207,7 +207,7 @@
 
         pane.appendChild(widget);
 
-        // Force teaser to render at the same size and color as body text (black, normal weight)
+        // Force teaser to render at the same size and color as body text (pure black, normal weight)
         // while keeping the widget interactive.
         const override = document.createElement("style");
         override.textContent = `
@@ -215,7 +215,7 @@
             font-family: var(--font-sans) !important;
             font-size: 1rem !important;
             line-height: 1.7 !important;
-            color: #111827 !important;
+            color: #000 !important;
             max-height: none !important;
             -webkit-mask-image: none !important;
             mask-image: none !important;
