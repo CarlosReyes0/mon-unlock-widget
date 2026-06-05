@@ -184,24 +184,29 @@
           return;
         }
 
-        // Static content preview — teaser and body shown at normal size,
-        // teaser above body, so the publisher can verify their text.
-        pane.innerHTML = `
-          <div style="width:100%; max-width:42rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-            <div style="padding:1.25rem 1.5rem 0.75rem; border-bottom:1px solid #f1f5f9;">
-              <div style="font-size:0.6875rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#7c3aed;">UNLOCK WITH MON</div>
-              <h1 style="font-family:'Literata', Georgia, serif; font-size:1.5rem; font-weight:700; line-height:1.3; margin:0.5rem 0 0.25rem; color:#111827;">${v.title}</h1>
-              <div style="font-size:0.875rem; color:#6b7280;">${v.author} · ${new Date().toLocaleDateString()}</div>
-            </div>
-            <div style="padding:1.25rem 1.5rem; font-size:1rem; line-height:1.7; color:#374151;">
-              <div style="margin-bottom:1.25rem;">${v.teaser.replace(/\n/g, "<br>")}</div>
-              <div>${v.body.replace(/\n/g, "<br>")}</div>
-            </div>
-            <div style="padding:0.75rem 1.5rem; background:#f8fafc; border-top:1px solid #e5e7eb; font-size:0.75rem; color:#6b7280;">
-              Teaser above • Body below • Same text size
-            </div>
-          </div>
-        `;
+        // Clear and mount a fresh widget instance (interactive)
+        pane.innerHTML = "";
+        const widget = document.createElement("mon-unlock");
+        widget.setAttribute("article-id", v.articleId);
+        widget.setAttribute("title", v.title);
+        widget.setAttribute("author", v.author);
+        widget.setAttribute("price", v.price);
+        // Note: intentionally NOT setting unlock-contract so the preview uses
+        // the simulated UnlockService (localStorage). Real on-chain payments
+        // are tested on the /demo.html page.
+
+        const teaserSlot = document.createElement("div");
+        teaserSlot.setAttribute("slot", "teaser");
+        teaserSlot.innerHTML = v.teaser.replace(/\n/g, "<br>");
+
+        const bodySlot = document.createElement("div");
+        bodySlot.setAttribute("slot", "body");
+        bodySlot.innerHTML = v.body;
+
+        widget.appendChild(teaserSlot);
+        widget.appendChild(bodySlot);
+
+        pane.appendChild(widget);
       }
 
       function renderCode() {
