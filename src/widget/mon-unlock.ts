@@ -250,7 +250,7 @@ export class MonUnlock extends LitElement {
       <article class="mon-card ${classMap({ dark: this.theme === "dark" })}">
         <header class="border-b border-stone-100 px-6 py-5 dark:border-zinc-800">
           <p class="mon-badge mb-2">Unlock with MON</p>
-          <h1 class="font-serif text-2xl font-semibold leading-tight">${a.title}</h1>
+          <h1 class="font-serif text-2xl font-semibold leading-tight text-black dark:text-white">${a.title}</h1>
           <p class="mt-2 text-sm text-stone-500 dark:text-zinc-400">
             ${a.author} · ${new Date(a.publishedAt).toLocaleDateString()}
           </p>
