@@ -117,8 +117,9 @@ mon-unlock {
 .mon-card .mon-body,
 .mon-card p.mt-2,
 .mon-card p.mt-6,
-.mon-card .mon-title-box {
+.mon-card div.mb-6 {
   color: #000 !important;
+  background: transparent !important;
 }
 
 /* Dark theme */
@@ -130,6 +131,7 @@ mon-unlock {
 .mon-card.dark .mon-body,
 .mon-card.dark p.mt-2,
 .mon-card.dark p.mt-6,
-.mon-card.dark .mon-title-box {
+.mon-card.dark div.mb-6 {
   color: #fff !important;
+  background: transparent !important;
 }
