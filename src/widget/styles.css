@@ -21,6 +21,7 @@ mon-unlock {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #fff;
+  color: #000;
   overflow: hidden;
   max-width: 42rem;
 }

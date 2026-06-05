@@ -251,7 +251,7 @@ export class MonUnlock extends LitElement {
         <header class="border-b border-stone-100 px-6 py-5 dark:border-zinc-800">
           <p class="mon-badge mb-2">Unlock with MON</p>
           <h1 class="font-serif text-2xl font-semibold leading-tight">${a.title}</h1>
-          <p class="mt-2 text-sm text-stone-500 dark:text-zinc-500">
+          <p class="mt-2 text-sm text-stone-500 dark:text-zinc-400">
             ${a.author} · ${new Date(a.publishedAt).toLocaleDateString()}
           </p>
         </header>
@@ -265,7 +265,7 @@ export class MonUnlock extends LitElement {
             ? html`
                 <div class="mon-title-box mb-6 whitespace-pre-wrap">${a.teaser}</div>
                 <div class="mon-body text-stone-800 dark:text-zinc-200">${unsafeHTML(a.body)}</div>
-                <p class="mt-6 text-xs text-stone-400">
+                <p class="mt-6 text-xs text-stone-900 dark:text-zinc-200">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
                   ${this.txHash
                     ? html`· <a href="https://testnet.monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
