@@ -263,7 +263,7 @@ export class MonUnlock extends LitElement {
 
           ${this.unlocked
             ? html`
-                <div class="mon-teaser mb-6 whitespace-pre-wrap">${a.teaser}</div>
+                <div class="mon-title-box mb-6 whitespace-pre-wrap">${a.teaser}</div>
                 <div class="mon-body text-stone-800 dark:text-zinc-200">${unsafeHTML(a.body)}</div>
                 <p class="mt-6 text-xs text-stone-400">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
