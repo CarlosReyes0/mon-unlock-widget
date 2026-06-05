@@ -49,8 +49,8 @@ mon-unlock {
 }
 
 .mon-title-box {
-  background: #18181b;
-  border: 1px solid #27272a;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 1rem 1.25rem;
   color: #000;
@@ -59,10 +59,10 @@ mon-unlock {
   line-height: 1.6;
 }
 
-.mon-card:not(.dark) .mon-title-box {
-  background: #f8fafc;
-  border-color: #e2e8f0;
-  color: #000;
+.mon-card.dark .mon-title-box {
+  background: #18181b;
+  border-color: #27272a;
+  color: #fff;
 }
 
 .mon-btn {
