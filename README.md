@@ -40,9 +40,11 @@ npm run build
 Upload `dist/mon-unlock.js` and `dist/mon-unlock.css` to your host (or CDN). Then add to every page header:
 
 ```html
-<link rel="stylesheet" href="https://YOUR-SITE.com/mon-unlock.css" />
-<script type="module" src="https://YOUR-SITE.com/mon-unlock.js"></script>
+<link rel="stylesheet" href="https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.css" />
+<script type="module" src="https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.js"></script>
 ```
+
+Or self-host from your own domain.
 
 ### For each paid article
 

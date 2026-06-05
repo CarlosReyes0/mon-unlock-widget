@@ -30,7 +30,7 @@
 - [x] Emit `ArticleUnlocked(address reader, bytes32 articleId, uint256 amount, address publisher)`
 - [x] Forward MON to publisher address (or treasury + split later)
 - [x] `hasUnlocked(reader, articleId)` view for Phase 1.3
-- [ ] Deploy to Monad testnet; document contract address in repo
+- [x] Deploy to Monad testnet; document contract address in repo
 
 **Done when:** You can call `unlock` from cast/wallet and see the event on explorer.
 
@@ -54,7 +54,7 @@
 
 ### 1.4 Ship testnet demo
 
-- [ ] Host `mon-unlock.js` + `.css` on stable URL (CDN)
+- [x] Host `mon-unlock.js` + `.css` on stable URL (CDN)
 - [ ] One public demo page with real testnet MON instructions (faucet link)
 - [ ] Update `examples/embed.html` with real contract URL + testnet attrs
 

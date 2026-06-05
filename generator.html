@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Embed Generator — MON Unlock Widget</title>
+    <link rel="stylesheet" href="https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.css" />
+    <script type="module" src="https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: "DM Sans", system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; color: #111827; background: #fafafa; }
+      @media (prefers-color-scheme: dark) { body { background: #0a0a0a; color: #ededed; } }
+      .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
+      .badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 9999px; }
+      h1 { font-size: 2rem; font-weight: 800; margin: 0; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+      .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.5rem; }
+      @media (prefers-color-scheme: dark) { .card { background: #111; border-color: #27272a; } }
+      label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #374151; }
+      @media (prefers-color-scheme: dark) { label { color: #a1a1aa; } }
+      input, textarea, select { width: 100%; padding: 0.75rem 1rem; font-size: 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; background: white; }
+      @media (prefers-color-scheme: dark) { input, textarea, select { background: #0a0a0a; border-color: #3f3f46; color: #ededed; } }
+      textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; }
+      .row { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; }
+      .hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem; }
+      .section-title { font-size: 1.125rem; font-weight: 700; margin: 0 0 1rem; }
+      .preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+      .preview-pane { min-height: 420px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 8px; padding: 2rem; }
+      @media (prefers-color-scheme: dark) { .preview-pane { background: #09090b; } }
+      .preview-pane > * { width: 100%; max-width: 42rem; }
+      .output { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; overflow-x: auto; white-space: pre; }
+      .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.12s; }
+      .btn-primary { background: linear-gradient(135deg, #7c3aed, #5b21b6); color: white; }
+      .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+      .btn-secondary { background: #e5e7eb; color: #111827; }
+      @media (prefers-color-scheme: dark) { .btn-secondary { background: #27272a; color: #ededed; } }
+      .btn-secondary:hover { background: #d1d5db; }
+      .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .copy-success { color: #16a34a; font-size: 0.75rem; margin-left: 0.5rem; }
+      .nav-back { display: inline-flex; align-items: center; gap: 0.5rem; color: #6b7280; text-decoration: none; font-size: 0.875rem; }
+      .nav-back:hover { color: #111827; }
+    </style>
+  </head>
+  <body>
+    <a href="/" class="nav-back">← Back to homepage</a>
+
+    <div class="header">
+      <div>
+        <div class="badge">PHASE 2 — BETA</div>
+        <h1>Embed Generator</h1>
+        <p style="margin: 0.5rem 0 0; color: #6b7280;">Create a working paywall block in under 2 minutes. No account required.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Form -->
+      <div>
+        <div class="card">
+          <h2 class="section-title">Article details</h2>
+
+          <div style="margin-bottom: 1rem;">
+            <label for="title">Title</label>
+            <input id="title" type="text" placeholder="Why Every Founder Should Own Their Reader Relationship" />
+          </div>
+
+          <div class="row" style="margin-bottom: 1rem;">
+            <div>
+              <label for="author">Author</label>
+              <input id="author" type="text" placeholder="Your Name" />
+            </div>
+            <div>
+              <label for="price">Price (MON)</label>
+              <input id="price" type="number" step="0.1" min="0.1" value="5" />
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label for="articleId">Article ID (slug)</label>
+            <input id="articleId" type="text" placeholder="founder-manifesto" />
+            <div class="hint">Used to derive a unique on-chain ID. Keep it short and stable.</div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label for="teaser">Teaser (free preview)</label>
+            <textarea id="teaser" placeholder="Write a short preview that entices readers to unlock..."></textarea>
+            <div class="hint">Plain text or simple HTML. Shown to everyone.</div>
+          </div>
+
+          <div>
+            <label for="body">Body (full article — HTML)</label>
+            <textarea id="body" placeholder="<p>Your full article content here...</p>"></textarea>
+            <div class="hint">HTML is allowed. This is what paying readers see.</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center;">
+          <button class="btn btn-primary" id="copyFull">Copy full embed block</button>
+          <button class="btn btn-secondary" id="copyScripts">Copy script tags only</button>
+          <span id="copyStatus" class="copy-success" style="display:none;">Copied!</span>
+        </div>
+      </div>
+
+      <!-- Preview + Output -->
+      <div>
+        <div class="card">
+          <div class="preview-header">
+            <h2 class="section-title" style="margin:0;">Live preview</h2>
+            <button class="btn btn-secondary" id="resetDraft" style="padding:0.5rem 1rem; font-size:0.75rem;">Reset draft</button>
+          </div>
+          <div class="preview-pane" id="previewPane">
+            <p style="color:#6b7280; font-size:0.875rem;">Fill out the form to see a live preview here.</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h2 class="section-title">Generated embed code</h2>
+          <div class="output" id="outputCode" style="min-height: 180px;">&lt;!-- Fill the form to generate code --&gt;</div>
+          <div class="hint" style="margin-top: 0.75rem;">Paste the script tags once per site. Paste the &lt;mon-unlock&gt; block on any article page.</div>
+        </div>
+      </div>
+    </div>
+
+    <footer style="margin-top: 4rem; font-size: 0.875rem; color: #6b7280; text-align: center;">
+      Powered by the live widget at <a href="https://mon-unlock-widget-production.up.railway.app" target="_blank" style="color:inherit;">mon-unlock-widget-production.up.railway.app</a>
+    </footer>
+
+    <script>
+      const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
+      const CONTRACT = "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D";
+
+      const fields = ["title", "author", "price", "articleId", "teaser", "body"];
+      const STORAGE_KEY = "mon-unlock-generator-draft";
+
+      function loadDraft() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const data = JSON.parse(raw);
+          fields.forEach((f) => {
+            const el = document.getElementById(f);
+            if (el && data[f] != null) el.value = data[f];
+          });
+        } catch {}
+      }
+
+      function saveDraft() {
+        const data = {};
+        fields.forEach((f) => {
+          const el = document.getElementById(f);
+          if (el) data[f] = el.value;
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      }
+
+      function clearDraft() {
+        localStorage.removeItem(STORAGE_KEY);
+        fields.forEach((f) => {
+          const el = document.getElementById(f);
+          if (el) el.value = "";
+        });
+        renderPreview();
+        renderCode();
+      }
+
+      function getValues() {
+        return {
+          title: document.getElementById("title").value.trim(),
+          author: document.getElementById("author").value.trim() || "Author",
+          price: document.getElementById("price").value.trim() || "5",
+          articleId: document.getElementById("articleId").value.trim(),
+          teaser: document.getElementById("teaser").value.trim(),
+          body: document.getElementById("body").value.trim(),
+        };
+      }
+
+      function renderPreview() {
+        const v = getValues();
+        const pane = document.getElementById("previewPane");
+
+        if (!v.title || !v.articleId || !v.teaser || !v.body) {
+          pane.innerHTML = `<p style="color:#6b7280; font-size:0.875rem;">Fill out the form to see a live preview here.</p>`;
+          return;
+        }
+
+        // Clear and mount a fresh widget instance
+        pane.innerHTML = "";
+        const widget = document.createElement("mon-unlock");
+        widget.setAttribute("article-id", v.articleId);
+        widget.setAttribute("title", v.title);
+        widget.setAttribute("author", v.author);
+        widget.setAttribute("price", v.price);
+        widget.setAttribute("unlock-contract", CONTRACT);
+
+        const teaserSlot = document.createElement("div");
+        teaserSlot.setAttribute("slot", "teaser");
+        teaserSlot.innerHTML = v.teaser.replace(/\n/g, "<br>");
+
+        const bodySlot = document.createElement("div");
+        bodySlot.setAttribute("slot", "body");
+        bodySlot.innerHTML = v.body;
+
+        widget.appendChild(teaserSlot);
+        widget.appendChild(bodySlot);
+
+        pane.appendChild(widget);
+      }
+
+      function renderCode() {
+        const v = getValues();
+        const out = document.getElementById("outputCode");
+
+        if (!v.title || !v.articleId || !v.teaser || !v.body) {
+          out.textContent = "<!-- Fill the form to generate code -->";
+          return;
+        }
+
+        const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const bodyEsc = v.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        const code = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+
+<mon-unlock
+  article-id="${v.articleId}"
+  title="${v.title}"
+  author="${v.author}"
+  price="${v.price}"
+  unlock-contract="${CONTRACT}"
+>
+  <div slot="teaser">
+${teaserEsc}
+  </div>
+  <div slot="body">
+${bodyEsc}
+  </div>
+<\/mon-unlock>`;
+
+        out.textContent = code;
+      }
+
+      function copy(text, btnId) {
+        navigator.clipboard.writeText(text).then(() => {
+          const status = document.getElementById("copyStatus");
+          status.style.display = "inline";
+          setTimeout(() => (status.style.display = "none"), 2000);
+        });
+      }
+
+      function wireEvents() {
+        fields.forEach((f) => {
+          const el = document.getElementById(f);
+          if (!el) return;
+          el.addEventListener("input", () => {
+            saveDraft();
+            renderPreview();
+            renderCode();
+          });
+        });
+
+        document.getElementById("copyFull").addEventListener("click", () => {
+          const code = document.getElementById("outputCode").textContent;
+          copy(code, "copyFull");
+        });
+
+        document.getElementById("copyScripts").addEventListener("click", () => {
+          const v = getValues();
+          const scripts = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>`;
+          copy(scripts, "copyScripts");
+        });
+
+        document.getElementById("resetDraft").addEventListener("click", () => {
+          if (confirm("Clear the current draft?")) clearDraft();
+        });
+
+        // Auto-render on load after draft restore
+        setTimeout(() => {
+          renderPreview();
+          renderCode();
+        }, 0);
+      }
+
+      function init() {
+        loadDraft();
+        wireEvents();
+      }
+
+      init();
+    </script>
+  </body>
+</html>
