@@ -52,7 +52,7 @@ mon-unlock {
   border: 1px solid #27272a;
   border-radius: 10px;
   padding: 1rem 1.25rem;
-  color: #ededed;
+  color: #000;
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.6;
@@ -61,7 +61,7 @@ mon-unlock {
 .mon-card:not(.dark) .mon-title-box {
   background: #f8fafc;
   border-color: #e2e8f0;
-  color: #111827;
+  color: #000;
 }
 
 .mon-btn {
