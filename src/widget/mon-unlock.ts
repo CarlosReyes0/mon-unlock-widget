@@ -250,8 +250,8 @@ export class MonUnlock extends LitElement {
       <article class="mon-card ${classMap({ dark: this.theme === "dark" })}">
         <header class="border-b border-stone-100 px-6 py-5 dark:border-zinc-800">
           <p class="mon-badge mb-2">Unlock with MON</p>
-          <h1 class="font-serif text-2xl font-semibold leading-tight text-black dark:text-white">${a.title}</h1>
-          <p class="mt-2 text-sm text-stone-500 dark:text-zinc-400">
+          <h1 class="font-serif text-2xl font-semibold leading-tight" style="color:#000">${a.title}</h1>
+          <p class="mt-2 text-sm text-black dark:text-zinc-400">
             ${a.author} · ${new Date(a.publishedAt).toLocaleDateString()}
           </p>
         </header>
@@ -263,9 +263,9 @@ export class MonUnlock extends LitElement {
 
           ${this.unlocked
             ? html`
-                <div class="mon-title-box mb-6 whitespace-pre-wrap">${a.teaser}</div>
-                <div class="mon-body text-black dark:text-white">${unsafeHTML(a.body)}</div>
-                <p class="mt-6 text-xs text-black dark:text-zinc-200">
+                <div class="mon-title-box mb-6 whitespace-pre-wrap" style="color:#000">${a.teaser}</div>
+                <div class="mon-body" style="color:#000">${unsafeHTML(a.body)}</div>
+                <p class="mt-6 text-xs" style="color:#000">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
                   ${this.txHash
                     ? html`· <a href="https://testnet.monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
