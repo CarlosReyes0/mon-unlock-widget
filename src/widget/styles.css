@@ -107,3 +107,16 @@ mon-unlock {
   text-transform: uppercase;
   color: #7c3aed;
 }
+
+/* Force pure black text on title, body, and unlock status in light mode */
+.mon-card h1,
+.mon-card .mon-body,
+.mon-card p.mt-6 {
+  color: #000 !important;
+}
+
+.mon-card.dark h1,
+.mon-card.dark .mon-body,
+.mon-card.dark p.mt-6 {
+  color: #fff !important;
+}
