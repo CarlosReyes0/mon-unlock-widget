@@ -12,13 +12,15 @@
       rel="stylesheet"
     />
     <style>
+      :root { color-scheme: light dark; }
       body {
         min-height: 100vh;
-        background-color: #fafaf9;
-        color: #1c1917;
+        background-color: #fafafa;
+        color: #111827;
         -webkit-font-smoothing: antialiased;
         margin: 0;
       }
+      @media (prefers-color-scheme: dark) { body { background: #0a0a0a; color: #ededed; } }
       .container {
         max-width: 42rem;
         margin: 0 auto;
@@ -44,17 +46,20 @@
         margin: 0.5rem 0 0;
         color: #57534e;
       }
+      @media (prefers-color-scheme: dark) { .subtitle { color: #9ca3af; } }
       code {
         background: #e7e5e4;
         border-radius: 0.25rem;
         padding: 0 0.25rem;
       }
+      @media (prefers-color-scheme: dark) { code { background: #27272a; color: #ededed; } }
     </style>
   </head>
   <body>
     <div class="container">
       <nav style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
-        <a href="/generator.html" style="font-size:0.875rem; color:#7c3aed; text-decoration:none; font-weight:600;">Create embed →</a>
+        <a href="/generator.html" style="font-size:0.875rem; color:#7c3aed; text-decoration:none; font-weight:600;">Create embed</a>
+        <a href="/dashboard.html" style="font-size:0.875rem; color:#7c3aed; text-decoration:none; font-weight:600;">Writer dashboard</a>
         <a href="/" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
       </nav>
       <header>
