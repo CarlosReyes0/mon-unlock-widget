@@ -163,4 +163,36 @@ export class OnchainUnlockService {
     this.store.record(record);
     return record;
   }
+
+  /** Register an article as the connected publisher (Phase 2 writer dashboard) */
+  async registerArticle(articleId: string, wallet: string, priceMon: bigint): Promise<Hash> {
+    const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
+    if (!eth) throw new Error("No wallet found. Install MetaMask or another Web3 wallet.");
+
+    const walletClient = createWalletClient({ chain: monadTestnet, transport: custom(eth) });
+
+    const account = wallet as Address;
+    const articleIdBytes = toArticleId(articleId);
+
+    const txHash = (await walletClient.writeContract({
+      account,
+      address: this.contractAddress,
+      abi: [
+        {
+          name: "registerArticle",
+          type: "function",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "articleId", type: "bytes32" },
+            { name: "priceWei", type: "uint256" },
+          ],
+          outputs: [],
+        },
+      ],
+      functionName: "registerArticle",
+      args: [articleIdBytes, priceMon],
+    })) as Hash;
+
+    return txHash;
+  }
 }

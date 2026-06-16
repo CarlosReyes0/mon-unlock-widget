@@ -36,27 +36,27 @@
 
 ### 1.2 Widget → contract
 
-- [ ] Add viem; connect to Monad testnet RPC
-- [ ] Widget reads `unlock-contract` + `price` (and optional `publisher` address) from HTML attributes
-- [ ] Replace demo unlock with: connect wallet → send tx → wait for confirmation
-- [ ] On success: show full article + **“Paid X MON”** + link to tx on explorer
-- [ ] On reject/fail: clear error message, keep teaser visible
+- [x] Add viem; connect to Monad testnet RPC
+- [x] Widget reads `unlock-contract` + `price` (and optional `publisher` address) from HTML attributes
+- [x] Replace demo unlock with: connect wallet → send tx → wait for confirmation
+- [x] On success: show full article + **“Paid X MON”** + link to tx on explorer
+- [x] On reject/fail: clear error message, keep teaser visible
 
 **Done when:** End-to-end on testnet without localStorage fake unlock.
 
 ### 1.3 Verify unlock (cross-device)
 
-- [ ] Contract view: `hasUnlocked(address reader, bytes32 articleId) → bool` (or mapping + events indexer)
-- [ ] On load: if wallet connected, call `hasUnlocked` — show body without paying again
-- [ ] Remove reliance on localStorage as source of truth (cache OK, chain is authority)
+- [x] Contract view: `hasUnlocked(address reader, bytes32 articleId) → bool` (or mapping + events indexer)
+- [x] On load: if wallet connected, call `hasUnlocked` — show body without paying again
+- [x] Remove reliance on localStorage as source of truth (cache OK, chain is authority)
 
 **Done when:** Pay on laptop, connect same wallet on phone → article already unlocked.
 
 ### 1.4 Ship testnet demo
 
 - [x] Host `mon-unlock.js` + `.css` on stable URL (CDN)
-- [ ] One public demo page with real testnet MON instructions (faucet link)
-- [ ] Update `examples/embed.html` with real contract URL + testnet attrs
+- [x] One public demo page with real testnet MON instructions (faucet link)
+- [x] Update `examples/embed.html` with real contract URL + testnet attrs
 
 **Phase 1 exit criteria (all required):**
 
@@ -79,6 +79,7 @@
 - [ ] Output: copy-paste `<mon-unlock …>` block + site-wide script tags
 - [ ] Pre-fill `unlock-contract` and network from our config
 - [ ] No account required for v1 (optional: save drafts in localStorage)
+- [x] Writer dashboard: connect wallet → view articles, revenue, unlock counts, embed codes (wallet address as identity, no email/password accounts) — basic version implemented (register + embed copy; on-chain analytics next)
 
 **Done when:** Non-dev can create an embed block in under 2 minutes.
 
@@ -97,22 +98,36 @@
 
 **Phase 2 exit criteria:**
 
-1. Embed generator used by at least one external publisher (not you)  
+1. Embed generator used by at least one publisher (you count — you will notify when you've embedded on your site)  
 2. Same onchain unlock flow as Phase 1 — no second payment stack  
 
 ---
 
-## What to build next (single task)
+## Technical Implementation Roadmap
 
-If unsure what to do today, pick **one**:
+### ✅ Safe to Work On (No External Validation Required)
 
-| Priority | Task |
-|----------|------|
-| **Now** | 1.1 — Deploy `ArticleUnlock` to Monad testnet (see `contracts/README.md`) |
-| Then | 1.2 — Wire widget to send tx and show explorer link |
-| Then | 1.3 — `hasUnlocked` on page load |
-| Then | 1.4 — CDN + public testnet demo |
-| Later | Phase 2 embed generator |
+**High Priority**
+- Mainnet deployment of the `ArticleUnlock` contract + widget updates
+- Basic writer dashboard (unlock events, revenue, embed analytics) — built on the existing native-MON flow
+- Improved error / failure UX (rejected tx, wrong network, insufficient balance, etc.)
+
+**Medium Priority**
+- Hosted content mode (Phase 2.2) — fetch article body from API
+- Analytics / event tracking for writers
+- Mobile / responsive improvements
+- Security audit prep / contract hardening
+
+### ⛔ Do Not Pursue Until Validated
+
+These are explicitly gated behind a conversation with someone credible at Monad/DeltaV:
+
+- Dynamic / usage-based pricing mechanism (bonding curve or oracle integration)
+- ERC-20 support (accept `$READ` or other tokens alongside MON)
+- Any work on creating or integrating a `$READ` token
+- Any tokenomics-related smart contract changes
+
+**Rule:** Before designing or implementing any of the above, you must first speak with a credible contact at Monad or DeltaV to get feedback on the overall `$READ` + usage-pricing thesis.
 
 ---
 

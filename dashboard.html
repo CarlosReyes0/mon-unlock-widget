@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Writer Dashboard — MON Unlock</title>
+    <link rel="stylesheet" href="/dist/mon-unlock.css" />
+    <script type="module" src="/dist/mon-unlock.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: "DM Sans", system-ui, -apple-system, sans-serif; max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; color: #111827; background: #fafafa; }
+      @media (prefers-color-scheme: dark) { body { background: #0a0a0a; color: #ededed; } }
+      .nav-back { display: inline-flex; align-items: center; gap: 0.5rem; color: #6b7280; text-decoration: none; font-size: 0.875rem; }
+      .nav-back:hover { color: #111827; }
+      .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
+      .badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 9999px; }
+      h1 { font-size: 2rem; font-weight: 800; margin: 0; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+      .card { background: #111; border: 1px solid #27272a; border-radius: 12px; padding: 1.5rem; }
+      label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #a1a1aa; }
+      input { width: 100%; padding: 0.75rem 1rem; font-size: 1rem; border: 1px solid #27272a; border-radius: 10px; font-family: inherit; background: #18181b; color: #ededed; }
+      input:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2); }
+      .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.12s; }
+      .btn-primary { background: linear-gradient(135deg, #7c3aed, #5b21b6); color: white; }
+      .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+      .btn-secondary { background: #e5e7eb; color: #111827; }
+      @media (prefers-color-scheme: dark) { .btn-secondary { background: #27272a; color: #ededed; } }
+      .btn-secondary:hover { background: #d1d5db; }
+      .section-title { font-size: 1.125rem; font-weight: 700; margin: 0 0 1rem; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; }
+      .stat { font-size: 1.5rem; font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #27272a; }
+      th { font-weight: 600; color: #a1a1aa; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      .empty { color: #6b7280; font-size: 0.875rem; padding: 2rem 0; text-align: center; }
+      .success { color: #16a34a; font-size: 0.875rem; }
+      .tx-link { color: #7c3aed; text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <a href="/" class="nav-back">← Back to homepage</a>
+
+    <div class="header">
+      <div>
+        <div class="badge">WRITER DASHBOARD — PHASE 2</div>
+        <h1>Writer Dashboard</h1>
+        <p style="margin: 0.5rem 0 0; color: #6b7280;">Connect your wallet to register articles and track revenue.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Connect + Register -->
+      <div>
+        <div class="card">
+          <h2 class="section-title">Publisher identity</h2>
+          <div id="walletSection">
+            <button class="btn btn-primary" id="connectBtn">Connect wallet</button>
+            <p id="walletStatus" style="margin-top: 0.75rem; font-size: 0.875rem; color: #6b7280;"></p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h2 class="section-title">Register article on-chain</h2>
+          <div style="margin-bottom: 1rem;">
+            <label for="regArticleId">Article ID (slug)</label>
+            <input id="regArticleId" type="text" placeholder="founder-manifesto" />
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label for="regPrice">Price (MON)</label>
+            <input id="regPrice" type="number" step="0.1" min="0.1" value="5" />
+          </div>
+          <button class="btn btn-primary" id="registerBtn" disabled>Register on Monad testnet</button>
+          <p id="registerStatus" style="margin-top: 0.75rem; font-size: 0.875rem;"></p>
+        </div>
+      </div>
+
+      <!-- My Articles + Stats -->
+      <div>
+        <div class="card">
+          <h2 class="section-title">My articles</h2>
+          <table id="articlesTable">
+            <thead>
+              <tr>
+                <th>Article ID</th>
+                <th>Price</th>
+                <th>Unlocks</th>
+                <th>Revenue</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="articlesBody"></tbody>
+          </table>
+          <div id="articlesEmpty" class="empty">No articles yet. Register one on the left.</div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h2 class="section-title">Revenue overview</h2>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <div>
+              <div style="color: #a1a1aa; font-size: 0.75rem; font-weight: 600;">TOTAL UNLOCKS</div>
+              <div id="totalUnlocks" class="stat">0</div>
+            </div>
+            <div>
+              <div style="color: #a1a1aa; font-size: 0.75rem; font-weight: 600;">TOTAL REVENUE</div>
+              <div id="totalRevenue" class="stat">0 MON</div>
+            </div>
+          </div>
+          <p style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">On-chain analytics (ArticleUnlocked events) coming in the next update. Current numbers are from registered articles in this session.</p>
+        </div>
+      </div>
+    </div>
+
+    <footer style="margin-top: 4rem; font-size: 0.875rem; color: #6b7280; text-align: center;">
+      Wallet address = your identity. No accounts, no email.
+    </footer>
+
+    <script type="module">
+      import { WalletManager, OnchainUnlockService, formatMon, parseMonAmount } from "./src/core/index.js";
+
+      const CONTRACT = "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D";
+      const STORAGE_KEY = "mon-unlock-writer-articles";
+
+      let walletManager = new WalletManager();
+      let unlockService = new OnchainUnlockService(CONTRACT);
+      let currentWallet = null;
+      let myArticles = [];
+
+      function loadMyArticles(wallet) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY + ":" + wallet.toLowerCase());
+          myArticles = raw ? JSON.parse(raw) : [];
+        } catch {
+          myArticles = [];
+        }
+      }
+
+      function saveMyArticles(wallet) {
+        localStorage.setItem(STORAGE_KEY + ":" + wallet.toLowerCase(), JSON.stringify(myArticles));
+      }
+
+      function renderArticles() {
+        const body = document.getElementById("articlesBody");
+        const empty = document.getElementById("articlesEmpty");
+        body.innerHTML = "";
+
+        if (myArticles.length === 0) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+
+        myArticles.forEach((a, idx) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td class="mono">${a.articleId}</td>
+            <td>${formatMon(a.priceMon)} MON</td>
+            <td>—</td>
+            <td>—</td>
+            <td>
+              <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-idx="${idx}">Copy embed</button>
+            </td>
+          `;
+          body.appendChild(row);
+        });
+
+        // Wire copy buttons
+        body.querySelectorAll("button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = parseInt(btn.dataset.idx);
+            const art = myArticles[idx];
+            const code = generateEmbedCode(art);
+            navigator.clipboard.writeText(code).then(() => {
+              const orig = btn.textContent;
+              btn.textContent = "Copied!";
+              setTimeout(() => (btn.textContent = orig), 1500);
+            });
+          });
+        });
+      }
+
+      function generateEmbedCode(article) {
+        const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
+        return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+
+<mon-unlock
+  article-id="${article.articleId}"
+  title="${article.title || article.articleId}"
+  author="Your Name"
+  price="${(Number(article.priceMon) / 1e18).toFixed(1)}"
+  unlock-contract="${CONTRACT}"
+>
+  <div slot="teaser">Free preview goes here...</div>
+  <div slot="body">Full article content goes here...</div>
+<\/mon-unlock>`;
+      }
+
+      function updateStats() {
+        document.getElementById("totalUnlocks").textContent = myArticles.length; // placeholder
+        const totalWei = myArticles.reduce((sum, a) => sum + a.priceMon, 0n);
+        document.getElementById("totalRevenue").textContent = formatMon(totalWei) + " MON";
+      }
+
+      async function connectWallet() {
+        const status = document.getElementById("walletStatus");
+        const btn = document.getElementById("connectBtn");
+        btn.disabled = true;
+        btn.textContent = "Connecting…";
+
+        try {
+          const s = await walletManager.connect();
+          currentWallet = s.address;
+          loadMyArticles(currentWallet);
+          status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span>`;
+          btn.style.display = "none";
+
+          document.getElementById("registerBtn").disabled = false;
+          renderArticles();
+          updateStats();
+        } catch (e) {
+          status.textContent = e.message || "Connection failed";
+          btn.disabled = false;
+          btn.textContent = "Connect wallet";
+        }
+      }
+
+      async function registerArticle() {
+        const status = document.getElementById("registerStatus");
+        const btn = document.getElementById("registerBtn");
+        const articleId = document.getElementById("regArticleId").value.trim();
+        const priceStr = document.getElementById("regPrice").value.trim();
+
+        if (!articleId || !priceStr || !currentWallet) {
+          status.textContent = "Fill in article ID, price, and connect wallet.";
+          status.style.color = "#ef4444";
+          return;
+        }
+
+        const priceMon = parseMonAmount(priceStr);
+        btn.disabled = true;
+        btn.textContent = "Registering…";
+        status.textContent = "";
+        status.style.color = "";
+
+        try {
+          const txHash = await unlockService.registerArticle(articleId, currentWallet, priceMon);
+
+          // Add to local list
+          myArticles.push({
+            articleId,
+            priceMon,
+            registeredAt: Date.now(),
+          });
+          saveMyArticles(currentWallet);
+
+          status.innerHTML = `Registered! <a href="https://testnet.monadvision.com/tx/${txHash}" target="_blank" class="tx-link">View tx ↗</a>`;
+          status.style.color = "#16a34a";
+
+          renderArticles();
+          updateStats();
+
+          // Clear form
+          document.getElementById("regArticleId").value = "";
+        } catch (e) {
+          status.textContent = e.message || "Registration failed";
+          status.style.color = "#ef4444";
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Register on Monad testnet";
+        }
+      }
+
+      function init() {
+        document.getElementById("connectBtn").addEventListener("click", connectWallet);
+        document.getElementById("registerBtn").addEventListener("click", registerArticle);
+
+        // If already connected in this session (from other pages), try to restore
+        // For simplicity we start fresh on each load
+        document.getElementById("articlesEmpty").style.display = "block";
+      }
+
+      init();
+    </script>
+  </body>
+</html>
