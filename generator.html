@@ -372,6 +372,34 @@ ${bodyEsc}
               const articleIdBytes = keccak256(toBytes(v.articleId));
               const priceWei = parseEther(v.price || "1");
 
+              // Ensure the user's wallet is on Monad mainnet (chain 143) before registering
+              try {
+                const currentChain = await eth.request({ method: "eth_chainId" });
+                if (parseInt(currentChain, 16) !== 143) {
+                  status.textContent = "Switching to Monad mainnet…";
+                  await eth.request({
+                    method: "wallet_switchEthereumChain",
+                    params: [{ chainId: "0x8f" }], // 143 decimal = 0x8f
+                  });
+                }
+              } catch (switchErr) {
+                // If chain not added to wallet yet, add it
+                if (switchErr && switchErr.code === 4902) {
+                  await eth.request({
+                    method: "wallet_addEthereumChain",
+                    params: [{
+                      chainId: "0x8f",
+                      chainName: "Monad",
+                      nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+                      rpcUrls: ["https://rpc.monad.xyz"],
+                      blockExplorerUrls: ["https://monadvision.com"],
+                    }],
+                  });
+                } else {
+                  throw switchErr;
+                }
+              }
+
               const walletClient = createWalletClient({
                 account: connectedWallet,
                 chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
