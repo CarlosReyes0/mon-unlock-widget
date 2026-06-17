@@ -142,6 +142,42 @@ export class OnchainUnlockService {
     const account = wallet as Address;
     const articleIdBytes = toArticleId(articleId);
 
+    // Pre-flight: ensure the article is registered and active on-chain.
+    // Without this, the payable unlock() would revert with ArticleNotFound / ArticleInactive,
+    // and MetaMask would warn "This transaction is likely to fail."
+    try {
+      const article = (await publicClient.readContract({
+        address: this.contractAddress,
+        abi: [
+          {
+            name: "getArticle",
+            type: "function",
+            stateMutability: "view",
+            inputs: [{ name: "articleId", type: "bytes32" }],
+            outputs: [
+              { name: "priceWei", type: "uint256" },
+              { name: "publisher", type: "address" },
+              { name: "active", type: "bool" },
+            ],
+          },
+        ],
+        functionName: "getArticle",
+        args: [articleIdBytes],
+      })) as readonly [bigint, Address, boolean];
+
+      if (article[1] === "0x0000000000000000000000000000000000000000") {
+        throw new Error("This article has not been registered for on-chain payments yet.");
+      }
+      if (!article[2]) {
+        throw new Error("This article is currently inactive for purchases.");
+      }
+    } catch (e: any) {
+      if (e.message && e.message.includes("not been registered")) throw e;
+      if (e.message && e.message.includes("currently inactive")) throw e;
+      // If getArticle itself fails (e.g. contract not deployed on this chain), let the tx attempt fail with a clear message
+      throw new Error("On-chain article lookup failed. Confirm the unlock-contract address and network.");
+    }
+
     // Send the unlock transaction (payable).
     // Explicit gas limit avoids "exceeds transaction gas limit" errors on Monad
     // when the contract does an internal .call to forward payment (hard for RPCs to estimate).
