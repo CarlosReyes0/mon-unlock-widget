@@ -1,5 +1,5 @@
-import { createPublicClient, createWalletClient, custom, keccak256, toBytes, type Address, type Hash } from "viem";
-import { monadTestnet } from "./chains.js";
+import { createPublicClient, createWalletClient, custom, keccak256, toBytes, type Address, type Hash, type Chain } from "viem";
+import { monadTestnet, monadMainnet } from "./chains.js";
 import type { UnlockRecord } from "./types.js";
 
 function toArticleId(articleId: string): `0x${string}` {
@@ -69,11 +69,16 @@ export class UnlockService {
   }
 }
 
-/** Phase 1.2: real MON payment on Monad testnet via viem */
+/** Phase 1.2: real MON payment on Monad (testnet or mainnet) via viem */
 export class OnchainUnlockService {
   private store = new UnlockStore();
+  private contractAddress: Address;
+  private chain: Chain;
 
-  constructor(private contractAddress: Address) {}
+  constructor(contractAddress: Address, network: "testnet" | "mainnet" = "testnet") {
+    this.contractAddress = contractAddress;
+    this.chain = network === "mainnet" ? monadMainnet : monadTestnet;
+  }
 
   hasAccess(articleId: string, wallet: string | null): boolean {
     if (!wallet) return false;
@@ -87,7 +92,7 @@ export class OnchainUnlockService {
     const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
     if (!eth) return this.store.isUnlocked(articleId, wallet); // fallback to cache
 
-    const publicClient = createPublicClient({ chain: monadTestnet, transport: custom(eth) });
+    const publicClient = createPublicClient({ chain: this.chain, transport: custom(eth) });
     const articleIdBytes = toArticleId(articleId);
 
     const unlocked = (await publicClient.readContract({
@@ -125,8 +130,8 @@ export class OnchainUnlockService {
     const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
     if (!eth) throw new Error("No wallet found. Install MetaMask or another Web3 wallet.");
 
-    const publicClient = createPublicClient({ chain: monadTestnet, transport: custom(eth) });
-    const walletClient = createWalletClient({ chain: monadTestnet, transport: custom(eth) });
+    const publicClient = createPublicClient({ chain: this.chain, transport: custom(eth) });
+    const walletClient = createWalletClient({ chain: this.chain, transport: custom(eth) });
 
     const account = wallet as Address;
     const articleIdBytes = toArticleId(articleId);
@@ -169,7 +174,7 @@ export class OnchainUnlockService {
     const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
     if (!eth) throw new Error("No wallet found. Install MetaMask or another Web3 wallet.");
 
-    const walletClient = createWalletClient({ chain: monadTestnet, transport: custom(eth) });
+    const walletClient = createWalletClient({ chain: this.chain, transport: custom(eth) });
 
     const account = wallet as Address;
     const articleIdBytes = toArticleId(articleId);

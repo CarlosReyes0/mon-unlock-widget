@@ -30,8 +30,10 @@ export class MonUnlock extends LitElement {
   /** Price in MON, e.g. "5" or "0.5" */
   @property({ type: String }) price = "1";
   @property({ type: String }) theme: "light" | "dark" = "light";
-  /** Contract address on Monad testnet (enables real on-chain payments) */
+  /** Contract address (enables real on-chain payments) */
   @property({ type: String, attribute: "unlock-contract" }) unlockContract = "";
+  /** Network: "testnet" (default) or "mainnet" */
+  @property({ type: String, attribute: "network" }) network: "testnet" | "mainnet" = "testnet";
 
   @state() private article: Article | null = null;
   @state() private wallet: WalletState = { connected: false, address: null };
@@ -130,7 +132,10 @@ export class MonUnlock extends LitElement {
     // Switch to on-chain service if contract address is provided
     if (this.unlockContract?.trim()) {
       this.isOnchain = true;
-      this.unlockService = new OnchainUnlockService(this.unlockContract.trim() as `0x${string}`);
+      this.unlockService = new OnchainUnlockService(
+        this.unlockContract.trim() as `0x${string}`,
+        this.network
+      );
     } else {
       this.isOnchain = false;
       this.unlockService = new UnlockService();
