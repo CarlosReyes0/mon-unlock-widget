@@ -350,15 +350,25 @@
       }
 
       async function switchWallet() {
-        // Re-request accounts — MetaMask will show the account picker
         try {
           const eth = window.ethereum;
           if (!eth) return;
 
-          const accounts = await eth.request({ method: "eth_requestAccounts" });
+          // Use wallet_requestPermissions to force the account picker
+          await eth.request({
+            method: "wallet_requestPermissions",
+            params: [{ eth_accounts: {} }],
+          });
+
+          // After permission grant, get the selected account
+          const accounts = await eth.request({ method: "eth_accounts" });
           const newAddress = accounts?.[0];
-          if (!newAddress || newAddress.toLowerCase() === currentWallet?.toLowerCase()) {
-            return; // same wallet or cancelled
+
+          if (!newAddress) return;
+
+          // If user picked the same account, do nothing
+          if (newAddress.toLowerCase() === currentWallet?.toLowerCase()) {
+            return;
           }
 
           currentWallet = newAddress;
@@ -375,7 +385,7 @@
           renderArticles();
           updateStats();
         } catch (e) {
-          // silent fail on cancel
+          // User cancelled the permission prompt — do nothing
         }
       }
 
