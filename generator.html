@@ -91,7 +91,13 @@
           </div>
         </div>
 
-        <div style="margin-top: 1.5rem;">
+        <!-- Wallet connection (always visible) -->
+        <div style="margin-top: 1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="connectWalletBtn">Connect wallet</button>
+          <span id="walletStatus" style="font-size:0.875rem; color:#6b7280;"></span>
+        </div>
+
+        <div style="margin-top: 1rem;">
           <button class="btn btn-primary" id="copyFull">Copy full embed block</button>
           <span id="copyStatus" class="copy-success" style="display:none; margin-left:0.75rem;">Copied!</span>
           <span id="registerStatus" style="display:none; margin-left:0.75rem; font-size:0.75rem; color:#6b7280;"></span>
@@ -128,6 +134,7 @@
 
       const fields = ["title", "author", "price", "articleId", "teaser", "body"];
       const STORAGE_KEY = "mon-unlock-generator-draft";
+      const WALLET_KEY = "mon-unlock-generator-wallet";
 
       function loadDraft() {
         try {
@@ -158,6 +165,67 @@
         });
         renderPreview();
         renderCode();
+      }
+
+      // === Wallet persistence (survives reloads) ===
+      let connectedWallet = null;
+
+      function saveWallet(addr) {
+        try { localStorage.setItem(WALLET_KEY, addr); } catch {}
+      }
+      function loadWallet() {
+        try { return localStorage.getItem(WALLET_KEY); } catch { return null; }
+      }
+      function clearWallet() {
+        try { localStorage.removeItem(WALLET_KEY); } catch {}
+      }
+
+      function updateWalletUI() {
+        const btn = document.getElementById("connectWalletBtn");
+        const status = document.getElementById("walletStatus");
+        const copyBtn = document.getElementById("copyFull");
+
+        if (connectedWallet) {
+          btn.textContent = "Disconnect";
+          btn.onclick = disconnectWallet;
+          status.innerHTML = `Connected: <span class="mono">${connectedWallet.slice(0,6)}…${connectedWallet.slice(-4)}</span>`;
+          copyBtn.textContent = "Copy and register embed block";
+        } else {
+          btn.textContent = "Connect wallet";
+          btn.onclick = connectWallet;
+          status.textContent = "";
+          copyBtn.textContent = "Copy full embed block";
+        }
+      }
+
+      async function connectWallet() {
+        const eth = window.ethereum;
+        if (!eth) {
+          alert("MetaMask or another Web3 wallet is required.");
+          return;
+        }
+        try {
+          const accounts = await eth.request({ method: "eth_requestAccounts" });
+          connectedWallet = accounts[0];
+          saveWallet(connectedWallet);
+          updateWalletUI();
+        } catch (e) {
+          alert(e.message || "Failed to connect wallet.");
+        }
+      }
+
+      function disconnectWallet() {
+        connectedWallet = null;
+        clearWallet();
+        updateWalletUI();
+      }
+
+      function restoreWallet() {
+        const saved = loadWallet();
+        if (saved) {
+          connectedWallet = saved;
+        }
+        updateWalletUI();
       }
 
       function getValues() {
@@ -282,33 +350,30 @@ ${bodyEsc}
         });
 
         document.getElementById("copyFull").addEventListener("click", async () => {
-          const codeEl = document.getElementById("outputCode");
-          const code = codeEl.textContent;
           const v = getValues();
+          const status = document.getElementById("registerStatus");
+          status.style.display = "none";
+          status.textContent = "";
+          status.style.color = "";
 
-          // If the generated embed uses the on-chain contract, ensure the article is registered first
-          if (code.includes("unlock-contract")) {
-            const status = document.getElementById("registerStatus");
+          let finalCode;
+
+          if (connectedWallet) {
+            // Connected → register on-chain then copy embed WITH contract
             status.style.display = "inline";
-            status.textContent = "Connecting wallet…";
+            status.textContent = "Registering article on Monad…";
 
             try {
               const eth = window.ethereum;
-              if (!eth) throw new Error("MetaMask (or another wallet) is required to register for real MON payments.");
+              if (!eth) throw new Error("Wallet connection lost. Please reconnect.");
 
-              // Connect
-              const accounts = await eth.request({ method: "eth_requestAccounts" });
-              const account = accounts[0];
-              status.textContent = "Registering article on Monad…";
-
-              // Dynamic import viem (browser ESM) for correct keccak256 + contract write
               const { keccak256, toBytes, createWalletClient, custom, parseEther } = await import("https://esm.sh/viem@2");
 
               const articleIdBytes = keccak256(toBytes(v.articleId));
               const priceWei = parseEther(v.price || "1");
 
               const walletClient = createWalletClient({
-                account,
+                account: connectedWallet,
                 chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
                 transport: custom(eth),
               });
@@ -336,11 +401,52 @@ ${bodyEsc}
             } catch (e) {
               status.textContent = e.message || "Registration failed";
               status.style.color = "#ef4444";
-              // Still allow copy of the embed code even if registration failed (user can fix later)
             }
+
+            // Always produce the on-chain embed when wallet is connected
+            const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const bodyEsc = v.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+
+<mon-unlock
+  article-id="${v.articleId}"
+  title="${v.title}"
+  author="${v.author}"
+  price="${v.price}"
+  unlock-contract="${MAINNET_CONTRACT}"
+>
+  <div slot="teaser">
+${teaserEsc}
+  </div>
+  <div slot="body">
+${bodyEsc}
+  </div>
+<\/mon-unlock>`;
+          } else {
+            // No wallet → demo embed (no on-chain contract)
+            const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const bodyEsc = v.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+
+<mon-unlock
+  article-id="${v.articleId}"
+  title="${v.title}"
+  author="${v.author}"
+  price="${v.price}"
+>
+  <div slot="teaser">
+${teaserEsc}
+  </div>
+  <div slot="body">
+${bodyEsc}
+  </div>
+<\/mon-unlock>`;
           }
 
-          copy(code, "copyFull");
+          document.getElementById("outputCode").textContent = finalCode;
+          copy(finalCode, "copyFull");
         });
 
         document.getElementById("resetDraft").addEventListener("click", () => {
@@ -356,6 +462,7 @@ ${bodyEsc}
 
       function init() {
         loadDraft();
+        restoreWallet();
         wireEvents();
       }
 
