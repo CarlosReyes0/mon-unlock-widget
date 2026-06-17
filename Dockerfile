@@ -23,5 +23,7 @@ COPY --from=builder /app/demo.html ./demo.html
 COPY --from=builder /app/generator.html ./generator.html
 COPY --from=builder /app/dashboard.html ./dashboard.html
 
-# Serve the current directory with index.html as default and directory listings disabled; --proxy falls back to demo.html for unknown paths
-CMD ["sh", "-c", "http-server . -p ${PORT:-8080} -d false --proxy http://localhost:${PORT:-8080}/demo.html"]
+# Serve static files (incl. /dist/* hashed chunks for ES modules) with CORS headers so any site can embed the widget via CDN.
+# Uses Access-Control-Allow-Origin: * (permissive for public CDN embeds; non-credentialed requests only).
+# To restrict later, replace with a custom server reading EMBED_ALLOWED_ORIGINS env var.
+CMD ["sh", "-c", "http-server . -p ${PORT:-8080} -d false --cors --proxy http://localhost:${PORT:-8080}/demo.html"]

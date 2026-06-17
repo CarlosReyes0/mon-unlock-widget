@@ -46,6 +46,8 @@ Upload `dist/mon-unlock.js` and `dist/mon-unlock.css` to your host (or CDN). The
 
 Or self-host from your own domain.
 
+**CORS for third-party embeds:** The production CDN at https://mon-unlock-widget-production.up.railway.app serves `/dist/*` (including the main `mon-unlock.js` and its hashed import chunks) with `Access-Control-Allow-Origin: *`. This allows any origin (localhost:* or production consumer sites) to load the ES module scripts cross-origin. No credentials are used, so `*` is safe and simple. If you need an allowlist later, set `EMBED_ALLOWED_ORIGINS` and replace the static server with origin-aware middleware.
+
 ### For each paid article
 
 Copy `examples/embed.html` or use this block. **Only edit the parts in ALL CAPS:**
