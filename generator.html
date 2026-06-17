@@ -94,6 +94,7 @@
         <div style="margin-top: 1.5rem;">
           <button class="btn btn-primary" id="copyFull">Copy full embed block</button>
           <span id="copyStatus" class="copy-success" style="display:none; margin-left:0.75rem;">Copied!</span>
+          <span id="registerStatus" style="display:none; margin-left:0.75rem; font-size:0.75rem; color:#6b7280;"></span>
         </div>
       </div>
 
@@ -280,8 +281,65 @@ ${bodyEsc}
           });
         });
 
-        document.getElementById("copyFull").addEventListener("click", () => {
-          const code = document.getElementById("outputCode").textContent;
+        document.getElementById("copyFull").addEventListener("click", async () => {
+          const codeEl = document.getElementById("outputCode");
+          const code = codeEl.textContent;
+          const v = getValues();
+
+          // If the generated embed uses the on-chain contract, ensure the article is registered first
+          if (code.includes("unlock-contract")) {
+            const status = document.getElementById("registerStatus");
+            status.style.display = "inline";
+            status.textContent = "Connecting wallet…";
+
+            try {
+              const eth = window.ethereum;
+              if (!eth) throw new Error("MetaMask (or another wallet) is required to register for real MON payments.");
+
+              // Connect
+              const accounts = await eth.request({ method: "eth_requestAccounts" });
+              const account = accounts[0];
+              status.textContent = "Registering article on Monad…";
+
+              // Dynamic import viem (browser ESM) for correct keccak256 + contract write
+              const { keccak256, toBytes, createWalletClient, custom, parseEther } = await import("https://esm.sh/viem@2");
+
+              const articleIdBytes = keccak256(toBytes(v.articleId));
+              const priceWei = parseEther(v.price || "1");
+
+              const walletClient = createWalletClient({
+                account,
+                chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+                transport: custom(eth),
+              });
+
+              await walletClient.writeContract({
+                address: MAINNET_CONTRACT,
+                abi: [
+                  {
+                    name: "registerArticle",
+                    type: "function",
+                    stateMutability: "nonpayable",
+                    inputs: [
+                      { name: "articleId", type: "bytes32" },
+                      { name: "priceWei", type: "uint256" },
+                    ],
+                    outputs: [],
+                  },
+                ],
+                functionName: "registerArticle",
+                args: [articleIdBytes, priceWei],
+              });
+
+              status.textContent = "Registered on Monad ✓";
+              status.style.color = "#16a34a";
+            } catch (e) {
+              status.textContent = e.message || "Registration failed";
+              status.style.color = "#ef4444";
+              // Still allow copy of the embed code even if registration failed (user can fix later)
+            }
+          }
+
           copy(code, "copyFull");
         });
 
