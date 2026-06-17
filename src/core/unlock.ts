@@ -94,23 +94,30 @@ export class OnchainUnlockService {
     const publicClient = createPublicClient({ chain: this.chain, transport: custom(eth) });
     const articleIdBytes = toArticleId(articleId);
 
-    const unlocked = (await publicClient.readContract({
-      address: this.contractAddress,
-      abi: [
-        {
-          name: "hasUnlocked",
-          type: "function",
-          stateMutability: "view",
-          inputs: [
-            { name: "reader", type: "address" },
-            { name: "articleId", type: "bytes32" },
-          ],
-          outputs: [{ type: "bool" }],
-        },
-      ],
-      functionName: "hasUnlocked",
-      args: [wallet as Address, articleIdBytes],
-    })) as boolean;
+    let unlocked = false;
+    try {
+      unlocked = (await publicClient.readContract({
+        address: this.contractAddress,
+        abi: [
+          {
+            name: "hasUnlocked",
+            type: "function",
+            stateMutability: "view",
+            inputs: [
+              { name: "reader", type: "address" },
+              { name: "articleId", type: "bytes32" },
+            ],
+            outputs: [{ type: "bool" }],
+          },
+        ],
+        functionName: "hasUnlocked",
+        args: [wallet as Address, articleIdBytes],
+      })) as boolean;
+    } catch {
+      // Contract may not be deployed, article not registered, or network mismatch.
+      // Treat as not unlocked so the user can attempt payment (which will surface a proper revert).
+      unlocked = false;
+    }
 
     // If on-chain says true, persist to local cache so future loads are instant
     if (unlocked) {
