@@ -13,13 +13,13 @@ export const monadTestnet = {
 } as const satisfies Chain;
 
 export const monadMainnet = {
-  id: 10143, // TODO: confirm final mainnet chain ID
+  id: 143,
   name: "Monad",
   nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://rpc.monad.xyz"] }, // placeholder – replace with production RPC
+    default: { http: ["https://rpc.monad.xyz"] },
   },
   blockExplorers: {
-    default: { name: "MonadVision", url: "https://monadvision.com" }, // placeholder
+    default: { name: "MonadVision", url: "https://monadvision.com" },
   },
 } as const satisfies Chain;

@@ -116,15 +116,19 @@
 
     <script type="module">
       // === Network configuration ===
-      // Update these when you deploy the contract on Monad mainnet
       const NETWORKS = {
-        10143: { // Monad Testnet (current)
+        // Monad Testnet
+        10143: {
           name: "Monad Testnet",
           contract: "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D",
           explorer: "https://testnet.monadvision.com",
         },
-        // TODO: add real mainnet chainId + contract once deployed
-        // 10143: { name: "Monad", contract: "0x...", explorer: "https://monadvision.com" },
+        // Monad Mainnet (chain ID 143)
+        143: {
+          name: "Monad",
+          contract: "", // ← Fill this after you deploy ArticleUnlock to mainnet
+          explorer: "https://monadvision.com",
+        },
       };
 
       const STORAGE_KEY = "mon-unlock-writer-articles";
