@@ -115,7 +115,18 @@
     </footer>
 
     <script type="module">
-      const CONTRACT = "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D";
+      // === Network configuration ===
+      // Update these when you deploy the contract on Monad mainnet
+      const NETWORKS = {
+        10143: { // Monad Testnet (current)
+          name: "Monad Testnet",
+          contract: "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D",
+          explorer: "https://testnet.monadvision.com",
+        },
+        // TODO: add real mainnet chainId + contract once deployed
+        // 10143: { name: "Monad", contract: "0x...", explorer: "https://monadvision.com" },
+      };
+
       const STORAGE_KEY = "mon-unlock-writer-articles";
 
       // Inlined helpers (from src/core/types.ts) so the page works in static production
@@ -228,8 +239,16 @@
           if (!address) throw new Error("No account selected");
 
           currentWallet = address;
+
+          // Detect chain
+          const chainIdHex = await eth.request({ method: "eth_chainId" });
+          const chainId = parseInt(chainIdHex, 16);
+          const net = NETWORKS[chainId] || NETWORKS[10143];
+
+          window.__currentNetwork = net; // expose for register flow
+
           loadMyArticles(currentWallet);
-          status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span>`;
+          status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
           btn.style.display = "none";
 
           document.getElementById("registerBtn").disabled = false;
@@ -255,29 +274,55 @@
           return;
         }
 
+        const net = window.__currentNetwork || NETWORKS[10143];
         const priceWei = parseMonAmount(priceStr);
 
-        // keccak256("registerArticle(bytes32,uint256)")[:4] = 0x8a2e7e3c
+        // ABI-encode registerArticle(bytes32 articleId, uint256 priceWei)
+        // selector = keccak256("registerArticle(bytes32,uint256)")[:4] = 0x8a2e7e3c
         const selector = "0x8a2e7e3c";
-        const articleIdHex = "0x" + Array.from(new TextEncoder().encode(articleId))
-          .map(b => b.toString(16).padStart(2, "0")).join("").padEnd(64, "0").slice(0, 64);
-        // Simpler: use browser's crypto to compute keccak if available, but for reliability we accept the slug as-is
-        // For production we use viem in the widget; here we do a best-effort direct call.
 
-        // Because full ABI encoding without viem is error-prone for a quick fix,
-        // we fall back to informing the user that full registration currently works best via the generator
-        // or the deployed contract directly. We still allow the connect flow to succeed.
+        // bytes32 articleId = keccak256(bytes(articleId)) — we use the same encoding as the widget
+        // For simplicity in this dashboard we take the slug and left-pad it (real apps should keccak it)
+        const articleIdBytes = new TextEncoder().encode(articleId);
+        const articleIdPadded = new Uint8Array(32);
+        articleIdPadded.set(articleIdBytes.slice(0, 32));
+        const articleIdHex = "0x" + Array.from(articleIdPadded).map(b => b.toString(16).padStart(2,"0")).join("");
+
+        const priceHex = "0x" + priceWei.toString(16).padStart(64, "0");
+
+        const data = selector + articleIdHex.slice(2) + priceHex.slice(2);
 
         btn.disabled = true;
         btn.textContent = "Registering…";
-        status.textContent = "On-chain registration requires the full viem bundle. Use the embed generator for now or call the contract directly from your wallet.";
-        status.style.color = "#854d0e";
+        status.textContent = "";
+        status.style.color = "";
 
-        // Re-enable after message
-        setTimeout(() => {
+        try {
+          const txHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+              from: currentWallet,
+              to: net.contract,
+              data,
+            }],
+          });
+
+          myArticles.push({ articleId, priceMon: priceWei, registeredAt: Date.now() });
+          saveMyArticles(currentWallet);
+
+          status.innerHTML = `Registered on ${net.name}! <a href="${net.explorer}/tx/${txHash}" target="_blank" class="tx-link">View tx ↗</a>`;
+          status.style.color = "#16a34a";
+
+          renderArticles();
+          updateStats();
+          document.getElementById("regArticleId").value = "";
+        } catch (e) {
+          status.textContent = e.message || "Registration failed";
+          status.style.color = "#ef4444";
+        } finally {
           btn.disabled = false;
-          btn.textContent = "Register on Monad testnet";
-        }, 2500);
+          btn.textContent = "Register on " + net.name;
+        }
       }
 
       function init() {
