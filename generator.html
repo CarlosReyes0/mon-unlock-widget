@@ -184,6 +184,10 @@
         const btn = document.getElementById("connectWalletBtn");
         const status = document.getElementById("walletStatus");
         const copyBtn = document.getElementById("copyFull");
+        if (!btn) return;
+
+        // Remove any previous listeners to avoid duplicates
+        btn.onclick = null;
 
         if (connectedWallet) {
           btn.textContent = "Disconnect";
@@ -540,6 +544,8 @@ ${bodyEsc}
         loadDraft();
         restoreWallet();
         wireEvents();
+        // Ensure button handler is attached even if restoreWallet had no saved wallet
+        updateWalletUI();
       }
 
       init();
