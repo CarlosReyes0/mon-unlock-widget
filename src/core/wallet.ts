@@ -1,4 +1,5 @@
 import type { WalletState } from "./types.js";
+import type { Chain } from "viem";
 
 const DEMO_ADDRESS = "0xDemo0000000000000000000000000000000001";
 
@@ -43,6 +44,39 @@ export class WalletManager {
   disconnect() {
     this.state = { connected: false, address: null };
     this.emit();
+  }
+
+  async ensureChain(chain: Chain): Promise<void> {
+    const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
+    if (!eth) return;
+
+    try {
+      const current = (await eth.request({ method: "eth_chainId" })) as string;
+      if (parseInt(current, 16) === chain.id) return;
+
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x" + chain.id.toString(16) }],
+      });
+    } catch (switchErr: any) {
+      // If chain not added yet, add it
+      if (switchErr?.code === 4902) {
+        await eth.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: "0x" + chain.id.toString(16),
+              chainName: chain.name,
+              nativeCurrency: chain.nativeCurrency,
+              rpcUrls: chain.rpcUrls.default.http,
+              blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined,
+            },
+          ],
+        });
+      } else {
+        throw switchErr;
+      }
+    }
   }
 }
 

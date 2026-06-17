@@ -6,6 +6,7 @@ import {
   UnlockService,
   OnchainUnlockService,
   WalletManager,
+  monadMainnet,
   formatMon,
   parseMonAmount,
   truncateAddress,
@@ -192,6 +193,11 @@ export class MonUnlock extends LitElement {
     try {
       const s = await this.walletManager.connect();
       this.wallet = s;
+
+      // Ensure MetaMask is on the correct chain for on-chain payments
+      if (this.isOnchain) {
+        await this.walletManager.ensureChain(monadMainnet);
+      }
 
       const address = s.address!;
 
