@@ -73,7 +73,7 @@
             <label for="regPrice">Price (MON)</label>
             <input id="regPrice" type="number" step="0.1" min="0.1" value="5" />
           </div>
-          <button class="btn btn-primary" id="registerBtn" disabled>Register on Monad testnet</button>
+          <button class="btn btn-primary" id="registerBtn" disabled>Register on Monad</button>
           <p id="registerStatus" style="margin-top: 0.75rem; font-size: 0.875rem;"></p>
         </div>
       </div>
@@ -119,18 +119,11 @@
     </footer>
 
     <script type="module">
-      // === Network configuration ===
+      // === Network configuration (Mainnet only) ===
       const NETWORKS = {
-        // Monad Testnet
-        10143: {
-          name: "Monad Testnet",
-          contract: "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D",
-          explorer: "https://testnet.monadvision.com",
-        },
-        // Monad Mainnet (chain ID 143)
         143: {
           name: "Monad",
-          contract: "0x038446b1F736e254cC0E256B20D74823c41EeADB", // ← Fill this after you deploy ArticleUnlock to mainnet
+          contract: "0x038446b1F736e254cC0E256B20D74823c41EeADB",
           explorer: "https://monadvision.com",
         },
       };
@@ -251,7 +244,7 @@
           // Detect chain
           const chainIdHex = await eth.request({ method: "eth_chainId" });
           const chainId = parseInt(chainIdHex, 16);
-          const net = NETWORKS[chainId] || NETWORKS[10143];
+          const net = NETWORKS[chainId] || NETWORKS[143];
 
           window.__currentNetwork = net; // expose for register flow
 
@@ -286,7 +279,7 @@
           return;
         }
 
-        const net = window.__currentNetwork || NETWORKS[10143];
+        const net = window.__currentNetwork || NETWORKS[143];
         const priceWei = parseMonAmount(priceStr);
 
         // ABI-encode registerArticle(bytes32 articleId, uint256 priceWei)
@@ -376,7 +369,7 @@
           // Re-detect chain
           const chainIdHex = await eth.request({ method: "eth_chainId" });
           const chainId = parseInt(chainIdHex, 16);
-          const net = NETWORKS[chainId] || NETWORKS[10143];
+          const net = NETWORKS[chainId] || NETWORKS[143];
           window.__currentNetwork = net;
 
           loadMyArticles(currentWallet);

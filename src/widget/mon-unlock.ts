@@ -32,8 +32,6 @@ export class MonUnlock extends LitElement {
   @property({ type: String }) theme: "light" | "dark" = "light";
   /** Contract address (enables real on-chain payments) */
   @property({ type: String, attribute: "unlock-contract" }) unlockContract = "";
-  /** Network: "testnet" (default) or "mainnet" */
-  @property({ type: String, attribute: "network" }) network: "testnet" | "mainnet" = "testnet";
 
   @state() private article: Article | null = null;
   @state() private wallet: WalletState = { connected: false, address: null };
@@ -132,10 +130,7 @@ export class MonUnlock extends LitElement {
     // Switch to on-chain service if contract address is provided
     if (this.unlockContract?.trim()) {
       this.isOnchain = true;
-      this.unlockService = new OnchainUnlockService(
-        this.unlockContract.trim() as `0x${string}`,
-        this.network
-      );
+      this.unlockService = new OnchainUnlockService(this.unlockContract.trim() as `0x${string}`);
     } else {
       this.isOnchain = false;
       this.unlockService = new UnlockService();
@@ -273,7 +268,7 @@ export class MonUnlock extends LitElement {
                 <p class="mt-6 text-xs text-black">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
                   ${this.txHash
-                    ? html`· <a href="https://testnet.monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
+                    ? html`· <a href="https://monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
                     : nothing}
                 </p>
               `
@@ -285,7 +280,7 @@ export class MonUnlock extends LitElement {
                   </p>
                   <p class="mt-1 text-xs text-stone-500">
                     ${this.isOnchain
-                      ? "Pay with MON on Monad testnet. Connect wallet to continue."
+                      ? "Pay with MON on Monad. Connect wallet to continue."
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">

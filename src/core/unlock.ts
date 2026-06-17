@@ -1,5 +1,5 @@
-import { createPublicClient, createWalletClient, custom, keccak256, toBytes, type Address, type Hash, type Chain } from "viem";
-import { monadTestnet, monadMainnet } from "./chains.js";
+import { createPublicClient, createWalletClient, custom, keccak256, toBytes, type Address, type Hash } from "viem";
+import { monadMainnet } from "./chains.js";
 import type { UnlockRecord } from "./types.js";
 
 function toArticleId(articleId: string): `0x${string}` {
@@ -69,15 +69,14 @@ export class UnlockService {
   }
 }
 
-/** Phase 1.2: real MON payment on Monad (testnet or mainnet) via viem */
+/** Phase 1.2: real MON payment on Monad mainnet via viem */
 export class OnchainUnlockService {
   private store = new UnlockStore();
   private contractAddress: Address;
-  private chain: Chain;
+  private chain = monadMainnet;
 
-  constructor(contractAddress: Address, network: "testnet" | "mainnet" = "testnet") {
+  constructor(contractAddress: Address) {
     this.contractAddress = contractAddress;
-    this.chain = network === "mainnet" ? monadMainnet : monadTestnet;
   }
 
   hasAccess(articleId: string, wallet: string | null): boolean {
