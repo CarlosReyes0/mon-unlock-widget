@@ -55,7 +55,11 @@
           <h2 class="section-title">Publisher identity</h2>
           <div id="walletSection">
             <button class="btn btn-primary" id="connectBtn">Connect wallet</button>
-            <p id="walletStatus" style="margin-top: 0.75rem; font-size: 0.875rem; color: #6b7280;"></p>
+            <div id="walletConnected" style="display:none; align-items:center; gap:0.75rem;">
+              <p id="walletStatus" style="margin:0; font-size:0.875rem; color:#6b7280;"></p>
+              <button class="btn btn-secondary" id="switchBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch</button>
+              <button class="btn btn-secondary" id="disconnectBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Disconnect</button>
+            </div>
           </div>
         </div>
 
@@ -253,7 +257,10 @@
 
           loadMyArticles(currentWallet);
           status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
-          btn.style.display = "none";
+
+          // Toggle UI
+          document.getElementById("connectBtn").style.display = "none";
+          document.getElementById("walletConnected").style.display = "flex";
 
           document.getElementById("registerBtn").disabled = false;
           renderArticles();
@@ -262,6 +269,7 @@
           status.textContent = e.message || "Connection failed";
           btn.disabled = false;
           btn.textContent = "Connect wallet";
+          document.getElementById("walletConnected").style.display = "none";
         }
       }
 
@@ -329,9 +337,53 @@
         }
       }
 
+      function disconnectWallet() {
+        currentWallet = null;
+        window.__currentNetwork = null;
+
+        document.getElementById("connectBtn").style.display = "inline-flex";
+        document.getElementById("walletConnected").style.display = "none";
+        document.getElementById("registerBtn").disabled = true;
+
+        // Clear status text
+        document.getElementById("walletStatus").textContent = "";
+      }
+
+      async function switchWallet() {
+        // Re-request accounts — MetaMask will show the account picker
+        try {
+          const eth = window.ethereum;
+          if (!eth) return;
+
+          const accounts = await eth.request({ method: "eth_requestAccounts" });
+          const newAddress = accounts?.[0];
+          if (!newAddress || newAddress.toLowerCase() === currentWallet?.toLowerCase()) {
+            return; // same wallet or cancelled
+          }
+
+          currentWallet = newAddress;
+
+          // Re-detect chain
+          const chainIdHex = await eth.request({ method: "eth_chainId" });
+          const chainId = parseInt(chainIdHex, 16);
+          const net = NETWORKS[chainId] || NETWORKS[10143];
+          window.__currentNetwork = net;
+
+          loadMyArticles(currentWallet);
+          document.getElementById("walletStatus").innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
+
+          renderArticles();
+          updateStats();
+        } catch (e) {
+          // silent fail on cancel
+        }
+      }
+
       function init() {
         document.getElementById("connectBtn").addEventListener("click", connectWallet);
         document.getElementById("registerBtn").addEventListener("click", registerArticle);
+        document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
+        document.getElementById("switchBtn").addEventListener("click", switchWallet);
 
         // If already connected in this session (from other pages), try to restore
         // For simplicity we start fresh on each load
