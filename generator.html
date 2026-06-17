@@ -367,12 +367,104 @@ ${bodyEsc}
               const eth = window.ethereum;
               if (!eth) throw new Error("Wallet connection lost. Please reconnect.");
 
-              const { keccak256, toBytes, createWalletClient, custom, parseEther } = await import("https://esm.sh/viem@2");
+              const { keccak256, toBytes, createWalletClient, custom, parseEther, createPublicClient, http } = await import("https://esm.sh/viem@2");
 
               const articleIdBytes = keccak256(toBytes(v.articleId));
               const priceWei = parseEther(v.price || "1");
 
-              // Ensure the user's wallet is on Monad mainnet (chain 143) before registering
+              // Helper that performs the actual registration (chain switch + write)
+              async function doRegister() {
+                // Ensure the user's wallet is on Monad mainnet (chain 143) before registering
+                try {
+                  const currentChain = await eth.request({ method: "eth_chainId" });
+                  if (parseInt(currentChain, 16) !== 143) {
+                    status.textContent = "Switching to Monad mainnet…";
+                    await eth.request({
+                      method: "wallet_switchEthereumChain",
+                      params: [{ chainId: "0x8f" }],
+                    });
+                  }
+                } catch (switchErr) {
+                  if (switchErr && switchErr.code === 4902) {
+                    await eth.request({
+                      method: "wallet_addEthereumChain",
+                      params: [{
+                        chainId: "0x8f",
+                        chainName: "Monad",
+                        nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+                        rpcUrls: ["https://rpc.monad.xyz"],
+                        blockExplorerUrls: ["https://monadvision.com"],
+                      }],
+                    });
+                  } else {
+                    throw switchErr;
+                  }
+                }
+
+                const walletClient = createWalletClient({
+                  account: connectedWallet,
+                  chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+                  transport: custom(eth),
+                });
+
+                await walletClient.writeContract({
+                  address: MAINNET_CONTRACT,
+                  abi: [
+                    {
+                      name: "registerArticle",
+                      type: "function",
+                      stateMutability: "nonpayable",
+                      inputs: [
+                        { name: "articleId", type: "bytes32" },
+                        { name: "priceWei", type: "uint256" },
+                      ],
+                      outputs: [],
+                    },
+                  ],
+                  functionName: "registerArticle",
+                  args: [articleIdBytes, priceWei],
+                });
+
+                status.textContent = "Registered on Monad ✓";
+                status.style.color = "#16a34a";
+              }
+
+              // Idempotency check: if already registered by this wallet, skip the tx (gas-free repeat clicks)
+              const publicClient = createPublicClient({
+                chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+                transport: http("https://rpc.monad.xyz"),
+              });
+
+              try {
+                const existing = await publicClient.readContract({
+                  address: MAINNET_CONTRACT,
+                  abi: [
+                    {
+                      name: "getArticle",
+                      type: "function",
+                      stateMutability: "view",
+                      inputs: [{ name: "articleId", type: "bytes32" }],
+                      outputs: [
+                        { name: "priceWei", type: "uint256" },
+                        { name: "publisher", type: "address" },
+                        { name: "active", type: "bool" },
+                      ],
+                    },
+                  ],
+                  functionName: "getArticle",
+                  args: [articleIdBytes],
+                });
+                if (existing && existing[1] && existing[1].toLowerCase() === connectedWallet.toLowerCase()) {
+                  status.textContent = "Already registered ✓";
+                  status.style.color = "#16a34a";
+                  // Skip writeContract entirely — still copy the embed below
+                } else {
+                  await doRegister();
+                }
+              } catch {
+                // Contract may not be deployed or article unknown → attempt registration
+                await doRegister();
+              }
               try {
                 const currentChain = await eth.request({ method: "eth_chainId" });
                 if (parseInt(currentChain, 16) !== 143) {
@@ -382,50 +474,6 @@ ${bodyEsc}
                     params: [{ chainId: "0x8f" }], // 143 decimal = 0x8f
                   });
                 }
-              } catch (switchErr) {
-                // If chain not added to wallet yet, add it
-                if (switchErr && switchErr.code === 4902) {
-                  await eth.request({
-                    method: "wallet_addEthereumChain",
-                    params: [{
-                      chainId: "0x8f",
-                      chainName: "Monad",
-                      nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
-                      rpcUrls: ["https://rpc.monad.xyz"],
-                      blockExplorerUrls: ["https://monadvision.com"],
-                    }],
-                  });
-                } else {
-                  throw switchErr;
-                }
-              }
-
-              const walletClient = createWalletClient({
-                account: connectedWallet,
-                chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
-                transport: custom(eth),
-              });
-
-              await walletClient.writeContract({
-                address: MAINNET_CONTRACT,
-                abi: [
-                  {
-                    name: "registerArticle",
-                    type: "function",
-                    stateMutability: "nonpayable",
-                    inputs: [
-                      { name: "articleId", type: "bytes32" },
-                      { name: "priceWei", type: "uint256" },
-                    ],
-                    outputs: [],
-                  },
-                ],
-                functionName: "registerArticle",
-                args: [articleIdBytes, priceWei],
-              });
-
-              status.textContent = "Registered on Monad ✓";
-              status.style.color = "#16a34a";
             } catch (e) {
               status.textContent = e.message || "Registration failed";
               status.style.color = "#ef4444";
