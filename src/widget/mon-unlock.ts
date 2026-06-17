@@ -143,6 +143,34 @@ export class MonUnlock extends LitElement {
     if (this.isOnchain && this.wallet.address) {
       void this.verifyOnchain();
     }
+
+    // Passive on-chain check: if the user has previously authorized this wallet on this domain,
+    // detect it silently via eth_accounts (no popup) and verify unlock status automatically.
+    // This makes cross-site unlocks (localhost → production, etc.) appear without clicking Connect.
+    if (this.isOnchain) {
+      this.attemptSilentOnchainCheck();
+    }
+  }
+
+  /** Attempt to discover an already-authorized account without prompting the user.
+   *  Used so that on-chain unlocks done on another domain become visible immediately.
+   */
+  private attemptSilentOnchainCheck() {
+    const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
+    if (!eth) return;
+
+    eth.request({ method: "eth_accounts" })
+      .then((accounts: unknown) => {
+        const list = accounts as string[] | undefined;
+        if (list && list.length > 0) {
+          const addr = list[0];
+          this.wallet = { connected: true, address: addr };
+          void this.verifyOnchain();
+        }
+      })
+      .catch(() => {
+        /* No accounts exposed yet – user has not connected on this origin */
+      });
   }
 
   private checkAccess() {
