@@ -142,7 +142,9 @@ export class OnchainUnlockService {
     const account = wallet as Address;
     const articleIdBytes = toArticleId(articleId);
 
-    // Send the unlock transaction (payable)
+    // Send the unlock transaction (payable).
+    // Explicit gas limit avoids "exceeds transaction gas limit" errors on Monad
+    // when the contract does an internal .call to forward payment (hard for RPCs to estimate).
     const txHash = (await walletClient.writeContract({
       account,
       address: this.contractAddress,
@@ -158,6 +160,7 @@ export class OnchainUnlockService {
       functionName: "unlock",
       args: [articleIdBytes],
       value: priceMon,
+      gas: 200000n,
     })) as Hash;
 
     // Wait for confirmation
