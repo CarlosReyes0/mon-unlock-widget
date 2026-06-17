@@ -49,6 +49,10 @@
         border-radius: 0.25rem;
         padding: 0 0.25rem;
       }
+      /* Hide slotted fallback content until the widget upgrades */
+      mon-unlock:not(:defined) [slot] {
+        display: none;
+      }
     </style>
   </head>
   <body>
