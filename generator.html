@@ -469,15 +469,6 @@ ${bodyEsc}
                 // Contract may not be deployed or article unknown → attempt registration
                 await doRegister();
               }
-              try {
-                const currentChain = await eth.request({ method: "eth_chainId" });
-                if (parseInt(currentChain, 16) !== 143) {
-                  status.textContent = "Switching to Monad mainnet…";
-                  await eth.request({
-                    method: "wallet_switchEthereumChain",
-                    params: [{ chainId: "0x8f" }], // 143 decimal = 0x8f
-                  });
-                }
             } catch (e) {
               status.textContent = e.message || "Registration failed";
               status.style.color = "#ef4444";
