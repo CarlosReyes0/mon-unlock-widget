@@ -81,7 +81,10 @@
       <!-- My Articles + Stats -->
       <div>
         <div class="card">
-          <h2 class="section-title">My articles</h2>
+          <h2 class="section-title" style="display:flex; align-items:center; justify-content:space-between;">
+            My articles
+            <button class="btn btn-secondary" id="refreshOnchainBtn" style="font-size:0.75rem; padding:0.25rem 0.75rem;">Refresh from chain</button>
+          </h2>
           <table id="articlesTable">
             <thead>
               <tr>
@@ -166,35 +169,34 @@
       }
 
       // === On-chain data loader (automatic, cached, rate-limit friendly) ===
-      async function loadOnchainData(wallet, net) {
+      async function loadOnchainData(wallet, net, { force = false } = {}) {
         const cacheKey = `mon-unlock-dashboard-onchain:${wallet.toLowerCase()}:${net.contract}`;
+        const statusEl = document.getElementById("walletStatus");
+        const originalStatus = statusEl.innerHTML;
+
         try {
-          const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
-          if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-            // Use cached data instantly (fast path)
-            myArticles = cached.articles || [];
-            renderArticles();
-            updateStats();
-            return;
+          if (!force) {
+            const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+            if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+              myArticles = cached.articles || [];
+              renderArticles();
+              updateStats();
+              return;
+            }
           }
         } catch {}
 
-        // Show a subtle loading hint
-        const statusEl = document.getElementById("walletStatus");
-        const original = statusEl.innerHTML;
-        statusEl.innerHTML = original + ` <span style="color:#6b7280">(loading on-chain data…)</span>`;
+        statusEl.innerHTML = originalStatus + ` <span style="color:#6b7280">(loading on-chain data…)</span>`;
 
         try {
-          const { createPublicClient, http, parseAbiItem, keccak256, toBytes } = await import("https://esm.sh/viem@2");
+          const { createPublicClient, http, parseAbiItem } = await import("https://esm.sh/viem@2");
 
           const publicClient = createPublicClient({
             chain: { id: net.chainId || 143, name: net.name, nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: [net.rpcUrl || "https://rpc.monad.xyz"] } } },
             transport: http(net.rpcUrl || "https://rpc.monad.xyz"),
           });
 
-          const publisherTopic = "0x" + wallet.toLowerCase().slice(2).padStart(64, "0");
-
-          // 1. Get all articles this wallet has registered
+          // 1. Articles registered by this wallet
           const registeredLogs = await publicClient.getLogs({
             address: net.contract,
             event: parseAbiItem("event ArticleRegistered(bytes32 indexed articleId, uint256 priceWei, address indexed publisher)"),
@@ -206,27 +208,24 @@
           for (const log of registeredLogs) {
             const articleId = log.args.articleId;
             try {
-              const [priceWei, publisher, active] = await publicClient.readContract({
+              const [priceWei, , active] = await publicClient.readContract({
                 address: net.contract,
-                abi: [
-                  { name: "getArticle", type: "function", stateMutability: "view", inputs: [{ name: "articleId", type: "bytes32" }], outputs: [{ type: "uint256" }, { type: "address" }, { type: "bool" }] },
-                ],
+                abi: [{ name: "getArticle", type: "function", stateMutability: "view", inputs: [{ name: "articleId", type: "bytes32" }], outputs: [{ type: "uint256" }, { type: "address" }, { type: "bool" }] }],
                 functionName: "getArticle",
                 args: [articleId],
               });
               onchainArticles.push({
-                articleId: articleId,
+                articleId,
                 priceMon: priceWei,
                 active,
                 registeredAt: Number(log.blockNumber || 0) * 1000,
               });
-            } catch (e) {
-              // If getArticle fails, still show the articleId
+            } catch {
               onchainArticles.push({ articleId, priceMon: 0n, active: false, registeredAt: 0 });
             }
           }
 
-          // 2. Aggregate revenue from ArticleUnlocked events (client-side, acceptable for current volume)
+          // 2. Revenue from ArticleUnlocked events
           const unlockedLogs = await publicClient.getLogs({
             address: net.contract,
             event: parseAbiItem("event ArticleUnlocked(address indexed reader, bytes32 indexed articleId, uint256 amount, address indexed publisher)"),
@@ -237,11 +236,9 @@
           const revenueByArticle = {};
           for (const log of unlockedLogs) {
             const aid = log.args.articleId;
-            const amt = log.args.amount || 0n;
-            revenueByArticle[aid] = (revenueByArticle[aid] || 0n) + amt;
+            revenueByArticle[aid] = (revenueByArticle[aid] || 0n) + (log.args.amount || 0n);
           }
 
-          // Merge on-chain data into myArticles (preserve any local-only metadata)
           const merged = onchainArticles.map((a) => {
             const local = myArticles.find((x) => x.articleId === a.articleId);
             return {
@@ -253,19 +250,28 @@
 
           myArticles = merged;
           saveMyArticles(wallet);
-
-          // Save cache
           localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), articles: myArticles }));
 
           renderArticles();
           updateStats();
         } catch (e) {
-          console.warn("On-chain load failed", e);
-          // Fall back to whatever is in localStorage
+          console.error("On-chain load failed", e);
+          statusEl.innerHTML = originalStatus + ` <span style="color:#ef4444">(failed to load on-chain data — try Refresh)</span>`;
+          // Still render whatever we have
           renderArticles();
           updateStats();
+          // Clear the error message after a few seconds
+          setTimeout(() => {
+            if (statusEl.innerHTML.includes("failed to load")) {
+              statusEl.innerHTML = originalStatus;
+            }
+          }, 6000);
+          return;
         } finally {
-          statusEl.innerHTML = original;
+          // Only restore if we didn't leave an error message
+          if (!statusEl.innerHTML.includes("failed")) {
+            statusEl.innerHTML = originalStatus;
+          }
         }
       }
 
@@ -393,16 +399,11 @@
         const net = window.__currentNetwork || NETWORKS[143];
         const priceWei = parseMonAmount(priceStr);
 
-        // ABI-encode registerArticle(bytes32 articleId, uint256 priceWei)
-        // selector = keccak256("registerArticle(bytes32,uint256)")[:4] = 0x8a2e7e3c
-        const selector = "0x8a2e7e3c";
-
-        // bytes32 articleId = keccak256(bytes(articleId)) — we use the same encoding as the widget
-        // For simplicity in this dashboard we take the slug and left-pad it (real apps should keccak it)
-        const articleIdBytes = new TextEncoder().encode(articleId);
-        const articleIdPadded = new Uint8Array(32);
-        articleIdPadded.set(articleIdBytes.slice(0, 32));
-        const articleIdHex = "0x" + Array.from(articleIdPadded).map(b => b.toString(16).padStart(2,"0")).join("");
+        // Use the exact same encoding as the generator and the widget:
+        // keccak256(bytes(articleId))
+        const { keccak256, toBytes } = await import("https://esm.sh/viem@2");
+        const articleIdBytes = keccak256(toBytes(articleId));
+        const articleIdHex = articleIdBytes;
 
         const priceHex = "0x" + priceWei.toString(16).padStart(64, "0");
 
@@ -501,6 +502,20 @@
         document.getElementById("registerBtn").addEventListener("click", registerArticle);
         document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
         document.getElementById("switchBtn").addEventListener("click", switchWallet);
+
+        // Refresh button for on-chain data
+        const refreshBtn = document.getElementById("refreshOnchainBtn");
+        if (refreshBtn) {
+          refreshBtn.addEventListener("click", () => {
+            if (!currentWallet || !window.__currentNetwork) return;
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = "Refreshing…";
+            loadOnchainData(currentWallet, window.__currentNetwork, { force: true }).finally(() => {
+              refreshBtn.disabled = false;
+              refreshBtn.textContent = "Refresh from chain";
+            });
+          });
+        }
 
         // If already connected in this session (from other pages), try to restore
         // For simplicity we start fresh on each load
