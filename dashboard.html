@@ -169,6 +169,8 @@
       }
 
       // === On-chain data loader (automatic, cached, rate-limit friendly) ===
+      // NOTE: The Monad RPC limits eth_getLogs to a 100-block range.
+      // We paginate the history in 100-block chunks to comply.
       async function loadOnchainData(wallet, net, { force = false } = {}) {
         const cacheKey = `mon-unlock-dashboard-onchain:${wallet.toLowerCase()}:${net.contract}`;
         const statusEl = document.getElementById("walletStatus");
@@ -196,13 +198,34 @@
             transport: http(net.rpcUrl || "https://rpc.monad.xyz"),
           });
 
-          // 1. Articles registered by this wallet
-          const registeredLogs = await publicClient.getLogs({
-            address: net.contract,
-            event: parseAbiItem("event ArticleRegistered(bytes32 indexed articleId, uint256 priceWei, address indexed publisher)"),
-            args: { publisher: wallet },
-            fromBlock: 0n,
-          });
+          const currentBlock = await publicClient.getBlockNumber();
+          const chunkSize = 100n; // RPC limit
+
+          let registeredLogs = [];
+          let unlockedLogs = [];
+
+          // Paginate from 0 to currentBlock
+          for (let from = 0n; from <= currentBlock; from += chunkSize) {
+            const to = (from + chunkSize - 1n > currentBlock) ? currentBlock : from + chunkSize - 1n;
+
+            const regChunk = await publicClient.getLogs({
+              address: net.contract,
+              event: parseAbiItem("event ArticleRegistered(bytes32 indexed articleId, uint256 priceWei, address indexed publisher)"),
+              args: { publisher: wallet },
+              fromBlock: from,
+              toBlock: to,
+            });
+            registeredLogs.push(...regChunk);
+
+            const unlockChunk = await publicClient.getLogs({
+              address: net.contract,
+              event: parseAbiItem("event ArticleUnlocked(address indexed reader, bytes32 indexed articleId, uint256 amount, address indexed publisher)"),
+              args: { publisher: wallet },
+              fromBlock: from,
+              toBlock: to,
+            });
+            unlockedLogs.push(...unlockChunk);
+          }
 
           const onchainArticles = [];
           for (const log of registeredLogs) {
@@ -224,14 +247,6 @@
               onchainArticles.push({ articleId, priceMon: 0n, active: false, registeredAt: 0 });
             }
           }
-
-          // 2. Revenue from ArticleUnlocked events
-          const unlockedLogs = await publicClient.getLogs({
-            address: net.contract,
-            event: parseAbiItem("event ArticleUnlocked(address indexed reader, bytes32 indexed articleId, uint256 amount, address indexed publisher)"),
-            args: { publisher: wallet },
-            fromBlock: 0n,
-          });
 
           const revenueByArticle = {};
           for (const log of unlockedLogs) {
@@ -257,10 +272,8 @@
         } catch (e) {
           console.error("On-chain load failed", e);
           statusEl.innerHTML = originalStatus + ` <span style="color:#ef4444">(failed to load on-chain data — try Refresh)</span>`;
-          // Still render whatever we have
           renderArticles();
           updateStats();
-          // Clear the error message after a few seconds
           setTimeout(() => {
             if (statusEl.innerHTML.includes("failed to load")) {
               statusEl.innerHTML = originalStatus;
@@ -268,7 +281,6 @@
           }, 6000);
           return;
         } finally {
-          // Only restore if we didn't leave an error message
           if (!statusEl.innerHTML.includes("failed")) {
             statusEl.innerHTML = originalStatus;
           }
@@ -407,6 +419,7 @@
 
         const priceHex = "0x" + priceWei.toString(16).padStart(64, "0");
 
+        const selector = "0x8a2e7e3c";
         const data = selector + articleIdHex.slice(2) + priceHex.slice(2);
 
         btn.disabled = true;
