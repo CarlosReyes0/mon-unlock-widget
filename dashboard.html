@@ -125,6 +125,8 @@
           name: "Monad",
           contract: "0x038446b1F736e254cC0E256B20D74823c41EeADB",
           explorer: "https://monadvision.com",
+          rpcUrl: "https://rpc.monad.xyz",
+          chainId: 143,
         },
       };
 
@@ -148,6 +150,7 @@
 
       let currentWallet = null;
       let myArticles = [];
+      const CACHE_TTL_MS = 90_000; // 90 seconds – fast enough for UX, gentle on RPC
 
       function loadMyArticles(wallet) {
         try {
@@ -160,6 +163,110 @@
 
       function saveMyArticles(wallet) {
         localStorage.setItem(STORAGE_KEY + ":" + wallet.toLowerCase(), JSON.stringify(myArticles));
+      }
+
+      // === On-chain data loader (automatic, cached, rate-limit friendly) ===
+      async function loadOnchainData(wallet, net) {
+        const cacheKey = `mon-unlock-dashboard-onchain:${wallet.toLowerCase()}:${net.contract}`;
+        try {
+          const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+          if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+            // Use cached data instantly (fast path)
+            myArticles = cached.articles || [];
+            renderArticles();
+            updateStats();
+            return;
+          }
+        } catch {}
+
+        // Show a subtle loading hint
+        const statusEl = document.getElementById("walletStatus");
+        const original = statusEl.innerHTML;
+        statusEl.innerHTML = original + ` <span style="color:#6b7280">(loading on-chain data…)</span>`;
+
+        try {
+          const { createPublicClient, http, parseAbiItem, keccak256, toBytes } = await import("https://esm.sh/viem@2");
+
+          const publicClient = createPublicClient({
+            chain: { id: net.chainId || 143, name: net.name, nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: [net.rpcUrl || "https://rpc.monad.xyz"] } } },
+            transport: http(net.rpcUrl || "https://rpc.monad.xyz"),
+          });
+
+          const publisherTopic = "0x" + wallet.toLowerCase().slice(2).padStart(64, "0");
+
+          // 1. Get all articles this wallet has registered
+          const registeredLogs = await publicClient.getLogs({
+            address: net.contract,
+            event: parseAbiItem("event ArticleRegistered(bytes32 indexed articleId, uint256 priceWei, address indexed publisher)"),
+            args: { publisher: wallet },
+            fromBlock: 0n,
+          });
+
+          const onchainArticles = [];
+          for (const log of registeredLogs) {
+            const articleId = log.args.articleId;
+            try {
+              const [priceWei, publisher, active] = await publicClient.readContract({
+                address: net.contract,
+                abi: [
+                  { name: "getArticle", type: "function", stateMutability: "view", inputs: [{ name: "articleId", type: "bytes32" }], outputs: [{ type: "uint256" }, { type: "address" }, { type: "bool" }] },
+                ],
+                functionName: "getArticle",
+                args: [articleId],
+              });
+              onchainArticles.push({
+                articleId: articleId,
+                priceMon: priceWei,
+                active,
+                registeredAt: Number(log.blockNumber || 0) * 1000,
+              });
+            } catch (e) {
+              // If getArticle fails, still show the articleId
+              onchainArticles.push({ articleId, priceMon: 0n, active: false, registeredAt: 0 });
+            }
+          }
+
+          // 2. Aggregate revenue from ArticleUnlocked events (client-side, acceptable for current volume)
+          const unlockedLogs = await publicClient.getLogs({
+            address: net.contract,
+            event: parseAbiItem("event ArticleUnlocked(address indexed reader, bytes32 indexed articleId, uint256 amount, address indexed publisher)"),
+            args: { publisher: wallet },
+            fromBlock: 0n,
+          });
+
+          const revenueByArticle = {};
+          for (const log of unlockedLogs) {
+            const aid = log.args.articleId;
+            const amt = log.args.amount || 0n;
+            revenueByArticle[aid] = (revenueByArticle[aid] || 0n) + amt;
+          }
+
+          // Merge on-chain data into myArticles (preserve any local-only metadata)
+          const merged = onchainArticles.map((a) => {
+            const local = myArticles.find((x) => x.articleId === a.articleId);
+            return {
+              ...a,
+              revenueMon: revenueByArticle[a.articleId] || 0n,
+              title: local?.title || a.articleId,
+            };
+          });
+
+          myArticles = merged;
+          saveMyArticles(wallet);
+
+          // Save cache
+          localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), articles: myArticles }));
+
+          renderArticles();
+          updateStats();
+        } catch (e) {
+          console.warn("On-chain load failed", e);
+          // Fall back to whatever is in localStorage
+          renderArticles();
+          updateStats();
+        } finally {
+          statusEl.innerHTML = original;
+        }
       }
 
       function renderArticles() {
@@ -258,6 +365,10 @@
           document.getElementById("registerBtn").disabled = false;
           renderArticles();
           updateStats();
+
+          // Automatically load real on-chain data (articles + revenue) for this wallet
+          // This runs in the background and updates the UI when ready.
+          loadOnchainData(currentWallet, net);
         } catch (e) {
           status.textContent = e.message || "Connection failed";
           btn.disabled = false;
@@ -377,6 +488,9 @@
 
           renderArticles();
           updateStats();
+
+          // Automatically fetch real on-chain articles + revenue for the restored wallet
+          loadOnchainData(currentWallet, net);
         } catch (e) {
           // User cancelled the permission prompt — do nothing
         }
