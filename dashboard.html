@@ -179,8 +179,13 @@
       let supabaseClient = null;
 
       function getSupabase() {
-        if (!supabaseClient && window.supabase) {
-          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        if (!supabaseClient) {
+          if (window.supabase) {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            console.log('[Supabase] client initialized');
+          } else {
+            console.error('[Supabase] window.supabase is undefined — CDN script failed to load');
+          }
         }
         return supabaseClient;
       }
@@ -188,7 +193,14 @@
       async function loadFromSupabase(wallet) {
         const client = getSupabase();
         if (!client) {
-          console.error("Supabase client not initialized. Check SUPABASE_URL and SUPABASE_ANON_KEY.");
+          console.error('[Supabase] client unavailable — showing fallback message');
+          const body = document.getElementById('articlesBody');
+          const empty = document.getElementById('articlesEmpty');
+          if (body) body.innerHTML = '';
+          if (empty) {
+            empty.style.display = 'block';
+            empty.innerHTML = 'Supabase unavailable. Open this page from a local web server (not file://) so the CDN script can load.';
+          }
           return;
         }
         const statusEl = document.getElementById("walletStatus");
@@ -203,6 +215,8 @@
             .eq('publisher', wallet.toLowerCase());
 
           if (articlesError) throw articlesError;
+
+          console.log('[Supabase] articles for publisher', wallet.toLowerCase(), articlesData);
 
           const articleHashes = articlesData.map((a) => a.article_id_hash);
 
@@ -239,11 +253,12 @@
 
           renderArticles();
           updateStats();
+
+          // Clear the loading indicator only on success
+          statusEl.innerHTML = originalStatus;
         } catch (e) {
           console.error("Supabase load failed", e);
           statusEl.innerHTML = originalStatus + ` <span style="color:#ef4444">(Supabase load failed)</span>`;
-        } finally {
-          statusEl.innerHTML = originalStatus;
         }
       }
 
