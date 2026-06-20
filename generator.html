@@ -435,6 +435,23 @@ ${bodyEsc}
 
                 status.textContent = "Registered on Monad ✓";
                 status.style.color = "#16a34a";
+
+                // Record the slug in Supabase so the dashboard can later
+                // generate the exact same embed code the generator produced.
+                try {
+                  await fetch('https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      slug: v.articleId,
+                      articleIdHash: articleIdBytes,
+                      priceWei: priceWei.toString(),
+                      publisher: connectedWallet,
+                    }),
+                  });
+                } catch (_) {
+                  // Non-fatal: the on-chain registration succeeded.
+                }
               }
 
               // Idempotency check: if already registered by this wallet, skip the tx (gas-free repeat clicks)
@@ -465,7 +482,20 @@ ${bodyEsc}
                 if (existing && existing[1] && existing[1].toLowerCase() === connectedWallet.toLowerCase()) {
                   status.textContent = "Already registered ✓";
                   status.style.color = "#16a34a";
-                  // Skip writeContract entirely — still copy the embed below
+
+                  // Still record the slug so the dashboard can produce the exact embed later
+                  try {
+                    await fetch('https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        slug: v.articleId,
+                        articleIdHash: articleIdBytes,
+                        priceWei: priceWei.toString(),
+                        publisher: connectedWallet,
+                      }),
+                    });
+                  } catch (_) {}
                 } else {
                   await doRegister();
                 }
