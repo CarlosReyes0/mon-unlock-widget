@@ -447,6 +447,8 @@ ${bodyEsc}
                       articleIdHash: articleIdBytes,
                       priceWei: priceWei.toString(),
                       publisher: connectedWallet,
+                      teaser: v.teaser,
+                      body: v.body,
                     }),
                   });
                 } catch (_) {
@@ -493,6 +495,8 @@ ${bodyEsc}
                         articleIdHash: articleIdBytes,
                         priceWei: priceWei.toString(),
                         publisher: connectedWallet,
+                        teaser: v.teaser,
+                        body: v.body,
                       }),
                     });
                   } catch (_) {}

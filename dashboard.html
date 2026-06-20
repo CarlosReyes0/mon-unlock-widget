@@ -283,11 +283,23 @@
         return h.slice(0, 10) + '...' + h.slice(-6);
       }
 
+      function escapeHtml(str) {
+        return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
       function generateEmbedCode(article) {
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');
+
+        // Use stored teaser/body if available, otherwise fall back to generic text
+        const teaser = article.teaser
+          ? escapeHtml(article.teaser)
+          : `Free preview of ${displayTitle}...`;
+        const body = article.body
+          ? escapeHtml(article.body)
+          : `Full content of ${displayTitle} goes here...`;
 
         return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
@@ -299,8 +311,12 @@
   price="${(Number(article.priceMon) / 1e18).toFixed(1)}"
   unlock-contract="${CONTRACT}"
 >
-  <div slot="teaser">Free preview of ${displayTitle}...</div>
-  <div slot="body">Full content of ${displayTitle} goes here...</div>
+  <div slot="teaser">
+${teaser}
+  </div>
+  <div slot="body">
+${body}
+  </div>
 <\/mon-unlock>`;
       }
 
