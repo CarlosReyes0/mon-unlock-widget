@@ -6,6 +6,8 @@
     <title>Writer Dashboard — MON Unlock</title>
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
     <script type="module" src="/dist/mon-unlock.js"></script>
+    <!-- Supabase Client for reading dashboard data -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
     <style>
@@ -112,7 +114,7 @@
               <div id="totalRevenue" class="stat">0 MON</div>
             </div>
           </div>
-          <p style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">On-chain analytics (ArticleUnlocked events) coming in the next update. Current numbers are from registered articles in this session.</p>
+          <p style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">Data refreshed from Supabase (populated by the Edge Function indexer).</p>
         </div>
       </div>
     </div>
@@ -168,122 +170,80 @@
         localStorage.setItem(STORAGE_KEY + ":" + wallet.toLowerCase(), JSON.stringify(myArticles));
       }
 
-      // === On-chain data loader (automatic, cached, rate-limit friendly) ===
-      // NOTE: The Monad RPC limits eth_getLogs to a 100-block range.
-      // We paginate the history in 100-block chunks to comply.
-      async function loadOnchainData(wallet, net, { force = false } = {}) {
-        const cacheKey = `mon-unlock-dashboard-onchain:${wallet.toLowerCase()}:${net.contract}`;
+      // === Supabase Loader (Fast path via Edge Function Indexer) ===
+      // The heavy lifting (RPC scanning) is done by the Supabase Edge Function `indexer`.
+      // The dashboard just reads the aggregated data from the `articles` and `unlocks` tables.
+      const SUPABASE_URL = 'https://flczjqljgntmkanipugo.supabase.co';
+      // Get the anon key from Supabase Dashboard → Project Settings → API → Project API keys → "anon" (public)
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4';
+      let supabaseClient = null;
+
+      function getSupabase() {
+        if (!supabaseClient && window.supabase) {
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+        return supabaseClient;
+      }
+
+      async function loadFromSupabase(wallet) {
+        const client = getSupabase();
+        if (!client) {
+          console.error("Supabase client not initialized. Check SUPABASE_URL and SUPABASE_ANON_KEY.");
+          return;
+        }
         const statusEl = document.getElementById("walletStatus");
         const originalStatus = statusEl.innerHTML;
+        statusEl.innerHTML = originalStatus + ` <span style="color:#6b7280">(loading...)</span>`;
 
         try {
-          if (!force) {
-            const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
-            if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-              myArticles = cached.articles || [];
-              renderArticles();
-              updateStats();
-              return;
+          // 1. Fetch articles for this publisher
+          const { data: articlesData, error: articlesError } = await client
+            .from('articles')
+            .select('*')
+            .eq('publisher', wallet.toLowerCase());
+
+          if (articlesError) throw articlesError;
+
+          const articleHashes = articlesData.map((a) => a.article_id_hash);
+
+          // 2. Fetch unlocks only for these articles
+          let unlocksData = [];
+          if (articleHashes.length > 0) {
+            const { data: uData, error: unlocksError } = await client
+              .from('unlocks')
+              .select('article_id_hash, amount_wei')
+              .in('article_id_hash', articleHashes);
+            if (unlocksError) throw unlocksError;
+            unlocksData = uData || [];
+          }
+
+          // Aggregate per-article stats
+          const stats = {};
+          for (const u of unlocksData) {
+            if (!stats[u.article_id_hash]) {
+              stats[u.article_id_hash] = { count: 0, revenue: 0n };
             }
-          }
-        } catch {}
-
-        statusEl.innerHTML = originalStatus + ` <span style="color:#6b7280">(loading on-chain data…)</span>`;
-
-        try {
-          const { createPublicClient, http, parseAbiItem } = await import("https://esm.sh/viem@2");
-
-          const publicClient = createPublicClient({
-            chain: { id: net.chainId || 143, name: net.name, nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: [net.rpcUrl || "https://rpc.monad.xyz"] } } },
-            transport: http(net.rpcUrl || "https://rpc.monad.xyz"),
-          });
-
-          const currentBlock = await publicClient.getBlockNumber();
-          const chunkSize = 100n; // RPC limit
-
-          let registeredLogs = [];
-          let unlockedLogs = [];
-
-          // Paginate from 0 to currentBlock
-          for (let from = 0n; from <= currentBlock; from += chunkSize) {
-            const to = (from + chunkSize - 1n > currentBlock) ? currentBlock : from + chunkSize - 1n;
-
-            const regChunk = await publicClient.getLogs({
-              address: net.contract,
-              event: parseAbiItem("event ArticleRegistered(bytes32 indexed articleId, uint256 priceWei, address indexed publisher)"),
-              args: { publisher: wallet },
-              fromBlock: from,
-              toBlock: to,
-            });
-            registeredLogs.push(...regChunk);
-
-            const unlockChunk = await publicClient.getLogs({
-              address: net.contract,
-              event: parseAbiItem("event ArticleUnlocked(address indexed reader, bytes32 indexed articleId, uint256 amount, address indexed publisher)"),
-              args: { publisher: wallet },
-              fromBlock: from,
-              toBlock: to,
-            });
-            unlockedLogs.push(...unlockChunk);
+            stats[u.article_id_hash].count += 1;
+            stats[u.article_id_hash].revenue += BigInt(u.amount_wei);
           }
 
-          const onchainArticles = [];
-          for (const log of registeredLogs) {
-            const articleId = log.args.articleId;
-            try {
-              const [priceWei, , active] = await publicClient.readContract({
-                address: net.contract,
-                abi: [{ name: "getArticle", type: "function", stateMutability: "view", inputs: [{ name: "articleId", type: "bytes32" }], outputs: [{ type: "uint256" }, { type: "address" }, { type: "bool" }] }],
-                functionName: "getArticle",
-                args: [articleId],
-              });
-              onchainArticles.push({
-                articleId,
-                priceMon: priceWei,
-                active,
-                registeredAt: Number(log.blockNumber || 0) * 1000,
-              });
-            } catch {
-              onchainArticles.push({ articleId, priceMon: 0n, active: false, registeredAt: 0 });
-            }
-          }
-
-          const revenueByArticle = {};
-          for (const log of unlockedLogs) {
-            const aid = log.args.articleId;
-            revenueByArticle[aid] = (revenueByArticle[aid] || 0n) + (log.args.amount || 0n);
-          }
-
-          const merged = onchainArticles.map((a) => {
-            const local = myArticles.find((x) => x.articleId === a.articleId);
-            return {
-              ...a,
-              revenueMon: revenueByArticle[a.articleId] || 0n,
-              title: local?.title || a.articleId,
-            };
-          });
-
-          myArticles = merged;
-          saveMyArticles(wallet);
-          localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), articles: myArticles }));
+          myArticles = articlesData.map((a) => ({
+            articleId: a.article_id || a.article_id_hash,
+            articleIdHash: a.article_id_hash,
+            priceMon: BigInt(a.price_wei),
+            active: a.active,
+            unlockCount: stats[a.article_id_hash]?.count || 0,
+            revenueMon: stats[a.article_id_hash]?.revenue || 0n,
+            title: a.article_id || a.article_id_hash,
+          }));
 
           renderArticles();
           updateStats();
         } catch (e) {
-          console.error("On-chain load failed", e);
-          statusEl.innerHTML = originalStatus + ` <span style="color:#ef4444">(failed to load on-chain data — try Refresh)</span>`;
-          renderArticles();
-          updateStats();
-          setTimeout(() => {
-            if (statusEl.innerHTML.includes("failed to load")) {
-              statusEl.innerHTML = originalStatus;
-            }
-          }, 6000);
-          return;
+          console.error("Supabase load failed", e);
+          statusEl.innerHTML = originalStatus + ` <span style="color:#ef4444">(Supabase load failed)</span>`;
         } finally {
-          if (!statusEl.innerHTML.includes("failed")) {
-            statusEl.innerHTML = originalStatus;
-          }
+          statusEl.innerHTML = originalStatus;
         }
       }
 
@@ -303,8 +263,8 @@
           row.innerHTML = `
             <td class="mono">${a.articleId}</td>
             <td>${formatMon(a.priceMon)} MON</td>
-            <td>—</td>
-            <td>—</td>
+            <td>${a.unlockCount ?? 0}</td>
+            <td>${formatMon(a.revenueMon ?? 0n)} MON</td>
             <td>
               <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-idx="${idx}">Copy embed</button>
             </td>
@@ -345,9 +305,10 @@
       }
 
       function updateStats() {
-        document.getElementById("totalUnlocks").textContent = myArticles.length; // placeholder
-        const totalWei = myArticles.reduce((sum, a) => sum + a.priceMon, 0n);
-        document.getElementById("totalRevenue").textContent = formatMon(totalWei) + " MON";
+        const totalUnlocks = myArticles.reduce((sum, a) => sum + (a.unlockCount ?? 0), 0);
+        const totalRevenue = myArticles.reduce((sum, a) => sum + (a.revenueMon ?? 0n), 0n);
+        document.getElementById("totalUnlocks").textContent = totalUnlocks;
+        document.getElementById("totalRevenue").textContent = formatMon(totalRevenue) + " MON";
       }
 
       async function connectWallet() {
@@ -384,9 +345,8 @@
           renderArticles();
           updateStats();
 
-          // Automatically load real on-chain data (articles + revenue) for this wallet
-          // This runs in the background and updates the UI when ready.
-          loadOnchainData(currentWallet, net);
+          // Load data from Supabase (populated by the Edge Function Indexer)
+          loadFromSupabase(currentWallet);
         } catch (e) {
           status.textContent = e.message || "Connection failed";
           btn.disabled = false;
@@ -503,8 +463,8 @@
           renderArticles();
           updateStats();
 
-          // Automatically fetch real on-chain articles + revenue for the restored wallet
-          loadOnchainData(currentWallet, net);
+          // Load data from Supabase
+          loadFromSupabase(currentWallet);
         } catch (e) {
           // User cancelled the permission prompt — do nothing
         }
@@ -516,14 +476,14 @@
         document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
         document.getElementById("switchBtn").addEventListener("click", switchWallet);
 
-        // Refresh button for on-chain data
+        // Refresh button for Supabase data
         const refreshBtn = document.getElementById("refreshOnchainBtn");
         if (refreshBtn) {
           refreshBtn.addEventListener("click", () => {
-            if (!currentWallet || !window.__currentNetwork) return;
+            if (!currentWallet) return;
             refreshBtn.disabled = true;
             refreshBtn.textContent = "Refreshing…";
-            loadOnchainData(currentWallet, window.__currentNetwork, { force: true }).finally(() => {
+            loadFromSupabase(currentWallet).finally(() => {
               refreshBtn.disabled = false;
               refreshBtn.textContent = "Refresh from chain";
             });
