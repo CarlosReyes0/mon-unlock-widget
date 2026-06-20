@@ -297,13 +297,10 @@
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');
 
-        // Use stored teaser/body if available, otherwise fall back to generic text
+        // Use stored teaser if available, otherwise fall back to generic text
         const teaser = article.teaser
           ? escapeHtml(article.teaser)
           : `Free preview of ${displayTitle}...`;
-        const body = article.body
-          ? escapeHtml(article.body)
-          : `Full content of ${displayTitle} goes here...`;
 
         return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
@@ -317,9 +314,6 @@
 >
   <div slot="teaser">
 ${teaser}
-  </div>
-  <div slot="body">
-${body}
   </div>
 <\/mon-unlock>`;
       }

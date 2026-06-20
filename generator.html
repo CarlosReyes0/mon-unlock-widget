@@ -311,13 +311,12 @@
         const v = getValues();
         const out = document.getElementById("outputCode");
 
-        if (!v.title || !v.articleId || !v.teaser || !v.body) {
+        if (!v.title || !v.articleId || !v.teaser) {
           out.textContent = "<!-- Fill the form to generate code -->";
           return;
         }
 
         const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const bodyEsc = v.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
         const code = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
@@ -331,9 +330,6 @@
 >
   <div slot="teaser">
 ${teaserEsc}
-  </div>
-  <div slot="body">
-${bodyEsc}
   </div>
 <\/mon-unlock>`;
 
@@ -516,7 +512,6 @@ ${bodyEsc}
 
             // Always produce the on-chain embed when wallet is connected
             const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            const bodyEsc = v.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
 
@@ -530,14 +525,10 @@ ${bodyEsc}
   <div slot="teaser">
 ${teaserEsc}
   </div>
-  <div slot="body">
-${bodyEsc}
-  </div>
 <\/mon-unlock>`;
           } else {
             // No wallet → demo embed (no on-chain contract)
             const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            const bodyEsc = v.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
 
@@ -549,9 +540,6 @@ ${bodyEsc}
 >
   <div slot="teaser">
 ${teaserEsc}
-  </div>
-  <div slot="body">
-${bodyEsc}
   </div>
 <\/mon-unlock>`;
           }

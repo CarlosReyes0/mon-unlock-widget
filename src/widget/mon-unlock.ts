@@ -40,6 +40,7 @@ export class MonUnlock extends LitElement {
   @state() private loading = false;
   @state() private error: string | null = null;
   @state() private txHash: string | null = null;
+  @state() private fetchedBody: string | null = null;
 
   private walletManager = new WalletManager();
   private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
@@ -112,18 +113,14 @@ export class MonUnlock extends LitElement {
       this.error = 'Add a free preview: <div slot="teaser">...</div>';
       return;
     }
-    if (!body) {
-      this.article = null;
-      this.error = 'Add full article: <div slot="body">...</div>';
-      return;
-    }
+    // Body is now optional — if not provided via slot, it will be fetched after unlock.
 
     this.article = {
       id: this.articleId.trim(),
       title: this.title.trim(),
       author: (this.author || "Author").trim(),
       teaser,
-      body,
+      body, // may be empty string when body will be fetched after unlock
       priceMon: parseMonAmount(this.price),
       publishedAt: new Date().toISOString(),
     };
@@ -199,8 +196,51 @@ export class MonUnlock extends LitElement {
     this.unlocked = onchain;
     if (onchain) {
       this.txHash = null; // confirmed via chain, original tx unknown here
+      // Attempt to fetch body if we don't have a slotted one
+      void this.fetchBodyIfNeeded();
     } else {
       this.txHash = null;
+    }
+  }
+
+  /** If the publisher did not provide a slotted body, fetch the real content
+   *  from the article-body Edge Function after a successful unlock.
+   */
+  private async fetchBodyIfNeeded() {
+    if (!this.article || this.fetchedBody) return;
+    const slottedBody = this.slotHtml("body");
+    if (slottedBody) return; // already have body from the embed — no need to fetch
+
+    if (!this.wallet.address) return;
+
+    const apiBase = "https://flczjqljgntmkanipugo.supabase.co/functions/v1";
+    const anonKey =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
+
+    try {
+      const res = await fetch(
+        `${apiBase}/article-body?article_id=${encodeURIComponent(this.article.id)}&reader=${encodeURIComponent(
+          this.wallet.address
+        )}`,
+        {
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+          },
+        }
+      );
+
+      if (res.ok) {
+        const data = (await res.json()) as { body?: string };
+        if (data.body) {
+          this.fetchedBody = data.body;
+        }
+      } else {
+        // 403 or 404 — leave fetchedBody null; the UI will still show the teaser
+        console.warn("[mon-unlock] article-body fetch returned", res.status);
+      }
+    } catch (e) {
+      console.warn("[mon-unlock] failed to fetch body after unlock", e);
     }
   }
 
@@ -255,6 +295,9 @@ export class MonUnlock extends LitElement {
         await this.verifyOnchain();
       }
 
+      // If no slotted body was provided, fetch it from the service now that we are unlocked
+      await this.fetchBodyIfNeeded();
+
       this.emit("mon:connected", s);
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Could not connect wallet.";
@@ -298,7 +341,7 @@ export class MonUnlock extends LitElement {
           ${this.unlocked
             ? html`
                 <div class="mb-6 whitespace-pre-wrap text-base" style="color:#000">${a.teaser}</div>
-                <div class="mon-body text-black">${unsafeHTML(a.body)}</div>
+                <div class="mon-body text-black">${unsafeHTML(this.fetchedBody || a.body)}</div>
                 <p class="mt-6 text-xs text-black">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
                   ${this.txHash
