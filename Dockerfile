@@ -19,11 +19,12 @@ RUN npm install -g http-server
 
 # Copy built assets and static pages
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/demo.html ./demo.html
+COPY --from=builder /app/index.html ./index.html
 COPY --from=builder /app/generator.html ./generator.html
 COPY --from=builder /app/dashboard.html ./dashboard.html
+COPY --from=builder /app/embed-example.html ./embed-example.html
 
 # Serve static files (incl. /dist/* hashed chunks for ES modules) with CORS headers so any site can embed the widget via CDN.
 # Uses Access-Control-Allow-Origin: * (permissive for public CDN embeds; non-credentialed requests only).
 # To restrict later, replace with a custom server reading EMBED_ALLOWED_ORIGINS env var.
-CMD ["sh", "-c", "http-server . -p ${PORT:-8080} -d false --cors --proxy http://localhost:${PORT:-8080}/demo.html"]
+CMD ["sh", "-c", "http-server . -p ${PORT:-8080} -d false --cors --proxy http://localhost:${PORT:-8080}/index.html"]
