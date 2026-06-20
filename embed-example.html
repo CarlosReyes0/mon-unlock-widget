@@ -16,12 +16,14 @@
     </style>
   </head>
   <body>
-    <nav style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
-      <a href="/" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
-      <a href="/generator.html" style="font-size:0.875rem; color:#7c3aed; text-decoration:none; font-weight:600;">Create embed</a>
-      <a href="/dashboard.html" style="font-size:0.875rem; color:#7c3aed; text-decoration:none; font-weight:600;">Writer dashboard</a>
-      <a href="/demo.html" style="font-size:0.875rem; color:#57534e; text-decoration:none;">View live demo</a>
+    <nav id="topnav" style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
+      <a href="/" data-nav="home" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
+      <a href="/generator.html" data-nav="embed" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Create embed</a>
+      <a href="/dashboard.html" data-nav="dashboard" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Writer dashboard</a>
     </nav>
+    <script>
+      (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
+    </script>
     <h1 style="font-size:2rem;">Embed this block on any site</h1>
     <p>No JavaScript required from the publisher. Just paste the HTML.</p>
 

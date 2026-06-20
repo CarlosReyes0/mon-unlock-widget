@@ -7,44 +7,94 @@
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
     <script type="module" src="/dist/mon-unlock.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      body { font-family: "DM Sans", system-ui, -apple-system, sans-serif; max-width: 720px; margin: 0 auto; padding: 4rem 1.5rem; line-height: 1.7; color: #111827; background: #fff; }
-      .badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 9999px; }
-      h1 { font-size: 3rem; font-weight: 800; margin: 1rem 0; }
-      .lead { font-size: 1.25rem; color: #4b5563; }
-      .nav { display: flex; gap: 1rem; margin: 2rem 0; flex-wrap: wrap; }
-      .nav a { display: inline-flex; align-items: center; padding: 0.75rem 1.5rem; background: #111827; color: white; border-radius: 9999px; text-decoration: none; font-weight: 600; transition: all 0.12s; }
-      .nav a:hover { background: #1f2937; transform: translateY(-1px); }
-      .section { margin: 4rem 0; }
-      footer { margin-top: 6rem; font-size: 0.875rem; color: #6b7280; }
-      a { color: #7c3aed; }
+      body {
+        min-height: 100vh;
+        background-color: #fff;
+        color: #111827;
+        -webkit-font-smoothing: antialiased;
+        margin: 0;
+      }
+      .container {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+      }
+      header {
+        margin-bottom: 2rem;
+      }
+      .label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #7c3aed;
+      }
+      h1 {
+        margin: 0.5rem 0 0;
+        font-family: "Literata", Georgia, serif;
+        font-size: 1.875rem;
+        font-weight: 600;
+      }
+      .subtitle {
+        margin: 0.5rem 0 0;
+        color: #57534e;
+      }
+      code {
+        background: #e7e5e4;
+        border-radius: 0.25rem;
+        padding: 0 0.25rem;
+      }
+      /* Hide slotted fallback content until the widget upgrades */
+      mon-unlock:not(:defined) [slot] {
+        display: none;
+      }
     </style>
   </head>
   <body>
-    <div class="badge">LIVE ON MONAD</div>
-    <h1>MON Unlock Widget</h1>
-    <p class="lead">Embeddable paywall. Readers pay with real MON on Monad. No platform lock-in.</p>
+    <div class="container">
+      <nav id="topnav" style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
+        <a href="/" data-nav="home" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
+        <a href="/generator.html" data-nav="embed" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Create embed</a>
+        <a href="/dashboard.html" data-nav="dashboard" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Writer dashboard</a>
+      </nav>
+      <script>
+        (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
+      </script>
+      <header>
+        <p class="label">Embed demo</p>
+        <h1>MON unlock widget</h1>
+        <p class="subtitle">
+          Use the generator to create an embed block, then paste it anywhere — no coding required.
+        </p>
+      </header>
 
-    <div class="nav">
-      <a href="/generator.html">Create embed</a>
-      <a href="/dashboard.html">Writer dashboard</a>
-      <a href="/demo.html">View live demo</a>
+      <mon-unlock
+        article-id="founder-manifesto"
+        title="Why Every Founder Should Own Their Reader Relationship"
+        author="Your Name"
+        price="5"
+        theme="light"
+      >
+        <div slot="teaser">Platforms take 30% and your audience isn't yours. Micropayments with one embed change the math for indie publishers. This preview is free — the rest unlocks with MON…</div>
+        <div slot="body">
+          Platforms take 30% and your audience isn't yours. Micropayments with one embed change the
+          math for indie publishers.
+
+          When you publish on someone else's turf, you're renting attention. Algorithm changes or
+          policy updates can cut you off overnight.
+
+          MON unlocks let readers pay per article while you keep the relationship. The widget
+          pastes into any website — no app store, no platform lock-in.
+
+          This section only appears after unlock. In the live product, readers pay MON from their
+          wallet; this demo simulates that step.
+        </div>
+      </mon-unlock>
     </div>
-
-    <div class="section">
-      <h2 style="font-size:1.5rem;">How it works</h2>
-      <ul>
-        <li>Paste one HTML block on any site</li>
-        <li>Readers connect a wallet and pay 5 MON</li>
-        <li>Same wallet unlocks the article on any device</li>
-        <li>Publisher keeps 100% of the relationship</li>
-      </ul>
-    </div>
-
-    <footer>
-      Phase 1 complete • Contract:
-      <a href="https://monadvision.com/address/0x038446b1F736e254cC0E256B20D74823c41EeADB" target="_blank">0x038446b1F736e254cC0E256B20D74823c41EeADB</a>
-    </footer>
   </body>
 </html>

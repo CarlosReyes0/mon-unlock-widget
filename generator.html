@@ -40,15 +40,17 @@
     </style>
   </head>
   <body>
-    <nav style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
-      <a href="/" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
-      <a href="/generator.html" style="font-size:0.875rem; color:#7c3aed; text-decoration:none; font-weight:600;">Create embed</a>
-      <a href="/dashboard.html" style="font-size:0.875rem; color:#7c3aed; text-decoration:none; font-weight:600;">Writer dashboard</a>
+    <nav id="topnav" style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
+      <a href="/" data-nav="home" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
+      <a href="/generator.html" data-nav="embed" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Create embed</a>
+      <a href="/dashboard.html" data-nav="dashboard" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Writer dashboard</a>
     </nav>
+    <script>
+      (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
+    </script>
 
     <div class="header">
       <div>
-        <div class="badge">PHASE 2 — BETA</div>
         <h1>Embed Generator</h1>
         <p style="margin: 0.5rem 0 0; color: #6b7280;">Create a working paywall block in under 2 minutes. No account required.</p>
       </div>
