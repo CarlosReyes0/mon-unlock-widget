@@ -293,6 +293,7 @@
 
       function generateEmbedCode(article) {
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
+        const WIDGET_VERSION = "20240620"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');
@@ -303,7 +304,7 @@
           : `Free preview of ${displayTitle}...`;
 
         return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
 
 <mon-unlock
   article-id="${article.articleId}"

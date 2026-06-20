@@ -137,6 +137,7 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
+      const WIDGET_VERSION = "20240620"; // bump this when widget behavior changes
 
       const fields = ["title", "author", "price", "articleId", "teaser", "body"];
       const STORAGE_KEY = "mon-unlock-generator-draft";
@@ -319,7 +320,7 @@
         const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
         const code = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
 
 <mon-unlock
   article-id="${v.articleId}"
@@ -513,7 +514,7 @@ ${teaserEsc}
             // Always produce the on-chain embed when wallet is connected
             const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
 
 <mon-unlock
   article-id="${v.articleId}"
@@ -530,7 +531,7 @@ ${teaserEsc}
             // No wallet → demo embed (no on-chain contract)
             const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js"><\/script>
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
 
 <mon-unlock
   article-id="${v.articleId}"
