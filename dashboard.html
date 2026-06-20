@@ -64,20 +64,6 @@
             </div>
           </div>
         </div>
-
-        <div class="card" style="margin-top: 1.5rem;">
-          <h2 class="section-title">Register article on-chain</h2>
-          <div style="margin-bottom: 1rem;">
-            <label for="regArticleId">Article ID (slug)</label>
-            <input id="regArticleId" type="text" placeholder="founder-manifesto" />
-          </div>
-          <div style="margin-bottom: 1rem;">
-            <label for="regPrice">Price (MON)</label>
-            <input id="regPrice" type="number" step="0.1" min="0.1" value="5" />
-          </div>
-          <button class="btn btn-primary" id="registerBtn" disabled>Register on Monad</button>
-          <p id="registerStatus" style="margin-top: 0.75rem; font-size: 0.875rem;"></p>
-        </div>
       </div>
 
       <!-- My Articles + Stats -->
@@ -356,7 +342,6 @@
           document.getElementById("connectBtn").style.display = "none";
           document.getElementById("walletConnected").style.display = "flex";
 
-          document.getElementById("registerBtn").disabled = false;
           renderArticles();
           updateStats();
 
@@ -370,73 +355,12 @@
         }
       }
 
-      // Minimal on-chain register using direct wallet RPC (no viem dependency)
-      async function registerArticle() {
-        const status = document.getElementById("registerStatus");
-        const btn = document.getElementById("registerBtn");
-        const articleId = document.getElementById("regArticleId").value.trim();
-        const priceStr = document.getElementById("regPrice").value.trim();
-
-        if (!articleId || !priceStr || !currentWallet) {
-          status.textContent = "Fill in article ID, price, and connect wallet.";
-          status.style.color = "#ef4444";
-          return;
-        }
-
-        const net = window.__currentNetwork || NETWORKS[143];
-        const priceWei = parseMonAmount(priceStr);
-
-        // Use the exact same encoding as the generator and the widget:
-        // keccak256(bytes(articleId))
-        const { keccak256, toBytes } = await import("https://esm.sh/viem@2");
-        const articleIdBytes = keccak256(toBytes(articleId));
-        const articleIdHex = articleIdBytes;
-
-        const priceHex = "0x" + priceWei.toString(16).padStart(64, "0");
-
-        const selector = "0x8a2e7e3c";
-        const data = selector + articleIdHex.slice(2) + priceHex.slice(2);
-
-        btn.disabled = true;
-        btn.textContent = "Registering…";
-        status.textContent = "";
-        status.style.color = "";
-
-        try {
-          const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-              from: currentWallet,
-              to: net.contract,
-              data,
-            }],
-          });
-
-          myArticles.push({ articleId, priceMon: priceWei, registeredAt: Date.now() });
-          saveMyArticles(currentWallet);
-
-          status.innerHTML = `Registered on ${net.name}! <a href="${net.explorer}/tx/${txHash}" target="_blank" class="tx-link">View tx ↗</a>`;
-          status.style.color = "#16a34a";
-
-          renderArticles();
-          updateStats();
-          document.getElementById("regArticleId").value = "";
-        } catch (e) {
-          status.textContent = e.message || "Registration failed";
-          status.style.color = "#ef4444";
-        } finally {
-          btn.disabled = false;
-          btn.textContent = "Register on " + net.name;
-        }
-      }
-
       function disconnectWallet() {
         currentWallet = null;
         window.__currentNetwork = null;
 
         document.getElementById("connectBtn").style.display = "inline-flex";
         document.getElementById("walletConnected").style.display = "none";
-        document.getElementById("registerBtn").disabled = true;
 
         // Clear status text
         document.getElementById("walletStatus").textContent = "";
@@ -487,7 +411,6 @@
 
       function init() {
         document.getElementById("connectBtn").addEventListener("click", connectWallet);
-        document.getElementById("registerBtn").addEventListener("click", registerArticle);
         document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
         document.getElementById("switchBtn").addEventListener("click", switchWallet);
 
