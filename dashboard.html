@@ -225,6 +225,8 @@
             unlockCount: stats[a.article_id_hash]?.count || 0,
             revenueMon: stats[a.article_id_hash]?.revenue || 0n,
             title: a.article_id || a.article_id_hash,
+            teaser: a.teaser,
+            body: a.body,
           }));
 
           renderArticles();
