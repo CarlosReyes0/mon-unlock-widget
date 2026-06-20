@@ -125,6 +125,8 @@
         },
       };
 
+      const CONTRACT = NETWORKS[143].contract;
+
       // Inlined helpers (from src/core/types.ts) so the page works in static production
       function formatMon(amount, decimals = 18) {
         const divisor = 10n ** BigInt(decimals);
