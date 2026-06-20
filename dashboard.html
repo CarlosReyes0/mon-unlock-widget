@@ -125,8 +125,6 @@
         },
       };
 
-      const STORAGE_KEY = "mon-unlock-writer-articles";
-
       // Inlined helpers (from src/core/types.ts) so the page works in static production
       function formatMon(amount, decimals = 18) {
         const divisor = 10n ** BigInt(decimals);
@@ -145,20 +143,6 @@
 
       let currentWallet = null;
       let myArticles = [];
-      const CACHE_TTL_MS = 90_000; // 90 seconds – fast enough for UX, gentle on RPC
-
-      function loadMyArticles(wallet) {
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY + ":" + wallet.toLowerCase());
-          myArticles = raw ? JSON.parse(raw) : [];
-        } catch {
-          myArticles = [];
-        }
-      }
-
-      function saveMyArticles(wallet) {
-        localStorage.setItem(STORAGE_KEY + ":" + wallet.toLowerCase(), JSON.stringify(myArticles));
-      }
 
       // === Supabase Loader (Fast path via Edge Function Indexer) ===
       // The heavy lifting (RPC scanning) is done by the Supabase Edge Function `indexer`.
@@ -339,7 +323,6 @@
 
           window.__currentNetwork = net; // expose for register flow
 
-          loadMyArticles(currentWallet);
           status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
 
           // Toggle UI
@@ -400,7 +383,6 @@
           const net = NETWORKS[chainId] || NETWORKS[143];
           window.__currentNetwork = net;
 
-          loadMyArticles(currentWallet);
           document.getElementById("walletStatus").innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
 
           renderArticles();
@@ -413,7 +395,21 @@
         }
       }
 
+      function clearLegacyLocalStorage() {
+        // One-time cleanup: remove any articles that were cached in localStorage
+        // before the dashboard became fully Supabase-driven.
+        const legacyPrefix = "mon-unlock-writer-articles:";
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(legacyPrefix)) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+
       function init() {
+        clearLegacyLocalStorage();
+
         document.getElementById("connectBtn").addEventListener("click", connectWallet);
         document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
         document.getElementById("switchBtn").addEventListener("click", switchWallet);
