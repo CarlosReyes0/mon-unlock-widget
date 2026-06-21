@@ -134,22 +134,32 @@ export class WalletManager {
       throw new Error("WalletConnect project ID is not configured.");
     }
 
-    // Handshake on Ethereum (widely supported). Switch to Monad after connect.
-    this.wcProvider = await EthereumProvider.init({
-      projectId: this.wcProjectId,
-      chains: [1],
-      optionalChains: [monadMainnet.id],
-      showQrModal: true,
-      rpcMap: {
-        [monadMainnet.id]: monadMainnet.rpcUrls.default.http[0],
-      },
-      metadata: {
-        name: "Mon Unlock",
-        description: "Unlock articles with MON",
-        url: typeof window !== "undefined" ? window.location.origin : "https://example.com",
-        icons: ["https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.png"],
-      },
-    });
+    try {
+      // Handshake on Ethereum (widely supported). Switch to Monad after connect.
+      this.wcProvider = await withTimeout(
+        EthereumProvider.init({
+          projectId: this.wcProjectId,
+          chains: [1],
+          optionalChains: [monadMainnet.id],
+          showQrModal: true,
+          rpcMap: {
+            [monadMainnet.id]: monadMainnet.rpcUrls.default.http[0],
+          },
+          metadata: {
+            name: "Mon Unlock",
+            description: "Unlock articles with MON",
+            url: typeof window !== "undefined" ? window.location.origin : "https://example.com",
+            icons: ["https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.png"],
+          },
+        }),
+        15_000,
+        "WalletConnect initialization timed out. Check your internet connection or try again."
+      );
+    } catch (err) {
+      this.wcProvider = null;
+      const msg = err instanceof Error ? err.message : "Failed to initialize WalletConnect.";
+      throw new Error(msg);
+    }
 
     return this.wcProvider;
   }
