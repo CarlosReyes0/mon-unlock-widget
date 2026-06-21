@@ -217,30 +217,46 @@ export class MonUnlock extends LitElement {
     const anonKey =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
 
-    try {
-      const res = await fetch(
-        `${apiBase}/article-body?article_id=${encodeURIComponent(this.article.id)}&reader=${encodeURIComponent(
-          this.wallet.address
-        )}`,
-        {
+    const params = new URLSearchParams({
+      article_id: this.article.id,
+      reader: this.wallet.address,
+    });
+    if (this.unlockContract?.trim()) {
+      params.set("unlock_contract", this.unlockContract.trim());
+    }
+
+    const url = `${apiBase}/article-body?${params.toString()}`;
+
+    // Retry briefly — covers RPC propagation right after a fresh payment.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(url, {
           headers: {
             apikey: anonKey,
             Authorization: `Bearer ${anonKey}`,
           },
-        }
-      );
+        });
 
-      if (res.ok) {
-        const data = (await res.json()) as { body?: string };
-        if (data.body) {
-          this.fetchedBody = data.body;
+        if (res.ok) {
+          const data = (await res.json()) as { body?: string };
+          if (data.body) {
+            this.fetchedBody = data.body;
+          }
+          return;
         }
-      } else {
-        // 403 or 404 — leave fetchedBody null; the UI will still show the teaser
-        console.warn("[mon-unlock] article-body fetch returned", res.status);
+
+        if (res.status !== 403 || attempt === 2) {
+          console.warn("[mon-unlock] article-body fetch returned", res.status);
+          return;
+        }
+      } catch (e) {
+        if (attempt === 2) {
+          console.warn("[mon-unlock] failed to fetch body after unlock", e);
+          return;
+        }
       }
-    } catch (e) {
-      console.warn("[mon-unlock] failed to fetch body after unlock", e);
+
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
     }
   }
 

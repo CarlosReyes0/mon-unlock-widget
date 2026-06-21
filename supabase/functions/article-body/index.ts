@@ -1,13 +1,21 @@
 // Edge Function: article-body
 // Returns the full article body only if the requesting wallet has unlocked it.
 // Called by the widget after a successful on-chain payment.
+//
+// Unlock verification order:
+// 1. Supabase unlocks table (indexer backfill / dashboard)
+// 2. On-chain hasUnlocked() — instant after payment, no indexer wait
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createPublicClient, http } from 'https://esm.sh/viem@2';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
+
+const DEFAULT_CONTRACT = '0x038446b1F736e254cC0E256B20D74823c41EeADB';
+const DEFAULT_RPC = 'https://rpc.monad.xyz';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +23,47 @@ const headers = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
   'Content-Type': 'application/json',
 };
+
+async function hasUnlockedOnChain(
+  articleIdHash: string,
+  reader: string,
+  contractAddress: `0x${string}`
+): Promise<boolean> {
+  const rpcUrl = Deno.env.get('RPC_URL') || DEFAULT_RPC;
+
+  const publicClient = createPublicClient({
+    chain: {
+      id: 143,
+      name: 'Monad',
+      nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+      rpcUrls: { default: { http: [rpcUrl] } },
+    },
+    transport: http(rpcUrl),
+  });
+
+  try {
+    return (await publicClient.readContract({
+      address: contractAddress,
+      abi: [
+        {
+          name: 'hasUnlocked',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [
+            { name: 'reader', type: 'address' },
+            { name: 'articleId', type: 'bytes32' },
+          ],
+          outputs: [{ type: 'bool' }],
+        },
+      ],
+      functionName: 'hasUnlocked',
+      args: [reader as `0x${string}`, articleIdHash as `0x${string}`],
+    })) as boolean;
+  } catch (e) {
+    console.warn('On-chain unlock check failed:', e);
+    return false;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -30,6 +79,10 @@ Deno.serve(async (req) => {
     const articleId = url.searchParams.get('article_id'); // human-readable slug
     const articleIdHash = url.searchParams.get('article_id_hash');
     const reader = url.searchParams.get('reader')?.toLowerCase();
+    const unlockContract =
+      (url.searchParams.get('unlock_contract') ||
+        Deno.env.get('CONTRACT_ADDRESS') ||
+        DEFAULT_CONTRACT) as `0x${string}`;
 
     if (!reader) {
       return new Response(JSON.stringify({ error: 'reader (wallet) is required' }), { status: 400, headers });
@@ -67,11 +120,17 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Failed to verify unlock' }), { status: 500, headers });
     }
 
-    if (!unlocks || unlocks.length === 0) {
+    let isUnlocked = Boolean(unlocks && unlocks.length > 0);
+
+    // Fall back to on-chain truth so body appears immediately after payment.
+    if (!isUnlocked && article.article_id_hash) {
+      isUnlocked = await hasUnlockedOnChain(article.article_id_hash, reader, unlockContract);
+    }
+
+    if (!isUnlocked) {
       return new Response(JSON.stringify({ error: 'Not unlocked' }), { status: 403, headers });
     }
 
-    // Reader has unlocked — return the body
     return new Response(JSON.stringify({ body: article.body || '' }), { status: 200, headers });
   } catch (e: any) {
     console.error('article-body error:', e);

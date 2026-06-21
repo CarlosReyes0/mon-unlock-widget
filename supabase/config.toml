@@ -1,0 +1,26 @@
+# Supabase project configuration
+# Run `supabase init` if you haven't already, then link this project.
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+
+[functions]
+[functions.indexer]
+verify_jwt = false # We will trigger this via Cron, not user auth
+
+[functions.article-body]
+verify_jwt = false # Called by the public widget with anon key
