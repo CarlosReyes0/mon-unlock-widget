@@ -4,7 +4,8 @@ import { EthereumProvider } from "@walletconnect/ethereum-provider";
 import { monadMainnet } from "./chains.js";
 
 const DEMO_ADDRESS = "0xDemo0000000000000000000000000000000001";
-const CONNECT_TIMEOUT_MS = 90_000;
+const CONNECT_TIMEOUT_MS = 180_000;
+const CHAIN_SWITCH_TIMEOUT_MS = 120_000;
 
 export type Eip1193Provider = { request: (args: any) => Promise<unknown> };
 
@@ -13,6 +14,15 @@ type WalletConnectProvider = Awaited<ReturnType<typeof EthereumProvider.init>>;
 function isMobileDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function hasReliableInjectedProvider(): boolean {
+  const eth = (globalThis as {
+    ethereum?: Eip1193Provider & { isMetaMask?: boolean; isCoinbaseWallet?: boolean };
+  }).ethereum;
+  if (!eth) return false;
+  // In-wallet mobile browsers (MetaMask, Coinbase) work better via injected than WC.
+  return Boolean(eth.isMetaMask || eth.isCoinbaseWallet);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -24,8 +34,25 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   ]);
 }
 
+function walletConnectHasSession(wc: WalletConnectProvider): boolean {
+  if (wc.accounts?.length) return true;
+  const accounts = wc.session?.namespaces?.eip155?.accounts;
+  return Boolean(accounts && accounts.length > 0);
+}
+
+function walletConnectAddress(wc: WalletConnectProvider): string | null {
+  if (wc.accounts?.[0]) return wc.accounts[0];
+  const sessionAccount = wc.session?.namespaces?.eip155?.accounts?.[0];
+  if (!sessionAccount) return null;
+  const parts = sessionAccount.split(":");
+  return parts[parts.length - 1] ?? null;
+}
+
 async function requestAccounts(provider: Eip1193Provider): Promise<string> {
-  const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
+  let accounts = (await provider.request({ method: "eth_accounts" })) as string[];
+  if (!accounts[0]) {
+    accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
+  }
   const address = accounts[0];
   if (!address) throw new Error("No account selected");
   return address;
@@ -38,6 +65,7 @@ export class WalletManager {
   private provider: Eip1193Provider | null = null;
   private wcProvider: WalletConnectProvider | null = null;
   private wcProjectId: string | null = null;
+  private usingWalletConnect = false;
 
   /** Set the WalletConnect project ID (required for mobile / WalletConnect flow). */
   setWalletConnectProjectId(id: string) {
@@ -46,6 +74,10 @@ export class WalletManager {
 
   getProvider(): Eip1193Provider | null {
     return this.provider;
+  }
+
+  isUsingWalletConnect(): boolean {
+    return this.usingWalletConnect;
   }
 
   subscribe(fn: (s: WalletState) => void) {
@@ -60,9 +92,11 @@ export class WalletManager {
 
   async connect(): Promise<WalletState> {
     const injected = (globalThis as { ethereum?: Eip1193Provider }).ethereum;
-    // Mobile browsers often expose a broken injected provider or hang on eth_requestAccounts.
-    // Prefer WalletConnect when a project ID is configured.
-    const preferWalletConnect = Boolean(this.wcProjectId) && isMobileDevice();
+    // Mobile Safari: use WalletConnect. MetaMask/Coinbase in-app browsers: use injected.
+    const preferWalletConnect =
+      Boolean(this.wcProjectId) && isMobileDevice() && !hasReliableInjectedProvider();
+
+    this.usingWalletConnect = false;
 
     if (preferWalletConnect) {
       await this.connectViaWalletConnect();
@@ -100,65 +134,67 @@ export class WalletManager {
       throw new Error("WalletConnect project ID is not configured.");
     }
 
+    // Handshake on Ethereum (widely supported). Switch to Monad after connect.
     this.wcProvider = await EthereumProvider.init({
       projectId: this.wcProjectId,
-      chains: [monadMainnet.id],
-      optionalChains: [1],
+      chains: [1],
+      optionalChains: [monadMainnet.id],
       showQrModal: true,
+      rpcMap: {
+        [monadMainnet.id]: monadMainnet.rpcUrls.default.http[0],
+      },
       metadata: {
         name: "Mon Unlock",
         description: "Unlock articles with MON",
         url: typeof window !== "undefined" ? window.location.origin : "https://example.com",
-        icons: [],
+        icons: ["https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.css"],
       },
     });
 
     return this.wcProvider;
   }
 
+  private async resolveWalletConnectAddress(wc: WalletConnectProvider): Promise<string> {
+    const fromSession = walletConnectAddress(wc);
+    if (fromSession) return fromSession;
+    return requestAccounts(wc as unknown as Eip1193Provider);
+  }
+
   private async connectViaWalletConnect(): Promise<void> {
     const wc = await this.getOrInitWalletConnect();
+    this.usingWalletConnect = true;
 
-    if (wc.session) {
+    if (walletConnectHasSession(wc)) {
       this.provider = wc as unknown as Eip1193Provider;
-      try {
-        const address = await requestAccounts(this.provider);
-        this.state = { connected: true, address };
-        return;
-      } catch {
-        // Session stale — fall through to a fresh connect.
-      }
+      const address = await this.resolveWalletConnectAddress(wc);
+      this.state = { connected: true, address };
+      return;
     }
 
     await this.connectWalletConnectWithMobileResume(wc);
     this.provider = wc as unknown as Eip1193Provider;
-    const address = await requestAccounts(this.provider);
+    const address = await this.resolveWalletConnectAddress(wc);
     this.state = { connected: true, address };
   }
 
   /** iOS often approves WC in the wallet app while the browser tab promise never resolves. */
   private async connectWalletConnectWithMobileResume(wc: WalletConnectProvider): Promise<void> {
-    let settled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let visHandler: (() => void) | undefined;
-
-    const cleanup = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (visHandler) document.removeEventListener("visibilitychange", visHandler);
-    };
-
-    const tryResumeSession = async (): Promise<boolean> => {
-      try {
-        const accounts = (await wc.request({ method: "eth_accounts" })) as string[];
-        return Boolean(accounts[0]);
-      } catch {
-        return false;
-      }
-    };
-
     await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let pollId: ReturnType<typeof setInterval> | undefined;
+
+      const cleanup = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (pollId) clearInterval(pollId);
+        document.removeEventListener("visibilitychange", onVisible);
+        window.removeEventListener("pageshow", onVisible);
+        wc.removeListener("connect", onConnect);
+        wc.removeListener("accountsChanged", onAccounts);
+      };
+
       const finishOk = () => {
-        if (settled) return;
+        if (settled || !walletConnectHasSession(wc)) return;
         settled = true;
         cleanup();
         resolve();
@@ -171,30 +207,34 @@ export class WalletManager {
         reject(err instanceof Error ? err : new Error("Wallet connection failed."));
       };
 
-      timeoutId = setTimeout(async () => {
-        if (await tryResumeSession()) {
+      const onConnect = () => finishOk();
+      const onAccounts = () => finishOk();
+      const onVisible = () => {
+        if (document.visibilityState === "visible") finishOk();
+      };
+
+      wc.on("connect", onConnect);
+      wc.on("accountsChanged", onAccounts);
+      document.addEventListener("visibilitychange", onVisible);
+      window.addEventListener("pageshow", onVisible);
+      pollId = setInterval(() => finishOk(), 500);
+
+      timeoutId = setTimeout(() => {
+        if (walletConnectHasSession(wc)) {
           finishOk();
           return;
         }
         finishErr(
           new Error(
-            "Wallet connection timed out. Open your wallet app, approve the connection, then try again."
+            "Wallet connection timed out. Pick your wallet, approve the connection in the app, then return here and tap Connect again."
           )
         );
       }, CONNECT_TIMEOUT_MS);
 
-      visHandler = async () => {
-        if (document.visibilityState !== "visible" || settled) return;
-        if (await tryResumeSession()) finishOk();
-      };
-      document.addEventListener("visibilitychange", visHandler);
-
       wc.connect()
-        .then(async () => {
-          if (await tryResumeSession()) finishOk();
-        })
-        .catch(async (err: unknown) => {
-          if (await tryResumeSession()) {
+        .then(() => finishOk())
+        .catch((err: unknown) => {
+          if (walletConnectHasSession(wc)) {
             finishOk();
             return;
           }
@@ -206,6 +246,7 @@ export class WalletManager {
   disconnect() {
     this.state = { connected: false, address: null };
     this.provider = null;
+    this.usingWalletConnect = false;
     this.emit();
   }
 
@@ -243,8 +284,8 @@ export class WalletManager {
           }
         }
       })(),
-      CONNECT_TIMEOUT_MS,
-      "Network switch timed out. Approve Monad in your wallet app and try again."
+      CHAIN_SWITCH_TIMEOUT_MS,
+      "Network switch timed out. Approve Monad in your wallet app, then tap Connect again."
     );
   }
 }

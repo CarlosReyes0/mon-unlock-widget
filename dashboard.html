@@ -293,7 +293,7 @@
 
       function generateEmbedCode(article) {
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
-        const WIDGET_VERSION = "20240622"; // bump when widget behavior changes
+        const WIDGET_VERSION = "20240623"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');

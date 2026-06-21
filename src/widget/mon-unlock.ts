@@ -293,9 +293,15 @@ export class MonUnlock extends LitElement {
       this.wallet = s;
       this.bindOnchainProvider();
 
-      // Ensure MetaMask is on the correct chain for on-chain payments
+      // Ensure wallet is on Monad for on-chain payments (skip if already there).
       if (this.isOnchain) {
-        await this.walletManager.ensureChain(monadMainnet);
+        try {
+          await this.walletManager.ensureChain(monadMainnet);
+        } catch (chainErr) {
+          const msg =
+            chainErr instanceof Error ? chainErr.message : "Could not switch to Monad network.";
+          throw new Error(msg);
+        }
       }
 
       const address = s.address!;
