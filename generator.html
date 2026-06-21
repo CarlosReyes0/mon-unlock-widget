@@ -140,6 +140,7 @@
       const WIDGET_VERSION = "20240623"; // bump this when widget behavior changes
 
       const fields = ["title", "author", "price", "articleId", "teaser", "body"];
+      const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
       const STORAGE_KEY = "mon-unlock-generator-draft";
       const WALLET_KEY = "mon-unlock-generator-wallet";
 
@@ -328,6 +329,7 @@
   author="${v.author}"
   price="${v.price}"
   unlock-contract="${MAINNET_CONTRACT}"
+  walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
 ${teaserEsc}
@@ -522,6 +524,7 @@ ${teaserEsc}
   author="${v.author}"
   price="${v.price}"
   unlock-contract="${MAINNET_CONTRACT}"
+  walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
 ${teaserEsc}
@@ -538,6 +541,7 @@ ${teaserEsc}
   title="${v.title}"
   author="${v.author}"
   price="${v.price}"
+  walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
 ${teaserEsc}
