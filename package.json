@@ -28,7 +28,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@walletconnect/ethereum-provider": "^2.21.1",
+    "@walletconnect/ethereum-provider": "2.18.0",
     "lit": "^3.3.3",
     "viem": "^2.52.0"
   },
