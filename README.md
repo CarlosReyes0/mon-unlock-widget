@@ -59,6 +59,8 @@ Copy `examples/embed.html` or use this block. **Only edit the parts in ALL CAPS:
   author="Your name"
   price="5"
   theme="light"
+  unlock-contract="0x038446b1F736e254cC0E256B20D74823c41EeADB"
+  walletconnect-project-id="c2a289e11ad2998f8ea4633db536334c"
 >
   <div slot="teaser">
     Free preview text everyone can read…
@@ -75,7 +77,8 @@ Copy `examples/embed.html` or use this block. **Only edit the parts in ALL CAPS:
 | `title` | Headline |
 | `author` | Your name or publication |
 | `price` | MON price (e.g. `5` or `0.25`) |
-| `unlock-contract` | Contract address on Monad testnet (enables real payments) |
+| `unlock-contract` | Contract address on Monad mainnet (enables real MON payments) |
+| `walletconnect-project-id` | WalletConnect Project ID (enables mobile readers via QR / app) |
 | `slot="teaser"` | Free preview |
 | `slot="body"` | Paid content |
 
