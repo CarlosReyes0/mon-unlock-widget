@@ -276,9 +276,10 @@ export class MonUnlock extends LitElement {
   }
 
   private openInMetaMask() {
-    const url = window.location.href;
-    const encoded = encodeURIComponent(url);
-    window.location.href = `https://metamask.app.link/dapp/${encoded}`;
+    // Use the bare host+path form — MetaMask's deep link handler is more reliable with this format
+    const { hostname, pathname, search, hash } = window.location;
+    const dappUrl = `${hostname}${pathname}${search}${hash}`;
+    window.location.href = `https://metamask.app.link/dapp/${dappUrl}`;
   }
 
   private async connect() {
