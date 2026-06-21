@@ -1,5 +1,6 @@
 import { createPublicClient, createWalletClient, custom, keccak256, toBytes, type Address, type Hash } from "viem";
 import { monadMainnet } from "./chains.js";
+import type { Eip1193Provider } from "./wallet.js";
 import type { UnlockRecord } from "./types.js";
 
 function toArticleId(articleId: string): `0x${string}` {
@@ -74,9 +75,18 @@ export class OnchainUnlockService {
   private store = new UnlockStore();
   private contractAddress: Address;
   private chain = monadMainnet;
+  private provider: Eip1193Provider | null = null;
 
   constructor(contractAddress: Address) {
     this.contractAddress = contractAddress;
+  }
+
+  setProvider(provider: Eip1193Provider | null) {
+    this.provider = provider;
+  }
+
+  private getEthProvider(): Eip1193Provider | null {
+    return this.provider ?? (globalThis as { ethereum?: Eip1193Provider }).ethereum ?? null;
   }
 
   hasAccess(articleId: string, wallet: string | null): boolean {
@@ -88,7 +98,7 @@ export class OnchainUnlockService {
   async checkOnchainAccess(articleId: string, wallet: string | null): Promise<boolean> {
     if (!wallet) return false;
 
-    const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
+    const eth = this.getEthProvider();
     if (!eth) return this.store.isUnlocked(articleId, wallet); // fallback to cache
 
     const publicClient = createPublicClient({ chain: this.chain, transport: custom(eth) });
@@ -133,8 +143,8 @@ export class OnchainUnlockService {
   }
 
   async unlock(articleId: string, wallet: string, priceMon: bigint): Promise<UnlockRecord> {
-    const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
-    if (!eth) throw new Error("No wallet found. Install MetaMask or another Web3 wallet.");
+    const eth = this.getEthProvider();
+    if (!eth) throw new Error("No wallet connected. Connect your wallet and try again.");
 
     const publicClient = createPublicClient({ chain: this.chain, transport: custom(eth) });
     const walletClient = createWalletClient({ chain: this.chain, transport: custom(eth) });
@@ -216,8 +226,8 @@ export class OnchainUnlockService {
 
   /** Register an article as the connected publisher (Phase 2 writer dashboard) */
   async registerArticle(articleId: string, wallet: string, priceMon: bigint): Promise<Hash> {
-    const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
-    if (!eth) throw new Error("No wallet found. Install MetaMask or another Web3 wallet.");
+    const eth = this.getEthProvider();
+    if (!eth) throw new Error("No wallet connected. Connect your wallet and try again.");
 
     const walletClient = createWalletClient({ chain: this.chain, transport: custom(eth) });
 

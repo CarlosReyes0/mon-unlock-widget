@@ -293,7 +293,7 @@
 
       function generateEmbedCode(article) {
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
-        const WIDGET_VERSION = "20240621"; // bump when widget behavior changes
+        const WIDGET_VERSION = "20240622"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');
@@ -312,7 +312,6 @@
   author="Your Name"
   price="${(Number(article.priceMon) / 1e18).toFixed(1)}"
   unlock-contract="${CONTRACT}"
-  walletconnect-project-id="c2a289e11ad2998f8ea4633db536334c"
 >
   <div slot="teaser">
 ${teaser}

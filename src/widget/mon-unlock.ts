@@ -131,6 +131,7 @@ export class MonUnlock extends LitElement {
     if (this.unlockContract?.trim()) {
       this.isOnchain = true;
       this.unlockService = new OnchainUnlockService(this.unlockContract.trim() as `0x${string}`);
+      this.bindOnchainProvider();
     } else {
       this.isOnchain = false;
       this.unlockService = new UnlockService();
@@ -266,11 +267,13 @@ export class MonUnlock extends LitElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
-  private isMobile(): boolean {
-    if (typeof navigator === "undefined") return false;
-    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  private bindOnchainProvider() {
+    if (!this.isOnchain) return;
+    const provider = this.walletManager.getProvider();
+    if (provider) {
+      (this.unlockService as OnchainUnlockService).setProvider(provider);
+    }
   }
-
 
   private async connect() {
     if (!this.article) {
@@ -288,6 +291,7 @@ export class MonUnlock extends LitElement {
       }
       const s = await this.walletManager.connect();
       this.wallet = s;
+      this.bindOnchainProvider();
 
       // Ensure MetaMask is on the correct chain for on-chain payments
       if (this.isOnchain) {
