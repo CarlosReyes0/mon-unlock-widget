@@ -275,10 +275,12 @@ export class MonUnlock extends LitElement {
     return !eth;
   }
 
-  private getMetaMaskNativeDeepLink(): string {
-    // Native URL scheme bypasses Branch.io universal link restrictions.
-    // Works on iOS Safari when MetaMask is already installed.
-    return `metamask://dapp/${window.location.hostname}`;
+  private getMetaMaskIntermediaryUrl(): string {
+    // Navigate to a dedicated page (different path) that hosts a real
+    // anchor pointing to link.metamask.io. This two-tap flow satisfies
+    // iOS Universal Link requirements better than a same-page link.
+    const target = encodeURIComponent(window.location.hostname);
+    return `/metamask-open.html?target=${target}`;
   }
 
   private async connect() {
@@ -398,7 +400,7 @@ export class MonUnlock extends LitElement {
                       ? html`
                           <a
                             class="mon-btn mon-btn-primary inline-block no-underline"
-                            href=${this.getMetaMaskNativeDeepLink()}
+                            href=${this.getMetaMaskIntermediaryUrl()}
                           >
                             Open in MetaMask
                           </a>
