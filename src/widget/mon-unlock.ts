@@ -47,6 +47,7 @@ export class MonUnlock extends LitElement {
 
   // WalletConnect QR state (mobile only)
   @state() private wcQrSvg: string | null = null;
+  @state() private wcUri: string | null = null;
   @state() private wcConnecting = false;
 
   private walletManager = new WalletManager();
@@ -285,6 +286,7 @@ export class MonUnlock extends LitElement {
 
     try {
       const uri = await this.walletManager.beginWalletConnectQr();
+      this.wcUri = uri;
       const qr = generate(uri);
       // lean-qr returns a small object with toDataURL()
       this.wcQrSvg = qr.toDataURL();
@@ -467,7 +469,14 @@ export class MonUnlock extends LitElement {
                       ? html`
                           <div class="flex flex-col items-center gap-3">
                             <img src=${this.wcQrSvg} width="220" height="220" alt="WalletConnect QR code" />
-                            <p class="text-xs text-stone-500">Scan with MetaMask to connect</p>
+                            <p class="text-xs text-stone-500">Scan with MetaMask or tap below</p>
+
+                            <a
+                              class="mon-btn mon-btn-primary inline-block no-underline"
+                              href=${this.wcUri ? `metamask://wc?uri=${encodeURIComponent(this.wcUri)}` : "#"}
+                            >
+                              Open MetaMask
+                            </a>
                           </div>
                         `
                       : html`
