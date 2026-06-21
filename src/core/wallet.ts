@@ -147,7 +147,7 @@ export class WalletManager {
         name: "Mon Unlock",
         description: "Unlock articles with MON",
         url: typeof window !== "undefined" ? window.location.origin : "https://example.com",
-        icons: ["https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.css"],
+        icons: ["https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.png"],
       },
     });
 
