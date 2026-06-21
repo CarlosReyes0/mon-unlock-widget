@@ -95,6 +95,7 @@
             <textarea id="body" placeholder="<p>Your full article content here...</p>"></textarea>
             <div class="hint">HTML is allowed. This is what paying readers see.</div>
           </div>
+
         </div>
 
         <!-- Wallet connection (always visible) -->
@@ -308,6 +309,8 @@
         pane.appendChild(override);
       }
 
+      const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
+
       function renderCode() {
         const v = getValues();
         const out = document.getElementById("outputCode");
@@ -328,6 +331,7 @@
   author="${v.author}"
   price="${v.price}"
   unlock-contract="${MAINNET_CONTRACT}"
+  walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
 ${teaserEsc}
@@ -522,6 +526,7 @@ ${teaserEsc}
   author="${v.author}"
   price="${v.price}"
   unlock-contract="${MAINNET_CONTRACT}"
+  walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
 ${teaserEsc}
@@ -538,6 +543,7 @@ ${teaserEsc}
   title="${v.title}"
   author="${v.author}"
   price="${v.price}"
+  walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
 ${teaserEsc}
