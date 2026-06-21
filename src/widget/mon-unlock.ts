@@ -275,16 +275,10 @@ export class MonUnlock extends LitElement {
     return !eth;
   }
 
-  private openInMetaMask() {
-    // Use only hostname (root) to match documented working examples.
-    // Dynamic <a> + .click() is required for reliable deep link triggering on mobile.
-    const url = `https://link.metamask.io/dapp/${window.location.hostname}`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.target = "_self";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  private getMetaMaskNativeDeepLink(): string {
+    // Native URL scheme bypasses Branch.io universal link restrictions.
+    // Works on iOS Safari when MetaMask is already installed.
+    return `metamask://dapp/${window.location.hostname}`;
   }
 
   private async connect() {
@@ -402,12 +396,12 @@ export class MonUnlock extends LitElement {
                   <div class="mt-4">
                     ${this.shouldShowMetaMaskDeepLink()
                       ? html`
-                          <button
-                            class="mon-btn mon-btn-primary"
-                            @click=${() => this.openInMetaMask()}
+                          <a
+                            class="mon-btn mon-btn-primary inline-block no-underline"
+                            href=${this.getMetaMaskNativeDeepLink()}
                           >
                             Open in MetaMask
-                          </button>
+                          </a>
                           <p class="mt-2 text-[10px] text-stone-500">
                             Opens this page inside the MetaMask app so you can connect your wallet.
                           </p>
