@@ -264,6 +264,23 @@ export class MonUnlock extends LitElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
+  private isMobile(): boolean {
+    if (typeof navigator === "undefined") return false;
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  }
+
+  private shouldShowMetaMaskDeepLink(): boolean {
+    if (!this.isMobile()) return false;
+    const eth = (globalThis as any).ethereum;
+    return !eth;
+  }
+
+  private openInMetaMask() {
+    const url = window.location.href;
+    const encoded = encodeURIComponent(url);
+    window.location.href = `https://metamask.app.link/dapp/${encoded}`;
+  }
+
   private async connect() {
     if (!this.article) {
       this.loadArticle();
@@ -377,13 +394,27 @@ export class MonUnlock extends LitElement {
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">
-                    <button
-                      class="mon-btn mon-btn-primary"
-                      ?disabled=${this.loading}
-                      @click=${() => this.connect()}
-                    >
-                      ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
-                    </button>
+                    ${this.shouldShowMetaMaskDeepLink()
+                      ? html`
+                          <button
+                            class="mon-btn mon-btn-primary"
+                            @click=${() => this.openInMetaMask()}
+                          >
+                            Open in MetaMask
+                          </button>
+                          <p class="mt-2 text-[10px] text-stone-500">
+                            Opens this page inside the MetaMask app so you can connect your wallet.
+                          </p>
+                        `
+                      : html`
+                          <button
+                            class="mon-btn mon-btn-primary"
+                            ?disabled=${this.loading}
+                            @click=${() => this.connect()}
+                          >
+                            ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
+                          </button>
+                        `}
                   </div>
                 </div>
               `}
