@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@walletconnect/ethereum-provider": "2.18.0",
+    "lean-qr": "^2.5.3",
     "lit": "^3.3.3",
     "viem": "^2.52.0"
   },

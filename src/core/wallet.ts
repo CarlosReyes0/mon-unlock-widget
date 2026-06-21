@@ -128,6 +128,56 @@ export class WalletManager {
     this.state = { connected: true, address };
   }
 
+  /** Initialize WalletConnect without the built-in modal and return the connection URI for custom QR rendering. */
+  async beginWalletConnectQr(): Promise<string> {
+    if (this.wcProvider) {
+      // If we already have a provider with a URI, return it (rare).
+      const uri = (this.wcProvider as any).uri;
+      if (uri) return uri;
+    }
+    if (!this.wcProjectId) {
+      throw new Error("WalletConnect project ID is not configured.");
+    }
+
+    const provider = await withTimeout(
+      EthereumProvider.init({
+        projectId: this.wcProjectId,
+        chains: [1],
+        optionalChains: [monadMainnet.id],
+        showQrModal: false, // we render our own QR
+        rpcMap: {
+          [monadMainnet.id]: monadMainnet.rpcUrls.default.http[0],
+        },
+        metadata: {
+          name: "Mon Unlock",
+          description: "Unlock articles with MON",
+          url: typeof window !== "undefined" ? window.location.origin : "https://example.com",
+          icons: ["https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.png"],
+        },
+      }),
+      15_000,
+      "WalletConnect initialization timed out."
+    );
+
+    this.wcProvider = provider;
+
+    return new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Timed out waiting for WalletConnect URI.")), 10_000);
+
+      provider.on("display_uri", (uri: string) => {
+        clearTimeout(timeout);
+        resolve(uri);
+      });
+
+      // Some versions emit the URI synchronously after init.
+      const immediateUri = (provider as any).uri;
+      if (immediateUri) {
+        clearTimeout(timeout);
+        resolve(immediateUri);
+      }
+    });
+  }
+
   private async getOrInitWalletConnect(): Promise<WalletConnectProvider> {
     if (this.wcProvider) return this.wcProvider;
     if (!this.wcProjectId) {

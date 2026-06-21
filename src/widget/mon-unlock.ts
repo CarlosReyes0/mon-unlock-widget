@@ -2,6 +2,7 @@ import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
+import { generate } from "lean-qr";
 import {
   UnlockService,
   OnchainUnlockService,
@@ -43,6 +44,10 @@ export class MonUnlock extends LitElement {
   @state() private error: string | null = null;
   @state() private txHash: string | null = null;
   @state() private fetchedBody: string | null = null;
+
+  // WalletConnect QR state (mobile only)
+  @state() private wcQrSvg: string | null = null;
+  @state() private wcConnecting = false;
 
   private walletManager = new WalletManager();
   private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
@@ -267,6 +272,55 @@ export class MonUnlock extends LitElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
+  private isMobile(): boolean {
+    if (typeof navigator === "undefined") return false;
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  }
+
+  /** Mobile-only: show a QR code for WalletConnect. Resolves when the user scans and connects. */
+  private async startWalletConnectQrFlow(): Promise<void> {
+    this.wcConnecting = true;
+    this.wcQrSvg = null;
+    this.error = null;
+
+    try {
+      const uri = await this.walletManager.beginWalletConnectQr();
+      const qr = generate(uri);
+      // lean-qr returns a small object with toDataURL()
+      this.wcQrSvg = qr.toDataURL();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : "Failed to start WalletConnect.";
+      this.wcConnecting = false;
+      throw err;
+    }
+
+    // Poll for connection (the provider will have accounts after the user scans)
+    return new Promise<void>((resolve, reject) => {
+      const maxWait = 5 * 60 * 1000; // 5 minutes
+      const start = Date.now();
+      const interval = setInterval(async () => {
+        try {
+          const accounts = (await (this.walletManager as any).wcProvider?.request?.({
+            method: "eth_accounts",
+          })) as string[] | undefined;
+
+          if (accounts && accounts.length > 0) {
+            clearInterval(interval);
+            this.wcConnecting = false;
+            this.wcQrSvg = null;
+            resolve();
+          } else if (Date.now() - start > maxWait) {
+            clearInterval(interval);
+            this.wcConnecting = false;
+            reject(new Error("WalletConnect connection timed out. Please try again."));
+          }
+        } catch {
+          // ignore transient errors while polling
+        }
+      }, 1200);
+    });
+  }
+
   private bindOnchainProvider() {
     if (!this.isOnchain) return;
     const provider = this.walletManager.getProvider();
@@ -289,8 +343,19 @@ export class MonUnlock extends LitElement {
       if (this.walletConnectProjectId) {
         this.walletManager.setWalletConnectProjectId(this.walletConnectProjectId);
       }
-      const s = await this.walletManager.connect();
-      this.wallet = s;
+
+      // Mobile + WalletConnect project ID → use custom QR flow
+      let s: WalletState;
+      if (this.isMobile() && this.walletConnectProjectId && !(globalThis as any).ethereum) {
+        await this.startWalletConnectQrFlow();
+        // After the QR flow resolves, the WC provider has a session.
+        // Re-call connect() — it will pick up the existing provider.
+        s = await this.walletManager.connect();
+        this.wallet = s;
+      } else {
+        s = await this.walletManager.connect();
+        this.wallet = s;
+      }
       this.bindOnchainProvider();
 
       // Ensure wallet is on Monad for on-chain payments (skip if already there).
@@ -398,13 +463,22 @@ export class MonUnlock extends LitElement {
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">
-                    <button
-                      class="mon-btn mon-btn-primary"
-                      ?disabled=${this.loading}
-                      @click=${() => this.connect()}
-                    >
-                      ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
-                    </button>
+                    ${this.wcQrSvg
+                      ? html`
+                          <div class="flex flex-col items-center gap-3">
+                            <img src=${this.wcQrSvg} width="220" height="220" alt="WalletConnect QR code" />
+                            <p class="text-xs text-stone-500">Scan with MetaMask to connect</p>
+                          </div>
+                        `
+                      : html`
+                          <button
+                            class="mon-btn mon-btn-primary"
+                            ?disabled=${this.loading || this.wcConnecting}
+                            @click=${() => this.connect()}
+                          >
+                            ${this.loading || this.wcConnecting ? "Connecting…" : "Connect wallet to unlock"}
+                          </button>
+                        `}
                   </div>
                 </div>
               `}
