@@ -169,12 +169,11 @@ export class WalletManager {
         resolve(uri);
       });
 
-      // Some versions emit the URI synchronously after init.
-      const immediateUri = (provider as any).uri;
-      if (immediateUri) {
+      // Start the connection handshake — this is what emits the pairing URI.
+      provider.connect().catch((e) => {
         clearTimeout(timeout);
-        resolve(immediateUri);
-      }
+        reject(e);
+      });
     });
   }
 
