@@ -275,10 +275,12 @@ export class MonUnlock extends LitElement {
     return !eth;
   }
 
-  private openInMetaMask() {
-    // Official working endpoint per MetaMask docs: link.metamask.io (not the old metamask.app.link)
-    const target = window.location.href;
-    window.location.href = `https://link.metamask.io/dapp/${encodeURIComponent(target)}`;
+  private getMetaMaskDeepLink(): string {
+    // Official format: https://link.metamask.io/dapp/{bare-host+path}
+    // Do NOT include protocol; do NOT use window.location.href.
+    const { hostname, pathname, search, hash } = window.location;
+    const bare = `${hostname}${pathname}${search}${hash}`;
+    return `https://link.metamask.io/dapp/${encodeURIComponent(bare)}`;
   }
 
   private async connect() {
@@ -396,12 +398,13 @@ export class MonUnlock extends LitElement {
                   <div class="mt-4">
                     ${this.shouldShowMetaMaskDeepLink()
                       ? html`
-                          <button
-                            class="mon-btn mon-btn-primary"
-                            @click=${() => this.openInMetaMask()}
+                          <a
+                            class="mon-btn mon-btn-primary inline-block no-underline"
+                            href=${this.getMetaMaskDeepLink()}
+                            target="_self"
                           >
                             Open in MetaMask
-                          </button>
+                          </a>
                           <p class="mt-2 text-[10px] text-stone-500">
                             Opens this page inside the MetaMask app so you can connect your wallet.
                           </p>
