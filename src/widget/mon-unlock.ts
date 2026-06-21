@@ -33,6 +33,8 @@ export class MonUnlock extends LitElement {
   @property({ type: String }) theme: "light" | "dark" = "light";
   /** Contract address (enables real on-chain payments) */
   @property({ type: String, attribute: "unlock-contract" }) unlockContract = "";
+  /** WalletConnect Project ID (enables mobile connection via WalletConnect) */
+  @property({ type: String, attribute: "walletconnect-project-id" }) walletConnectProjectId = "";
 
   @state() private article: Article | null = null;
   @state() private wallet: WalletState = { connected: false, address: null };
@@ -269,19 +271,6 @@ export class MonUnlock extends LitElement {
     return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   }
 
-  private shouldShowMetaMaskDeepLink(): boolean {
-    if (!this.isMobile()) return false;
-    const eth = (globalThis as any).ethereum;
-    return !eth;
-  }
-
-  private getMetaMaskIntermediaryUrl(): string {
-    // Navigate to a dedicated page (different path) that hosts a real
-    // anchor pointing to link.metamask.io. This two-tap flow satisfies
-    // iOS Universal Link requirements better than a same-page link.
-    const target = encodeURIComponent(window.location.hostname);
-    return `/metamask-open.html?target=${target}`;
-  }
 
   private async connect() {
     if (!this.article) {
@@ -294,6 +283,9 @@ export class MonUnlock extends LitElement {
     this.txHash = null;
 
     try {
+      if (this.walletConnectProjectId) {
+        this.walletManager.setWalletConnectProjectId(this.walletConnectProjectId);
+      }
       const s = await this.walletManager.connect();
       this.wallet = s;
 
@@ -396,27 +388,13 @@ export class MonUnlock extends LitElement {
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">
-                    ${this.shouldShowMetaMaskDeepLink()
-                      ? html`
-                          <a
-                            class="mon-btn mon-btn-primary inline-block no-underline"
-                            href=${this.getMetaMaskIntermediaryUrl()}
-                          >
-                            Open in MetaMask
-                          </a>
-                          <p class="mt-2 text-[10px] text-stone-500">
-                            Opens this page inside the MetaMask app so you can connect your wallet.
-                          </p>
-                        `
-                      : html`
-                          <button
-                            class="mon-btn mon-btn-primary"
-                            ?disabled=${this.loading}
-                            @click=${() => this.connect()}
-                          >
-                            ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
-                          </button>
-                        `}
+                    <button
+                      class="mon-btn mon-btn-primary"
+                      ?disabled=${this.loading}
+                      @click=${() => this.connect()}
+                    >
+                      ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
+                    </button>
                   </div>
                 </div>
               `}

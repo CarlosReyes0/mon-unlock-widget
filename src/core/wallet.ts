@@ -1,15 +1,22 @@
 import type { WalletState } from "./types.js";
 import type { Chain } from "viem";
+import { EthereumProvider } from "@walletconnect/ethereum-provider";
 
 const DEMO_ADDRESS = "0xDemo0000000000000000000000000000000001";
 
-/** MVP: wallet connect; uses demo address when no extension (local demo only) */
+type Eip1193Provider = { request: (args: any) => Promise<unknown> };
+
+/** WalletManager supports injected (window.ethereum), WalletConnect, or demo fallback. */
 export class WalletManager {
   private listeners = new Set<(s: WalletState) => void>();
-  private state: WalletState = {
-    connected: false,
-    address: null,
-  };
+  private state: WalletState = { connected: false, address: null };
+  private provider: Eip1193Provider | null = null;
+  private wcProjectId: string | null = null;
+
+  /** Set the WalletConnect project ID (required for mobile / WalletConnect flow). */
+  setWalletConnectProjectId(id: string) {
+    this.wcProjectId = id || null;
+  }
 
   subscribe(fn: (s: WalletState) => void) {
     this.listeners.add(fn);
@@ -22,19 +29,39 @@ export class WalletManager {
   }
 
   async connect(): Promise<WalletState> {
-    const eth = (globalThis as { ethereum?: { request: (a: { method: string }) => Promise<unknown> } })
-      .ethereum;
+    const injected = (globalThis as { ethereum?: Eip1193Provider }).ethereum;
 
-    if (eth) {
-      const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+    if (injected) {
+      this.provider = injected;
+      const accounts = (await this.provider.request({ method: "eth_requestAccounts" })) as string[];
+      const address = accounts[0];
+      if (!address) throw new Error("No account selected");
+      this.state = { connected: true, address };
+    } else if (this.wcProjectId) {
+      // Mobile: use WalletConnect (shows QR modal via @walletconnect/modal)
+      const wc = await EthereumProvider.init({
+        projectId: this.wcProjectId,
+        optionalChains: [1, 5600], // Ethereum + Monad (placeholder; actual chain used later)
+        showQrModal: true,
+        metadata: {
+          name: "Mon Unlock",
+          description: "Unlock articles with MON",
+          url: typeof window !== "undefined" ? window.location.origin : "https://example.com",
+          icons: [],
+        },
+      });
+      await wc.connect();
+      this.provider = wc as unknown as Eip1193Provider;
+      const accounts = (await this.provider.request({ method: "eth_accounts" })) as string[];
       const address = accounts[0];
       if (!address) throw new Error("No account selected");
       this.state = { connected: true, address };
     } else if (import.meta.env.DEV) {
-      // No MetaMask — still unlock in local demo
+      // Demo fallback (localhost only)
+      this.provider = null;
       this.state = { connected: true, address: DEMO_ADDRESS };
     } else {
-      throw new Error("Install a Web3 wallet (e.g. MetaMask) to unlock articles.");
+      throw new Error("Install a Web3 wallet (e.g. MetaMask) or provide a WalletConnect project ID for mobile.");
     }
 
     this.emit();
@@ -43,25 +70,24 @@ export class WalletManager {
 
   disconnect() {
     this.state = { connected: false, address: null };
+    this.provider = null;
     this.emit();
   }
 
   async ensureChain(chain: Chain): Promise<void> {
-    const eth = (globalThis as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
-    if (!eth) return;
+    if (!this.provider) return;
 
     try {
-      const current = (await eth.request({ method: "eth_chainId" })) as string;
+      const current = (await this.provider.request({ method: "eth_chainId" })) as string;
       if (parseInt(current, 16) === chain.id) return;
 
-      await eth.request({
+      await this.provider.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: "0x" + chain.id.toString(16) }],
       });
     } catch (switchErr: any) {
-      // If chain not added yet, add it
       if (switchErr?.code === 4902) {
-        await eth.request({
+        await this.provider.request({
           method: "wallet_addEthereumChain",
           params: [
             {
