@@ -107,6 +107,7 @@
           <button class="btn btn-primary" id="copyFull">Copy full embed block</button>
           <span id="copyStatus" class="copy-success" style="display:none; margin-left:0.75rem;">Copied!</span>
           <span id="registerStatus" style="display:none; margin-left:0.75rem; font-size:0.75rem; color:#6b7280;"></span>
+          <span id="metadataStatus" style="display:none; margin-left:0.5rem; font-size:0.75rem;"></span>
         </div>
       </div>
 
@@ -309,6 +310,23 @@
         pane.appendChild(override);
       }
 
+      const SUPABASE_REGISTER_URL = 'https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article';
+
+      async function syncMetadataToSupabase(payload) {
+        try {
+          const res = await fetch(SUPABASE_REGISTER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) return { ok: true };
+          const err = await res.json().catch(() => ({}));
+          return { ok: false, error: err.error || `HTTP ${res.status}` };
+        } catch (e) {
+          return { ok: false, error: e?.message || 'Network error' };
+        }
+      }
+
       function renderCode() {
         const v = getValues();
         const out = document.getElementById("outputCode");
@@ -437,23 +455,46 @@ ${teaserEsc}
                 status.textContent = "Registered on Monad ✓";
                 status.style.color = "#16a34a";
 
-                // Record the slug in Supabase so the dashboard can later
-                // generate the exact same embed code the generator produced.
-                try {
-                  await fetch('https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      slug: v.articleId,
-                      articleIdHash: articleIdBytes,
-                      priceWei: priceWei.toString(),
-                      publisher: connectedWallet,
-                      teaser: v.teaser,
-                      body: v.body,
-                    }),
-                  });
-                } catch (_) {
-                  // Non-fatal: the on-chain registration succeeded.
+                // Record the slug + body in Supabase
+                const metaStatus = document.getElementById("metadataStatus");
+                metaStatus.style.display = "inline";
+                metaStatus.textContent = "Syncing metadata…";
+                metaStatus.style.color = "#6b7280";
+
+                const metaPayload = {
+                  slug: v.articleId,
+                  articleIdHash: articleIdBytes,
+                  priceWei: priceWei.toString(),
+                  publisher: connectedWallet,
+                  teaser: v.teaser,
+                  body: v.body,
+                };
+
+                const metaResult = await syncMetadataToSupabase(metaPayload);
+                if (metaResult.ok) {
+                  metaStatus.textContent = "Metadata saved ✓";
+                  metaStatus.style.color = "#16a34a";
+                } else {
+                  metaStatus.innerHTML = `Metadata sync failed: ${metaResult.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
+                  metaStatus.style.color = "#b45309";
+                  const retryBtn = document.getElementById("retryMetaBtn");
+                  if (retryBtn) {
+                    retryBtn.onclick = async () => {
+                      retryBtn.disabled = true;
+                      retryBtn.textContent = "Retrying…";
+                      const r = await syncMetadataToSupabase(metaPayload);
+                      if (r.ok) {
+                        metaStatus.textContent = "Metadata saved ✓";
+                        metaStatus.style.color = "#16a34a";
+                      } else {
+                        retryBtn.disabled = false;
+                        retryBtn.textContent = "Retry";
+                        metaStatus.innerHTML = `Metadata sync failed: ${r.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
+                        const newBtn = document.getElementById("retryMetaBtn");
+                        if (newBtn) newBtn.onclick = retryBtn.onclick;
+                      }
+                    };
+                  }
                 }
               }
 
@@ -486,21 +527,47 @@ ${teaserEsc}
                   status.textContent = "Already registered ✓";
                   status.style.color = "#16a34a";
 
-                  // Still record the slug so the dashboard can produce the exact embed later
-                  try {
-                    await fetch('https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        slug: v.articleId,
-                        articleIdHash: articleIdBytes,
-                        priceWei: priceWei.toString(),
-                        publisher: connectedWallet,
-                        teaser: v.teaser,
-                        body: v.body,
-                      }),
-                    });
-                  } catch (_) {}
+                  // Still record the slug + body so the dashboard can produce the exact embed later
+                  const metaStatus = document.getElementById("metadataStatus");
+                  metaStatus.style.display = "inline";
+                  metaStatus.textContent = "Syncing metadata…";
+                  metaStatus.style.color = "#6b7280";
+
+                  const metaPayload = {
+                    slug: v.articleId,
+                    articleIdHash: articleIdBytes,
+                    priceWei: priceWei.toString(),
+                    publisher: connectedWallet,
+                    teaser: v.teaser,
+                    body: v.body,
+                  };
+
+                  const metaResult = await syncMetadataToSupabase(metaPayload);
+                  if (metaResult.ok) {
+                    metaStatus.textContent = "Metadata saved ✓";
+                    metaStatus.style.color = "#16a34a";
+                  } else {
+                    metaStatus.innerHTML = `Metadata sync failed: ${metaResult.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
+                    metaStatus.style.color = "#b45309";
+                    const retryBtn = document.getElementById("retryMetaBtn");
+                    if (retryBtn) {
+                      retryBtn.onclick = async () => {
+                        retryBtn.disabled = true;
+                        retryBtn.textContent = "Retrying…";
+                        const r = await syncMetadataToSupabase(metaPayload);
+                        if (r.ok) {
+                          metaStatus.textContent = "Metadata saved ✓";
+                          metaStatus.style.color = "#16a34a";
+                        } else {
+                          retryBtn.disabled = false;
+                          retryBtn.textContent = "Retry";
+                          metaStatus.innerHTML = `Metadata sync failed: ${r.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
+                          const newBtn = document.getElementById("retryMetaBtn");
+                          if (newBtn) newBtn.onclick = retryBtn.onclick;
+                        }
+                      };
+                    }
+                  }
                 } else {
                   await doRegister();
                 }
