@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Finish registration — MON Unlock</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      body {
+        font-family: "DM Sans", system-ui, sans-serif;
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem;
+        line-height: 1.6;
+        color: #111827;
+        background: #f8fafc;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      h1 { font-size: 1.35rem; margin: 0 0 0.5rem; }
+      .muted { color: #6b7280; font-size: 0.9rem; margin: 0 0 1.25rem; }
+      .slug {
+        font-family: ui-monospace, monospace;
+        background: #f3f4f6;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.65rem 1.1rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #7c3aed, #5b21b6);
+        color: white;
+      }
+      .btn-secondary { background: #e5e7eb; color: #111827; margin-right: 0.5rem; }
+      .status { margin-top: 1rem; font-size: 0.875rem; min-height: 1.25rem; }
+      .ok { color: #16a34a; }
+      .err { color: #ef4444; }
+      .steps { margin: 1rem 0; padding-left: 1.2rem; color: #374151; font-size: 0.9rem; }
+      a { color: #7c3aed; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Finish on-chain registration</h1>
+      <p class="muted" id="intro">
+        Your embed and body are already saved. This page registers the article on Monad so readers can pay.
+      </p>
+
+      <p><strong>Slug:</strong> <span class="slug" id="slugDisplay">—</span></p>
+      <p><strong>Price:</strong> <span id="priceDisplay">—</span> MON</p>
+
+      <ol class="steps">
+        <li>Connect your publisher wallet</li>
+        <li>Click Register on Monad</li>
+        <li>Approve the transaction in MetaMask</li>
+      </ol>
+
+      <div>
+        <button class="btn btn-secondary" id="connectBtn">Connect wallet</button>
+        <button class="btn btn-primary" id="registerBtn" disabled>Register on Monad</button>
+      </div>
+
+      <p class="status" id="status"></p>
+    </div>
+
+    <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #6b7280; text-align: center;">
+      Sent here from your publishing agent? You're in the right place.
+    </p>
+
+    <script type="module">
+      const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
+
+      const params = new URLSearchParams(location.search);
+      const slug = (params.get("slug") || params.get("articleId") || "").trim();
+      const price = (params.get("price") || "1").trim();
+
+      const slugEl = document.getElementById("slugDisplay");
+      const priceEl = document.getElementById("priceDisplay");
+      const statusEl = document.getElementById("status");
+      const connectBtn = document.getElementById("connectBtn");
+      const registerBtn = document.getElementById("registerBtn");
+
+      if (!slug) {
+        slugEl.textContent = "(missing)";
+        statusEl.className = "status err";
+        statusEl.textContent = "Missing slug in URL. Use ?slug=your-article-id&price=1";
+        connectBtn.disabled = true;
+      } else {
+        slugEl.textContent = slug;
+        priceEl.textContent = price;
+      }
+
+      let wallet = null;
+
+      function setStatus(msg, ok) {
+        statusEl.textContent = msg;
+        statusEl.className = "status " + (ok ? "ok" : msg ? "err" : "");
+      }
+
+      async function ensureMonad(eth) {
+        const chainId = await eth.request({ method: "eth_chainId" });
+        if (parseInt(chainId, 16) === 143) return;
+        try {
+          await eth.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0x8f" }],
+          });
+        } catch (e) {
+          if (e?.code === 4902) {
+            await eth.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: "0x8f",
+                chainName: "Monad",
+                nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+                rpcUrls: ["https://rpc.monad.xyz"],
+                blockExplorerUrls: ["https://monadvision.com"],
+              }],
+            });
+          } else throw e;
+        }
+      }
+
+      connectBtn.onclick = async () => {
+        const eth = window.ethereum;
+        if (!eth) {
+          setStatus("Install MetaMask or open this page in your wallet browser.", false);
+          return;
+        }
+        try {
+          const accounts = await eth.request({ method: "eth_requestAccounts" });
+          wallet = accounts[0];
+          connectBtn.textContent = wallet.slice(0, 6) + "…" + wallet.slice(-4);
+          registerBtn.disabled = !slug;
+          setStatus("Wallet connected. Click Register on Monad.", true);
+        } catch (e) {
+          setStatus(e.message || "Connection failed.", false);
+        }
+      };
+
+      registerBtn.onclick = async () => {
+        if (!slug || !wallet) return;
+        const eth = window.ethereum;
+        if (!eth) return;
+
+        registerBtn.disabled = true;
+        setStatus("Switching to Monad…", true);
+
+        try {
+          await ensureMonad(eth);
+
+          const { keccak256, toBytes, parseEther, createWalletClient, custom, createPublicClient, http } =
+            await import("https://esm.sh/viem@2");
+
+          const articleIdBytes = keccak256(toBytes(slug));
+          const priceWei = parseEther(price);
+
+          const publicClient = createPublicClient({
+            chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+            transport: http("https://rpc.monad.xyz"),
+          });
+
+          // Already registered?
+          try {
+            const existing = await publicClient.readContract({
+              address: MAINNET_CONTRACT,
+              abi: [{
+                name: "getArticle",
+                type: "function",
+                stateMutability: "view",
+                inputs: [{ name: "articleId", type: "bytes32" }],
+                outputs: [
+                  { name: "priceWei", type: "uint256" },
+                  { name: "publisher", type: "address" },
+                  { name: "active", type: "bool" },
+                ],
+              }],
+              functionName: "getArticle",
+              args: [articleIdBytes],
+            });
+            if (existing[1] && existing[1] !== "0x0000000000000000000000000000000000000000") {
+              if (existing[1].toLowerCase() === wallet.toLowerCase()) {
+                setStatus("Already registered ✓ Readers can pay now.", true);
+                registerBtn.textContent = "Done";
+                return;
+              }
+              setStatus("This slug is registered by another wallet: " + existing[1], false);
+              registerBtn.disabled = false;
+              return;
+            }
+          } catch { /* proceed to register */ }
+
+          setStatus("Confirm the transaction in your wallet…", true);
+
+          const walletClient = createWalletClient({
+            account: wallet,
+            chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+            transport: custom(eth),
+          });
+
+          const txHash = await walletClient.writeContract({
+            address: MAINNET_CONTRACT,
+            abi: [{
+              name: "registerArticle",
+              type: "function",
+              stateMutability: "nonpayable",
+              inputs: [
+                { name: "articleId", type: "bytes32" },
+                { name: "priceWei", type: "uint256" },
+              ],
+              outputs: [],
+            }],
+            functionName: "registerArticle",
+            args: [articleIdBytes, priceWei],
+          });
+
+          setStatus("Waiting for confirmation…", true);
+          await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+          setStatus("Registered ✓ Readers can pay now. Tx: " + txHash.slice(0, 10) + "…", true);
+          registerBtn.textContent = "Done";
+        } catch (e) {
+          setStatus(e.message || "Registration failed.", false);
+          registerBtn.disabled = false;
+        }
+      };
+    </script>
+  </body>
+</html>

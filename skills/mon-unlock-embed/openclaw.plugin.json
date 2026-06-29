@@ -1,0 +1,30 @@
+{
+  "id": "mon-unlock-embed",
+  "name": "MON Unlock Embed Generator",
+  "description": "Publish mon-unlock paid articles from chat: embed + Supabase + optional on-chain registration.",
+  "contracts": {
+    "tools": ["generate_mon_unlock_embed", "preview_mon_unlock_embed"]
+  },
+  "toolMetadata": {
+    "preview_mon_unlock_embed": {
+      "optional": true
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "publisher": {
+        "type": "string",
+        "description": "Publisher wallet address (0x...). Required for Supabase metadata sync."
+      },
+      "privateKey": {
+        "type": "string",
+        "description": "Publisher private key (0x...). Enables automatic on-chain registration on Monad. Keep secret."
+      }
+    },
+    "additionalProperties": false
+  }
+}

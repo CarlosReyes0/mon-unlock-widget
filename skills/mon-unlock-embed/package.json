@@ -1,0 +1,21 @@
+{
+  "name": "@mon-unlock/openclaw-embed",
+  "version": "1.0.0",
+  "description": "OpenClaw plugin — generate mon-unlock embeds from chat",
+  "type": "module",
+  "main": "./index.ts",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types test.mjs",
+    "test:onchain": "node --experimental-strip-types test.mjs"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.41",
+    "viem": "^2.31.0"
+  },
+  "peerDependencies": {
+    "openclaw": "*"
+  }
+}
