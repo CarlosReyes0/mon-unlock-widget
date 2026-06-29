@@ -24,3 +24,8 @@ verify_jwt = false # We will trigger this via Cron, not user auth
 
 [functions.article-body]
 verify_jwt = false # Called by the public widget with anon key
+[functions.register-article]
+verify_jwt = false # Called by the public generator (no user session)
+
+[functions.backfill-unlock]
+verify_jwt = false # Admin / one-off utility

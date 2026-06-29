@@ -91,9 +91,9 @@
           </div>
 
           <div>
-            <label for="body">Body (full article — HTML)</label>
-            <textarea id="body" placeholder="<p>Your full article content here...</p>"></textarea>
-            <div class="hint">HTML is allowed. This is what paying readers see.</div>
+            <label for="body">Body (full article)</label>
+            <textarea id="body" placeholder="Write your article here. Use blank lines for new paragraphs."></textarea>
+            <div class="hint">Plain text or HTML. Blank lines and indentation are preserved.</div>
           </div>
         </div>
 
@@ -278,7 +278,7 @@
 
         const bodySlot = document.createElement("div");
         bodySlot.setAttribute("slot", "body");
-        bodySlot.innerHTML = v.body;
+        bodySlot.textContent = v.body;
 
         widget.appendChild(teaserSlot);
         widget.appendChild(bodySlot);

@@ -1,0 +1,164 @@
+# MON Unlock Widget — Core Conventions
+
+This project builds a paste-anywhere paywall: `<mon-unlock>` custom element. Readers pay native **MON** on **Monad mainnet (chain 143)** to unlock the full article body. Publishers copy one HTML block; no accounts, no backend required from them.
+
+## Guiding Principles
+- Phase 1 (shipped): real on-chain MON payment + cross-device unlock verification.
+- Publisher UX: one embed snippet. Body lives in Supabase, not in the HTML.
+- Identity = wallet address. No email/password accounts.
+- On-chain is the source of truth for unlocks; local cache is a performance convenience.
+- Keep the embed contract stable. Changes to the generated HTML must be intentional and versioned.
+
+## Repository Layout
+- `src/core/` — pure business logic (no DOM). Types, unlock services, wallet manager, chains.
+- `src/widget/` — Lit custom element + component CSS. The `<mon-unlock>` implementation.
+- `src/index.ts` — library entry; re-exports and side-effect import of the custom element.
+- `*.html` (root) — static single-file apps: generator, dashboard, register, embed-example, index. They duplicate some constants because they must run without bundling.
+- `supabase/functions/*/index.ts` — Deno Edge Functions (CORS, service role for writes).
+- `contracts/src/` — Foundry Solidity (`ArticleUnlock.sol`).
+- `skills/mon-unlock-embed/` — OpenClaw plugin that re-uses the embed generation and Supabase sync logic. Must match generator output exactly.
+- `dist/` — build output (do not edit). Produced by `npm run build`.
+
+## TypeScript / Module Rules
+- Target: ES2022, ESM output. `"moduleResolution": "bundler"`.
+- **Always import relative files with `.js` extension** from `.ts` sources:
+  ```ts
+  import { monadMainnet } from "./chains.js";
+  import type { WalletState } from "./types.js";
+  ```
+- Bare specifiers stay bare: `"lit"`, `"viem"`, `"@walletconnect/ethereum-provider"`.
+- Re-export via barrels (`src/core/index.ts`).
+- Strict mode; no implicit any.
+
+## Widget (Lit) Conventions
+- Custom element: `@customElement("mon-unlock") export class MonUnlock extends LitElement`.
+- Light DOM: `createRenderRoot() { return this; }`. Styles come from `dist/mon-unlock.css` + host page.
+- Slots are the contract with publishers:
+  - `slot="teaser"` — always visible (plain text or simple HTML).
+  - `slot="body"` — shown only after unlock (optional; fetched from Supabase if absent).
+- Body content handling:
+  - If it contains HTML tags (`<p`, `<br`, etc.), render via `unsafeHTML`.
+  - Otherwise, treat as plain text and render with `whitespace-pre-wrap` so blank lines and indentation become paragraphs.
+- Two runtime modes (determined by presence of `unlock-contract` attribute):
+  - Demo: `UnlockService` + localStorage (no chain).
+  - On-chain: `OnchainUnlockService` + viem calls against the provided contract.
+- Pre-flight: before sending an on-chain unlock, call `getArticle` to surface clear errors (not registered, inactive) instead of letting MetaMask warn "tx will fail".
+- Use explicit `gas` on writes when Monad RPC estimation is unreliable.
+- Events: `mon:unlocked`, `mon:connected` (bubbles, composed).
+- Teaser in the locked state uses a styled box; after unlock it is plain text above the body.
+
+## On-Chain Model (Non-Negotiable)
+- Chain: Monad mainnet (id 143). `monadMainnet` in `src/core/chains.ts`.
+- Payment: native MON only (`payable unlock`, `msg.value` in wei). No USDC or custom tokens in v1.
+- Article ID encoding (must be identical everywhere):
+  ```ts
+  const articleIdBytes = keccak256(toBytes(slug)); // viem
+  // Solidity: keccak256(bytes(slug))
+  ```
+- Contract functions used by widget: `unlock(bytes32)`, `hasUnlocked(address,bytes32)`, `getArticle(bytes32)`, `registerArticle(bytes32,uint256)`.
+- Canonical contract (mainnet): `0x038446b1F736e254cC0E256B20D74823c41EeADB`.
+- Overpayment is forwarded (no refund in MVP).
+- One unlock per (reader, article). Re-unlock reverts with `AlreadyUnlocked`.
+
+## Dual Source of Truth for Unlocks
+- Local cache (`UnlockStore` / `localStorage`) makes UI instant and survives refreshes.
+- `checkOnchainAccess` (or on-chain `hasUnlocked`) is authoritative.
+- After a successful on-chain payment or a positive on-chain check, write to cache.
+- Silent discovery (`eth_accounts`) on load when `unlock-contract` is present enables cross-origin "already paid" without re-clicking connect.
+- First visit on a new origin typically still requires one explicit connect; subsequent visits on that origin can auto-detect.
+
+## Supabase / Edge Functions
+- All functions: `Deno.serve(async (req) => { ... })`.
+- Standard CORS headers object (vary by method). Always handle OPTIONS.
+- Writes use `SUPABASE_SERVICE_ROLE_KEY`.
+- `register-article`: upsert by `article_id_hash`. Stores human slug + body + teaser so the dashboard and `article-body` can serve the exact embed later.
+- `article-body`: returns body only if the reader has an unlock row or on-chain `hasUnlocked` is true. Falls back to on-chain truth for immediate post-payment UX.
+- `indexer`: cron-driven; paginates `getLogs` for `ArticleRegistered` / `ArticleUnlocked`, upserts into `articles`/`unlocks`, tracks `indexer_state.last_indexed_block`.
+- `backfill-unlock`: dev helper only; not public.
+- Schema drift note: indexer may write rows with `article_id = null`; `article-body` backfills the slug when possible.
+
+## Content Model
+- `teaser`: free preview. Supports newlines via `whitespace-pre-wrap` in the widget. Escaped when emitted into embed HTML.
+- `body`: paid content. Either plain text (newlines → paragraphs) or HTML (rendered). Never put the body in the pasted embed HTML; it is fetched after unlock.
+- Price: human string in generator ("1", "0.5"); stored in wei on chain and in Supabase.
+
+## Constants and Duplication (Keep in Sync)
+These values are intentionally duplicated across static pages and the skills plugin because those artifacts must be self-contained:
+- `CDN_BASE`: `https://mon-unlock-widget-production.up.railway.app`
+- `MAINNET_CONTRACT`: `0x038446b1F736e254cC0E256B20D74823c41EeADB`
+- `WIDGET_VERSION`: bump when widget behavior or embed shape changes (affects cache-busting `?v=` in script src).
+- `WC_PROJECT_ID`: `c2a289e11ad2998f8ea4633db536334c`
+- `MONAD_RPC`: `https://rpc.monad.xyz`
+
+When any of the above change, update **all** of:
+- `generator.html`
+- `dashboard.html`
+- `register.html`
+- `skills/mon-unlock-embed/embed.ts`
+- (and any docs/examples that hardcode them)
+
+## Embed Generation Contract
+- `generator.html` produces the canonical embed HTML.
+- `skills/mon-unlock-embed/embed.ts` `generateEmbed` and `publishArticle` must emit **identical** markup and use the same constants.
+- The teaser slot content is HTML-escaped in the generated code.
+- The body is **never** in the generated snippet; it is synced to Supabase and fetched post-unlock.
+
+## Error and UX Tone
+- Errors shown to end users must be actionable sentences, not stack traces or internal codes.
+- Examples: "This article has not been registered for on-chain payments yet.", "Install a Web3 wallet or provide a WalletConnect project ID for mobile."
+- Pre-flight checks surface the right message before MetaMask shows a scary warning.
+- WalletConnect on mobile has custom QR + visibility/poll recovery because iOS often approves in the wallet app while the page tab is backgrounded.
+
+## Comment Style
+- Prefer JSDoc for public or cross-module functions and classes.
+- Write "why" comments, not "what the next line does."
+- Avoid obvious narrative comments inside function bodies (e.g., do not write `// set the state` before `this.state = ...`).
+- Contract and edge functions may have short header blocks explaining purpose and verification order.
+
+## Build, Dev, and Tooling
+- `npm run dev` — Vite dev server (serves root; widget served from `/dist` after build or via plugin).
+- `npm run build` — `tsc && vite build --mode lib` (outputs `dist/mon-unlock.js`, `.css`, `.umd.cjs`).
+- `npm run typecheck` — `tsc --noEmit`.
+- Node >= 22.
+- Tailwind via Vite plugin (`@tailwindcss/vite`).
+- No ESLint/Prettier enforced in repo at time of writing; follow existing formatting and the patterns in `src/`.
+- Contracts: Foundry. `cd contracts && forge test`. Deploy via `forge script`.
+
+## What the Widget Does NOT Do
+- It does not host or inline the paid body in the embed HTML.
+- It does not create publisher accounts; wallet address is identity.
+- It does not support custom tokens or dynamic pricing in v1 (see FOCUS.md for gated items).
+
+## Navigation Header (Static Pages)
+All root HTML pages include a minimal inline nav with active-state highlighting via a small IIFE. Keep the three links consistent:
+- Home (`/`)
+- Create embed (`/generator.html`)
+- Writer dashboard (`/dashboard.html`)
+
+## Skills Plugin Specifics
+- `skills/mon-unlock-embed/embed.ts` is the single source for the plugin's embed + Supabase + on-chain registration behavior.
+- It must stay byte-compatible with what the web generator emits for the same inputs.
+- When `privateKey` is provided, the plugin can register on-chain automatically. Otherwise it produces a `finishRegistrationUrl` pointing at `/register.html?slug=...&price=...`.
+
+## Testing and Verification Patterns
+- Contract tests (Foundry) assert the core invariants: payment forwarding, insufficient payment revert, double-unlock revert, and `articleIdFromString` matches `keccak256(bytes(slug))`.
+- Widget behavior is primarily verified manually via the generator preview + `/demo.html` (or equivalent) with real MON on the target network.
+- Cross-device unlock: pay on one browser, connect the same wallet on another origin; `hasUnlocked` + silent `eth_accounts` should surface the body without a second payment.
+
+## When Changing Behavior
+- If the embed HTML shape or widget attribute contract changes, bump `WIDGET_VERSION` and update all constant locations.
+- If on-chain semantics change (events, function signatures), update the ABI fragments in the widget, generator, register page, dashboard, and skills plugin.
+- Document the change in FOCUS.md or a new note if it affects Phase exit criteria or trust assumptions.
+
+## Out of Scope (Per FOCUS.md)
+Do not pursue without explicit validation:
+- IPFS / decentralized storage for bodies
+- USDC or other payment assets in v1
+- Custom `$READ` token or usage-based pricing before talking to credible Monad/DeltaV contacts
+- WordPress/Webflow plugins before the hosted generator (Phase 2) is solid
+
+Follow FOCUS.md as the source of truth for what to build next and what to ignore.
+
+---
+
+Follow these rules so that any change—widget, generator, contract, or plugin—remains consistent with the existing mental model and the paste-anywhere promise.

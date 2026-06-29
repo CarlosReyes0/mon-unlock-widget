@@ -99,6 +99,21 @@ export class MonUnlock extends LitElement {
     return el?.innerHTML?.trim() ?? "";
   }
 
+  /** True when the body uses HTML tags (vs plain text with newlines). */
+  private looksLikeHtml(body: string): boolean {
+    return /<\s*(p|br|div|span|h[1-6]|ul|ol|li|a|strong|em|blockquote|pre|code|table|section|article)\b/i.test(
+      body
+    );
+  }
+
+  private renderBody(body: string) {
+    if (!body) return nothing;
+    if (this.looksLikeHtml(body)) {
+      return html`<div class="mon-body text-black">${unsafeHTML(body)}</div>`;
+    }
+    return html`<div class="mon-body text-black whitespace-pre-wrap">${body}</div>`;
+  }
+
   private loadArticle() {
     this.error = null;
 
@@ -451,7 +466,7 @@ export class MonUnlock extends LitElement {
           ${this.unlocked
             ? html`
                 <div class="mb-6 whitespace-pre-wrap text-base" style="color:#000">${a.teaser}</div>
-                <div class="mon-body text-black">${unsafeHTML(this.fetchedBody || a.body)}</div>
+                ${this.renderBody(this.fetchedBody || a.body)}
                 <p class="mt-6 text-xs text-black">
                   Unlocked · ${truncateAddress(this.wallet.address!)}
                   ${this.txHash
