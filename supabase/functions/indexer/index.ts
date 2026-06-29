@@ -31,21 +31,40 @@ async function upsertArticle(log: any) {
   // A better approach: The generator calls an Edge Function to register, which stores the slug.
   // For this MVP, we will just store the hash and the publisher.
 
-  const { error } = await supabase
+  const { data: existing } = await supabase
     .from('articles')
-    .upsert({
-      article_id: null, // we only have the hash from the event; slug is not emitted on-chain
-      article_id_hash: articleIdHash,
-      publisher: publisher,
-      price_wei: priceWei,
-      active: true,
-      registered_at: new Date().toISOString(),
-    }, { onConflict: 'article_id_hash' });
+    .select('id')
+    .eq('article_id_hash', articleIdHash)
+    .maybeSingle();
+
+  if (existing) {
+    // Preserve slug/body/teaser written by register-article; only sync chain fields.
+    const { error } = await supabase
+      .from('articles')
+      .update({
+        publisher,
+        price_wei: priceWei,
+        active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('article_id_hash', articleIdHash);
+
+    if (error) throw new Error(`Update article failed: ${error.message}`);
+    return;
+  }
+
+  const { error } = await supabase.from('articles').insert({
+    article_id: null, // slug unknown until register-article or article-body backfill
+    article_id_hash: articleIdHash,
+    publisher,
+    price_wei: priceWei,
+    active: true,
+    registered_at: new Date().toISOString(),
+  });
 
   if (error) {
-    console.error('Upsert article failed:', error);
-    // Surface in response for easier debugging
-    throw new Error(`Upsert article failed: ${error.message}`);
+    console.error('Insert article failed:', error);
+    throw new Error(`Insert article failed: ${error.message}`);
   }
 }
 

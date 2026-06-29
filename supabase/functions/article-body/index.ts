@@ -7,7 +7,7 @@
 // 2. On-chain hasUnlocked() — instant after payment, no indexer wait
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { createPublicClient, http } from 'https://esm.sh/viem@2';
+import { createPublicClient, http, keccak256, toBytes } from 'https://esm.sh/viem@2';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -92,20 +92,67 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'article_id or article_id_hash is required' }), { status: 400, headers });
     }
 
-    // Find the article
-    let query = supabase.from('articles').select('article_id_hash, body');
+    // Find the article by slug, then by on-chain hash derived from the slug.
+    // Indexer rows often have article_id=null (chain events only emit the hash).
+    let article: { article_id_hash: string; body: string | null } | null = null;
+
     if (articleId) {
-      query = query.eq('article_id', articleId);
+      const { data: bySlug, error: slugError } = await supabase
+        .from('articles')
+        .select('article_id_hash, body')
+        .eq('article_id', articleId)
+        .limit(1);
+
+      if (slugError) {
+        console.error('Article lookup failed:', slugError);
+        return new Response(JSON.stringify({ error: 'Failed to load article' }), { status: 500, headers });
+      }
+
+      if (bySlug && bySlug.length > 0) {
+        article = bySlug[0];
+      } else {
+        const derivedHash = keccak256(toBytes(articleId));
+        const { data: byHash, error: hashError } = await supabase
+          .from('articles')
+          .select('article_id_hash, body')
+          .eq('article_id_hash', derivedHash)
+          .limit(1);
+
+        if (hashError) {
+          console.error('Article hash lookup failed:', hashError);
+          return new Response(JSON.stringify({ error: 'Failed to load article' }), { status: 500, headers });
+        }
+
+        if (byHash && byHash.length > 0) {
+          article = byHash[0];
+          // Backfill slug so future lookups and the dashboard resolve the human-readable id.
+          await supabase
+            .from('articles')
+            .update({ article_id: articleId, updated_at: new Date().toISOString() })
+            .eq('article_id_hash', derivedHash)
+            .is('article_id', null);
+        }
+      }
     } else if (articleIdHash) {
-      query = query.eq('article_id_hash', articleIdHash);
+      const { data: byHash, error: hashError } = await supabase
+        .from('articles')
+        .select('article_id_hash, body')
+        .eq('article_id_hash', articleIdHash)
+        .limit(1);
+
+      if (hashError) {
+        console.error('Article hash lookup failed:', hashError);
+        return new Response(JSON.stringify({ error: 'Failed to load article' }), { status: 500, headers });
+      }
+
+      if (byHash && byHash.length > 0) {
+        article = byHash[0];
+      }
     }
 
-    const { data: articles, error: articleError } = await query.limit(1);
-    if (articleError || !articles || articles.length === 0) {
+    if (!article) {
       return new Response(JSON.stringify({ error: 'Article not found' }), { status: 404, headers });
     }
-
-    const article = articles[0];
 
     // Check if this reader has unlocked it
     const { data: unlocks, error: unlockError } = await supabase
