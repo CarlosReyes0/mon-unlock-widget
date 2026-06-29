@@ -236,8 +236,9 @@ export class MonUnlock extends LitElement {
 
     const url = `${apiBase}/article-body?${params.toString()}`;
 
-    // Retry briefly — covers RPC propagation right after a fresh payment.
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Retry with backoff — the edge function's independent on-chain check (via public RPC)
+    // can lag behind the wallet provider's view right after a confirmed tx. Keep trying on 403.
+    for (let attempt = 0; attempt < 10; attempt++) {
       try {
         const res = await fetch(url, {
           headers: {
@@ -254,19 +255,24 @@ export class MonUnlock extends LitElement {
           return;
         }
 
-        if (res.status !== 403 || attempt === 2) {
+        // Only continue retrying on 403 (unlock not yet visible to the edge function's RPC).
+        // Any other status is a hard failure.
+        if (res.status !== 403) {
           console.warn("[mon-unlock] article-body fetch returned", res.status);
           return;
         }
       } catch (e) {
-        if (attempt === 2) {
+        if (attempt === 9) {
           console.warn("[mon-unlock] failed to fetch body after unlock", e);
           return;
         }
       }
 
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      // Exponential backoff: ~300ms, 450ms, 675ms, ... up to ~5s total wait.
+      const delay = Math.floor(300 * Math.pow(1.5, attempt));
+      await new Promise((r) => setTimeout(r, delay));
     }
+    console.warn("[mon-unlock] exhausted retries fetching body after unlock");
   }
 
   private emit(name: string, detail: unknown) {
