@@ -20,7 +20,7 @@ enabled = true
 
 [functions]
 [functions.indexer]
-verify_jwt = false # We will trigger this via Cron, not user auth
+verify_jwt = false # Triggered by pg_cron (see migrations/0005_schedule_indexer_cron.sql)
 
 [functions.article-body]
 verify_jwt = false # Called by the public widget with anon key
