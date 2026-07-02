@@ -100,6 +100,26 @@ mon-unlock {
   font-size: 1.0625rem;
 }
 
+.mon-body img,
+.mon-body video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.mon-body iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border: none;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
 .mon-badge {
   font-size: 0.6875rem;
   font-weight: 600;

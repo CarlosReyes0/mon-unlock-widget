@@ -92,8 +92,8 @@
 
           <div>
             <label for="body">Body (full article)</label>
-            <textarea id="body" placeholder="Write your article here. Use blank lines for new paragraphs."></textarea>
-            <div class="hint">Plain text or HTML. Blank lines and indentation are preserved.</div>
+            <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
+            <div class="hint">Plain text or HTML. Use &lt;img src="..."&gt; for images, or paste a YouTube/Loom embed iframe.</div>
           </div>
         </div>
 
@@ -138,7 +138,19 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-      const WIDGET_VERSION = "20240701"; // bump this when widget behavior changes
+      const WIDGET_VERSION = "20240702"; // bump this when widget behavior changes
+
+      function looksLikeHtml(text) {
+        return /<\s*(p|br|div|span|h[1-6]|ul|ol|li|a|strong|em|blockquote|pre|code|table|section|article|img|video|audio|picture|figure|source|iframe)\b/i.test(text);
+      }
+
+      function setSlotContent(el, text) {
+        if (looksLikeHtml(text)) {
+          el.innerHTML = text;
+        } else {
+          el.textContent = text;
+        }
+      }
 
       const fields = ["title", "author", "price", "articleId", "teaser", "body"];
       const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
@@ -274,11 +286,15 @@
 
         const teaserSlot = document.createElement("div");
         teaserSlot.setAttribute("slot", "teaser");
-        teaserSlot.innerHTML = v.teaser.replace(/\n/g, "<br>");
+        if (looksLikeHtml(v.teaser)) {
+          teaserSlot.innerHTML = v.teaser;
+        } else {
+          teaserSlot.innerHTML = v.teaser.replace(/\n/g, "<br>");
+        }
 
         const bodySlot = document.createElement("div");
         bodySlot.setAttribute("slot", "body");
-        bodySlot.textContent = v.body;
+        setSlotContent(bodySlot, v.body);
 
         widget.appendChild(teaserSlot);
         widget.appendChild(bodySlot);
@@ -305,6 +321,11 @@
             -webkit-mask-image: none !important;
             mask-image: none !important;
             font-weight: 400 !important;
+          }
+          #previewPane mon-unlock .mon-body img,
+          #previewPane mon-unlock .mon-body video,
+          #previewPane mon-unlock .mon-body iframe {
+            max-width: 100%;
           }
         `;
         pane.appendChild(override);

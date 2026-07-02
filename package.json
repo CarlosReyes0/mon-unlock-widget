@@ -22,7 +22,7 @@
     "dev": "vite",
     "build": "tsc && vite build --mode lib",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/core/embed-signature.test.js"
+    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js"
   },
   "license": "MIT",
   "engines": {
