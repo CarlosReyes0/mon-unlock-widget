@@ -1,5 +1,6 @@
 import { createPublicClient, createWalletClient, custom, keccak256, toBytes, type Address, type Hash } from "viem";
 import { monadMainnet } from "./chains.js";
+import { assertEmbedAuthorized, EmbedSignatureError } from "./embed-signature.js";
 import type { Eip1193Provider } from "./wallet.js";
 import type { UnlockRecord } from "./types.js";
 
@@ -142,7 +143,12 @@ export class OnchainUnlockService {
     return unlocked;
   }
 
-  async unlock(articleId: string, wallet: string, priceMon: bigint): Promise<UnlockRecord> {
+  async unlock(
+    articleId: string,
+    wallet: string,
+    priceMon: bigint,
+    embedSig?: string
+  ): Promise<UnlockRecord> {
     const eth = this.getEthProvider();
     if (!eth) throw new Error("No wallet connected. Connect your wallet and try again.");
 
@@ -152,40 +158,17 @@ export class OnchainUnlockService {
     const account = wallet as Address;
     const articleIdBytes = toArticleId(articleId);
 
-    // Pre-flight: ensure the article is registered and active on-chain.
-    // Without this, the payable unlock() would revert with ArticleNotFound / ArticleInactive,
-    // and MetaMask would warn "This transaction is likely to fail."
     try {
-      const article = (await publicClient.readContract({
-        address: this.contractAddress,
-        abi: [
-          {
-            name: "getArticle",
-            type: "function",
-            stateMutability: "view",
-            inputs: [{ name: "articleId", type: "bytes32" }],
-            outputs: [
-              { name: "priceWei", type: "uint256" },
-              { name: "publisher", type: "address" },
-              { name: "active", type: "bool" },
-            ],
-          },
-        ],
-        functionName: "getArticle",
-        args: [articleIdBytes],
-      })) as readonly [bigint, Address, boolean];
-
-      if (article[1] === "0x0000000000000000000000000000000000000000") {
-        throw new Error("This article has not been registered for on-chain payments yet.");
-      }
-      if (!article[2]) {
-        throw new Error("This article is currently inactive for purchases.");
-      }
-    } catch (e: any) {
-      if (e.message && e.message.includes("not been registered")) throw e;
-      if (e.message && e.message.includes("currently inactive")) throw e;
-      // If getArticle itself fails (e.g. contract not deployed on this chain), let the tx attempt fail with a clear message
-      throw new Error("On-chain article lookup failed. Confirm the unlock-contract address and network.");
+      await assertEmbedAuthorized({
+        embedSig,
+        articleId,
+        priceWei: priceMon,
+        contractAddress: this.contractAddress,
+        publicClient,
+      });
+    } catch (e) {
+      if (e instanceof EmbedSignatureError) throw e;
+      throw e;
     }
 
     // Send the unlock transaction (payable).

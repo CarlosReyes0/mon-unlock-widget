@@ -138,7 +138,7 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-      const WIDGET_VERSION = "20240624"; // bump this when widget behavior changes
+      const WIDGET_VERSION = "20240701"; // bump this when widget behavior changes
 
       const fields = ["title", "author", "price", "articleId", "teaser", "body"];
       const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
@@ -325,6 +325,21 @@
         } catch (e) {
           return { ok: false, error: e?.message || 'Network error' };
         }
+      }
+
+      function buildEmbedSignMessage(chainId, contract, articleId, priceWei) {
+        return `MON Unlock v1\nchain:${chainId}\ncontract:${contract.toLowerCase()}\narticle:${articleId.trim()}\npriceWei:${priceWei.toString()}`;
+      }
+
+      async function signEmbed(eth, account, articleId, priceWei) {
+        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const walletClient = createWalletClient({
+          account,
+          chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+          transport: custom(eth),
+        });
+        const message = buildEmbedSignMessage(143, MAINNET_CONTRACT, articleId, priceWei);
+        return walletClient.signMessage({ account, message });
       }
 
       function renderCode() {
@@ -578,9 +593,22 @@ ${teaserEsc}
             } catch (e) {
               status.textContent = e.message || "Registration failed";
               status.style.color = "#ef4444";
+              return;
             }
 
-            // Always produce the on-chain embed when wallet is connected
+            let embedSig = "";
+            try {
+              const eth = window.ethereum;
+              const priceWei = (await import("https://esm.sh/viem@2")).parseEther(v.price || "1");
+              status.textContent = "Signing embed…";
+              embedSig = await signEmbed(eth, connectedWallet, v.articleId, priceWei);
+            } catch (e) {
+              status.textContent = e.message || "Could not sign embed";
+              status.style.color = "#ef4444";
+              return;
+            }
+
+            // Produce the on-chain embed when wallet is connected
             const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
@@ -591,6 +619,7 @@ ${teaserEsc}
   author="${v.author}"
   price="${v.price}"
   unlock-contract="${MAINNET_CONTRACT}"
+  embed-sig="${embedSig}"
   walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">

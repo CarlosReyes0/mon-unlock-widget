@@ -16,7 +16,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 export const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
 export const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-export const WIDGET_VERSION = "20240624";
+export const WIDGET_VERSION = "20240701";
 export const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
 export const REGISTER_ARTICLE_URL =
   "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
@@ -104,17 +104,47 @@ export function publisherFromPrivateKey(privateKey: `0x${string}`): string {
   return privateKeyToAccount(privateKey).address;
 }
 
-/** Same embed block as generator.html — teaser slot only, body fetched post-unlock. */
-export function generateEmbed(input: {
-  title: string;
+export function buildEmbedSignMessage(params: {
+  chainId: number;
+  contract: string;
   articleId: string;
-  teaser: string;
-  author?: string;
-  price?: string;
+  priceWei: bigint;
 }): string {
+  const contract = params.contract.trim().toLowerCase();
+  const article = params.articleId.trim();
+  return `MON Unlock v1\nchain:${params.chainId}\ncontract:${contract}\narticle:${article}\npriceWei:${params.priceWei.toString()}`;
+}
+
+export async function signEmbedWithPrivateKey(input: {
+  articleId: string;
+  priceWei: string;
+  privateKey: `0x${string}`;
+}): Promise<`0x${string}`> {
+  const account = privateKeyToAccount(input.privateKey);
+  const message = buildEmbedSignMessage({
+    chainId: 143,
+    contract: MAINNET_CONTRACT,
+    articleId: input.articleId,
+    priceWei: BigInt(input.priceWei),
+  });
+  return account.signMessage({ message });
+}
+
+/** Same embed block as generator.html — teaser slot only, body fetched post-unlock. */
+export function generateEmbed(
+  input: {
+    title: string;
+    articleId: string;
+    teaser: string;
+    author?: string;
+    price?: string;
+  },
+  embedSig?: string
+): string {
   const author = input.author?.trim() || "Author";
   const price = input.price?.trim() || "1";
   const teaserEsc = escapeTeaser(input.teaser.trim());
+  const sigAttr = embedSig ? `\n  embed-sig="${embedSig}"` : "";
 
   return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"></script>
@@ -124,7 +154,7 @@ export function generateEmbed(input: {
   title="${input.title.trim()}"
   author="${author}"
   price="${price}"
-  unlock-contract="${MAINNET_CONTRACT}"
+  unlock-contract="${MAINNET_CONTRACT}"${sigAttr}
   walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
@@ -303,8 +333,17 @@ export async function publishArticle(
   const onChainRegistered = Boolean(onChain?.ok);
   const needsManualOnChainRegistration = !onChainRegistered;
 
+  let embedSig: string | undefined;
+  if (onChainRegistered && privateKey) {
+    embedSig = await signEmbedWithPrivateKey({
+      articleId: result.slug,
+      priceWei: result.priceWei,
+      privateKey,
+    });
+  }
+
   return {
-    embed: result.embed,
+    embed: generateEmbed(fullInput, embedSig),
     slug: result.slug,
     articleIdHash: result.articleIdHash,
     metadataSynced: sync.ok,

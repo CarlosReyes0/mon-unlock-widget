@@ -34,6 +34,8 @@ export class MonUnlock extends LitElement {
   @property({ type: String }) theme: "light" | "dark" = "light";
   /** Contract address (enables real on-chain payments) */
   @property({ type: String, attribute: "unlock-contract" }) unlockContract = "";
+  /** Publisher signature authorizing this embed (required with unlock-contract) */
+  @property({ type: String, attribute: "embed-sig" }) embedSig = "";
   /** WalletConnect Project ID (enables mobile connection via WalletConnect) */
   @property({ type: String, attribute: "walletconnect-project-id" }) walletConnectProjectId = "";
 
@@ -408,7 +410,12 @@ export class MonUnlock extends LitElement {
       }
 
       if (needsPayment) {
-        const record = await this.unlockService.unlock(this.article.id, address, this.article.priceMon);
+        const record = await this.unlockService.unlock(
+          this.article.id,
+          address,
+          this.article.priceMon,
+          this.embedSig || undefined
+        );
         if (record.txHash) this.txHash = record.txHash;
         this.emit("mon:unlocked", { article: this.article, record });
       }

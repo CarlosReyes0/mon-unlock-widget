@@ -269,15 +269,25 @@
 
         // Wire copy buttons
         body.querySelectorAll("button").forEach((btn) => {
-          btn.addEventListener("click", () => {
+          btn.addEventListener("click", async () => {
             const idx = parseInt(btn.dataset.idx);
             const art = myArticles[idx];
-            const code = generateEmbedCode(art);
-            navigator.clipboard.writeText(code).then(() => {
-              const orig = btn.textContent;
+            const orig = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Signing…";
+            try {
+              const code = await generateEmbedCode(art);
+              await navigator.clipboard.writeText(code);
               btn.textContent = "Copied!";
-              setTimeout(() => (btn.textContent = orig), 1500);
-            });
+              setTimeout(() => {
+                btn.textContent = orig;
+                btn.disabled = false;
+              }, 1500);
+            } catch (e) {
+              btn.textContent = e.message || "Sign failed";
+              btn.disabled = false;
+              setTimeout(() => (btn.textContent = orig), 2500);
+            }
           });
         });
       }
@@ -291,9 +301,24 @@
         return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
 
-      function generateEmbedCode(article) {
+      function buildEmbedSignMessage(chainId, contract, articleId, priceWei) {
+        return `MON Unlock v1\nchain:${chainId}\ncontract:${contract.toLowerCase()}\narticle:${articleId.trim()}\npriceWei:${priceWei.toString()}`;
+      }
+
+      async function signEmbed(eth, account, articleId, priceWei) {
+        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const walletClient = createWalletClient({
+          account,
+          chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+          transport: custom(eth),
+        });
+        const message = buildEmbedSignMessage(143, CONTRACT, articleId, priceWei);
+        return walletClient.signMessage({ account, message });
+      }
+
+      async function generateEmbedCode(article) {
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
-        const WIDGET_VERSION = "20240624"; // bump when widget behavior changes
+        const WIDGET_VERSION = "20240701"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');
@@ -302,6 +327,13 @@
         const teaser = article.teaser
           ? escapeHtml(article.teaser)
           : `Free preview of ${displayTitle}...`;
+
+        const eth = window.ethereum;
+        if (!eth || !currentWallet) {
+          throw new Error("Connect your wallet to copy a signed embed.");
+        }
+
+        const embedSig = await signEmbed(eth, currentWallet, article.articleId, article.priceMon);
 
         return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
@@ -312,6 +344,7 @@
   author="Your Name"
   price="${(Number(article.priceMon) / 1e18).toFixed(1)}"
   unlock-contract="${CONTRACT}"
+  embed-sig="${embedSig}"
   walletconnect-project-id="c2a289e11ad2998f8ea4633db536334c"
 >
   <div slot="teaser">
