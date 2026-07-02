@@ -94,6 +94,12 @@
             <label for="body">Body (full article)</label>
             <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
             <div class="hint">Plain text or HTML. Use &lt;img src="..."&gt; for images, or paste a YouTube/Loom embed iframe.</div>
+            <div class="btn-group" style="margin-top:0.5rem;">
+              <button class="btn btn-secondary" id="insertImageTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert image template</button>
+              <button class="btn btn-secondary" id="insertYoutubeTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert YouTube template</button>
+              <button class="btn btn-secondary" id="insertVideoTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert MP4 template</button>
+            </div>
+            <div class="hint" style="margin-top:0.35rem;">Use trusted hosts only. Iframe embeds are allowlisted in the widget (YouTube, Vimeo, Loom).</div>
           </div>
         </div>
 
@@ -138,7 +144,7 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-      const WIDGET_VERSION = "20240702"; // bump this when widget behavior changes
+      const WIDGET_VERSION = "20240703"; // bump this when widget behavior changes
 
       function looksLikeHtml(text) {
         return /<\s*(p|br|div|span|h[1-6]|ul|ol|li|a|strong|em|blockquote|pre|code|table|section|article|img|video|audio|picture|figure|source|iframe)\b/i.test(text);
@@ -399,6 +405,20 @@ ${teaserEsc}
           status.style.display = "inline";
           setTimeout(() => (status.style.display = "none"), 2000);
         });
+      }
+
+      function insertAtCursor(el, text) {
+        const start = el.selectionStart ?? el.value.length;
+        const end = el.selectionEnd ?? el.value.length;
+        const before = el.value.slice(0, start);
+        const after = el.value.slice(end);
+        el.value = `${before}${text}${after}`;
+        const nextPos = start + text.length;
+        el.setSelectionRange(nextPos, nextPos);
+        el.focus();
+        saveDraft();
+        renderPreview();
+        renderCode();
       }
 
       function wireEvents() {
@@ -672,6 +692,26 @@ ${teaserEsc}
 
         document.getElementById("resetDraft").addEventListener("click", () => {
           if (confirm("Clear the current draft?")) clearDraft();
+        });
+
+        const bodyEl = document.getElementById("body");
+        document.getElementById("insertImageTemplate").addEventListener("click", () => {
+          insertAtCursor(
+            bodyEl,
+            '\n<img src="https://example.com/image.jpg" alt="Describe image" loading="lazy" />\n'
+          );
+        });
+        document.getElementById("insertYoutubeTemplate").addEventListener("click", () => {
+          insertAtCursor(
+            bodyEl,
+            '\n<iframe src="https://www.youtube.com/embed/VIDEO_ID" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>\n'
+          );
+        });
+        document.getElementById("insertVideoTemplate").addEventListener("click", () => {
+          insertAtCursor(
+            bodyEl,
+            '\n<video controls preload="metadata" src="https://example.com/video.mp4"></video>\n'
+          );
         });
 
         // Auto-render on load after draft restore

@@ -90,6 +90,45 @@ npm run build
 
 Output: `dist/mon-unlock.js` and `dist/mon-unlock.css`.
 
+## Media cookbook (pictures + videos)
+
+The body supports safe HTML for rich content. Common examples:
+
+### Image
+
+```html
+<img src="https://example.com/photo.jpg" alt="Describe the image" loading="lazy" />
+```
+
+### YouTube / Loom / Vimeo embed
+
+```html
+<iframe
+  src="https://www.youtube.com/embed/VIDEO_ID"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowfullscreen
+  loading="lazy"
+></iframe>
+```
+
+### Self-hosted MP4
+
+```html
+<video controls preload="metadata" src="https://example.com/video.mp4"></video>
+```
+
+### What is allowed
+
+- Body HTML allows: text tags, links, images, video/audio tags, and iframe embeds.
+- Iframes are allowlisted to trusted hosts (`youtube.com`, `youtu.be`, `player.vimeo.com`, `loom.com`).
+- Unsafe tags/scripts/event handlers are stripped.
+
+### Troubleshooting media
+
+- Image not showing: confirm the URL is public (not private/auth-protected).
+- Iframe not showing: use an allowlisted host and embed URL format (not watch/share page URL).
+- Works in generator preview but not production: deploy latest widget bundle and refresh cache.
+
 ## Behavior
 
 - **Connect wallet to unlock** — real MON payment on Monad testnet when `unlock-contract` is provided.

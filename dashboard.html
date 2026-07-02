@@ -107,6 +107,7 @@
             </div>
           </div>
           <p style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">Data refreshed from Supabase (populated by the Edge Function indexer).</p>
+          <p id="indexerHealth" style="margin-top: 0.4rem; font-size: 0.75rem; color: #6b7280;">Indexer status: checking…</p>
         </div>
       </div>
     </div>
@@ -147,6 +148,36 @@
 
       let currentWallet = null;
       let myArticles = [];
+      const INDEXER_CONTRACT = "0x038446b1f736e254cc0e256b20d74823c41eeadb";
+
+      function formatArticleIdForDisplay(slug, hash) {
+        if (slug && slug.trim()) return slug.trim();
+        if (!hash) return "unknown-article";
+        return `hash:${shortHash(hash)} (slug missing)`;
+      }
+
+      async function refreshIndexerHealth() {
+        const client = getSupabase();
+        const el = document.getElementById("indexerHealth");
+        if (!client || !el) return;
+        try {
+          const { data, error } = await client
+            .from("indexer_state")
+            .select("last_indexed_block, updated_at")
+            .eq("contract_address", INDEXER_CONTRACT)
+            .single();
+          if (error || !data) throw error || new Error("indexer_state not found");
+
+          const updatedAt = new Date(data.updated_at);
+          const ageMinutes = Math.floor((Date.now() - updatedAt.getTime()) / 60000);
+          const stale = ageMinutes > 15;
+          el.style.color = stale ? "#b45309" : "#6b7280";
+          el.textContent = `Indexer: block ${data.last_indexed_block} · updated ${ageMinutes}m ago${stale ? " (stale)" : ""}`;
+        } catch {
+          el.style.color = "#b45309";
+          el.textContent = "Indexer status unavailable";
+        }
+      }
 
       // === Supabase Loader (Fast path via Edge Function Indexer) ===
       // The heavy lifting (RPC scanning) is done by the Supabase Edge Function `indexer`.
@@ -220,7 +251,7 @@
           }
 
           myArticles = articlesData.map((a) => ({
-            articleId: a.article_id || a.article_id_hash,
+            articleId: a.article_id || "",
             articleIdHash: a.article_id_hash,
             priceMon: BigInt(a.price_wei),
             active: a.active,
@@ -229,10 +260,13 @@
             title: a.article_id || a.article_id_hash,
             teaser: a.teaser,
             body: a.body,
+            hasSlug: Boolean(a.article_id),
+            displayId: formatArticleIdForDisplay(a.article_id, a.article_id_hash),
           }));
 
           renderArticles();
           updateStats();
+          await refreshIndexerHealth();
 
           // Clear the loading indicator only on success
           statusEl.innerHTML = originalStatus;
@@ -256,12 +290,12 @@
         myArticles.forEach((a, idx) => {
           const row = document.createElement("tr");
           row.innerHTML = `
-            <td class="mono">${a.articleId}</td>
+            <td class="mono">${a.displayId}</td>
             <td>${formatMon(a.priceMon)} MON</td>
             <td>${a.unlockCount ?? 0}</td>
             <td>${formatMon(a.revenueMon ?? 0n)} MON</td>
             <td>
-              <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-idx="${idx}">Copy embed</button>
+              <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-idx="${idx}" ${a.hasSlug ? "" : "disabled title=\"Set slug via generator before copying embed\""}>${a.hasSlug ? "Copy embed" : "Slug required"}</button>
             </td>
           `;
           body.appendChild(row);
@@ -317,8 +351,11 @@
       }
 
       async function generateEmbedCode(article) {
+        if (!article.hasSlug) {
+          throw new Error("This row is hash-only. Re-save article metadata in the generator to set a slug.");
+        }
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
-        const WIDGET_VERSION = "20240702"; // bump when widget behavior changes
+        const WIDGET_VERSION = "20240703"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');
@@ -491,6 +528,7 @@ ${teaser}
         // If already connected in this session (from other pages), try to restore
         // For simplicity we start fresh on each load
         document.getElementById("articlesEmpty").style.display = "block";
+        refreshIndexerHealth();
       }
 
       init();

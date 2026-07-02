@@ -14,6 +14,7 @@ import {
   type Article,
   type WalletState,
   looksLikeHtml,
+  sanitizeRichHtml,
 } from "../core/index.js";
 import "./styles.css";
 
@@ -105,7 +106,7 @@ export class MonUnlock extends LitElement {
   private renderBody(body: string) {
     if (!body) return nothing;
     if (looksLikeHtml(body)) {
-      return html`<div class="mon-body text-black">${unsafeHTML(body)}</div>`;
+      return html`<div class="mon-body text-black">${unsafeHTML(sanitizeRichHtml(body))}</div>`;
     }
     return html`<div class="mon-body text-black whitespace-pre-wrap">${body}</div>`;
   }
