@@ -17,7 +17,7 @@ end $$;
 
 select cron.schedule(
   'mon-unlock-indexer',
-  '2 minutes',
+  '*/2 * * * *', -- every 2 minutes (cron syntax; "2 minutes" not supported on all Supabase Postgres versions)
   $$
   select net.http_post(
     url := 'https://flczjqljgntmkanipugo.supabase.co/functions/v1/indexer',
