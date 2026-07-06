@@ -355,7 +355,7 @@
           throw new Error("This row is hash-only. Re-save article metadata in the generator to set a slug.");
         }
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
-        const WIDGET_VERSION = "20240703"; // bump when widget behavior changes
+        const WIDGET_VERSION = "20240704"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');
