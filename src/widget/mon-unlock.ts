@@ -2,7 +2,6 @@ import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
-import { generate } from "lean-qr";
 import {
   UnlockService,
   OnchainUnlockService,
@@ -11,6 +10,7 @@ import {
   formatMon,
   parseMonAmount,
   truncateAddress,
+  hasReliableInjectedProvider,
   type Article,
   type WalletState,
   looksLikeHtml,
@@ -49,10 +49,7 @@ export class MonUnlock extends LitElement {
   @state() private txHash: string | null = null;
   @state() private fetchedBody: string | null = null;
 
-  // WalletConnect QR state (mobile only)
-  @state() private wcQrSvg: string | null = null;
-  @state() private wcUri: string | null = null;
-  @state() private wcConnecting = false;
+  @state() private urlCopied = false;
 
   private walletManager = new WalletManager();
   private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
@@ -296,49 +293,29 @@ export class MonUnlock extends LitElement {
     return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   }
 
-  /** Mobile-only: show a QR code for WalletConnect. Resolves when the user scans and connects. */
-  private async startWalletConnectQrFlow(): Promise<void> {
-    this.wcConnecting = true;
-    this.wcQrSvg = null;
-    this.error = null;
+  /** Mobile Safari/Chrome without an in-wallet browser — deeplinks and WC are unreliable. */
+  private needsMetaMaskBrowserHint(): boolean {
+    return this.isMobile() && !hasReliableInjectedProvider();
+  }
 
+  private async copyPageUrl(): Promise<void> {
+    const url = window.location.href;
     try {
-      const uri = await this.walletManager.beginWalletConnectQr();
-      this.wcUri = uri;
-      const qr = generate(uri);
-      // lean-qr returns a small object with toDataURL()
-      this.wcQrSvg = qr.toDataURL();
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : "Failed to start WalletConnect.";
-      this.wcConnecting = false;
-      throw err;
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
     }
-
-    // Poll for connection (the provider will have accounts after the user scans)
-    return new Promise<void>((resolve, reject) => {
-      const maxWait = 5 * 60 * 1000; // 5 minutes
-      const start = Date.now();
-      const interval = setInterval(async () => {
-        try {
-          const accounts = (await (this.walletManager as any).wcProvider?.request?.({
-            method: "eth_accounts",
-          })) as string[] | undefined;
-
-          if (accounts && accounts.length > 0) {
-            clearInterval(interval);
-            this.wcConnecting = false;
-            this.wcQrSvg = null;
-            resolve();
-          } else if (Date.now() - start > maxWait) {
-            clearInterval(interval);
-            this.wcConnecting = false;
-            reject(new Error("WalletConnect connection timed out. Please try again."));
-          }
-        } catch {
-          // ignore transient errors while polling
-        }
-      }, 1200);
-    });
+    this.urlCopied = true;
+    window.setTimeout(() => {
+      this.urlCopied = false;
+    }, 2500);
   }
 
   private bindOnchainProvider() {
@@ -364,18 +341,8 @@ export class MonUnlock extends LitElement {
         this.walletManager.setWalletConnectProjectId(this.walletConnectProjectId);
       }
 
-      // Mobile + WalletConnect project ID → use custom QR flow
-      let s: WalletState;
-      if (this.isMobile() && this.walletConnectProjectId && !(globalThis as any).ethereum) {
-        await this.startWalletConnectQrFlow();
-        // After the QR flow resolves, the WC provider has a session.
-        // Re-call connect() — it will pick up the existing provider.
-        s = await this.walletManager.connect();
-        this.wallet = s;
-      } else {
-        s = await this.walletManager.connect();
-        this.wallet = s;
-      }
+      const s = await this.walletManager.connect();
+      this.wallet = s;
       this.bindOnchainProvider();
 
       // Ensure wallet is on Monad for on-chain payments (skip if already there).
@@ -488,27 +455,38 @@ export class MonUnlock extends LitElement {
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">
-                    ${this.wcQrSvg
+                    ${this.needsMetaMaskBrowserHint()
                       ? html`
-                          <div class="flex flex-col items-center gap-3">
-                            <img src=${this.wcQrSvg} width="220" height="220" alt="WalletConnect QR code" />
-                            <p class="text-xs text-stone-500">Scan with MetaMask or tap below</p>
-
-                            <a
-                              class="mon-btn mon-btn-primary inline-block no-underline"
-                              href=${this.wcUri ? `metamask://wc?uri=${encodeURIComponent(this.wcUri)}` : "#"}
+                          <div class="mon-metamask-hint">
+                            <p class="text-sm font-medium text-stone-800 dark:text-stone-200">
+                              Open this page in MetaMask
+                            </p>
+                            <p class="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                              Mobile wallets work best when you open the article inside MetaMask&apos;s
+                              browser. Copy the link below, then paste it in MetaMask → Browser.
+                            </p>
+                            <ol class="mon-metamask-steps">
+                              <li>Copy page link</li>
+                              <li>Open MetaMask → Browser</li>
+                              <li>Paste the link and load this page</li>
+                              <li>Tap Connect wallet to unlock</li>
+                            </ol>
+                            <button
+                              type="button"
+                              class="mon-btn mon-btn-primary"
+                              @click=${() => this.copyPageUrl()}
                             >
-                              Open MetaMask
-                            </a>
+                              ${this.urlCopied ? "Link copied!" : "Copy page link"}
+                            </button>
                           </div>
                         `
                       : html`
                           <button
                             class="mon-btn mon-btn-primary"
-                            ?disabled=${this.loading || this.wcConnecting}
+                            ?disabled=${this.loading}
                             @click=${() => this.connect()}
                           >
-                            ${this.loading || this.wcConnecting ? "Connecting…" : "Connect wallet to unlock"}
+                            ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
                           </button>
                         `}
                   </div>

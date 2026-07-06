@@ -94,6 +94,30 @@ mon-unlock {
   cursor: not-allowed;
 }
 
+.mon-metamask-hint {
+  border-radius: 10px;
+  border: 1px solid #ddd6fe;
+  background: #faf5ff;
+  padding: 1rem 1.125rem;
+}
+
+.mon-card.dark .mon-metamask-hint {
+  border-color: #4c1d95;
+  background: #1e1033;
+}
+
+.mon-metamask-steps {
+  margin: 0.75rem 0 1rem;
+  padding-left: 1.25rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #57534e;
+}
+
+.mon-card.dark .mon-metamask-steps {
+  color: #d6d3d1;
+}
+
 .mon-body {
   font-family: var(--font-serif);
   line-height: 1.75;

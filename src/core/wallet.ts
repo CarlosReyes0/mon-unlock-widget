@@ -16,7 +16,8 @@ function isMobileDevice(): boolean {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-function hasReliableInjectedProvider(): boolean {
+/** True when the page runs inside MetaMask/Coinbase in-app browser with injected ethereum. */
+export function hasReliableInjectedProvider(): boolean {
   const eth = (globalThis as {
     ethereum?: Eip1193Provider & { isMetaMask?: boolean; isCoinbaseWallet?: boolean };
   }).ethereum;
