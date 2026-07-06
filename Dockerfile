@@ -27,4 +27,4 @@ COPY --from=builder /app/embed-example.html ./embed-example.html
 # Serve static files (incl. /dist/* hashed chunks for ES modules) with CORS headers so any site can embed the widget via CDN.
 # Uses Access-Control-Allow-Origin: * (permissive for public CDN embeds; non-credentialed requests only).
 # To restrict later, replace with a custom server reading EMBED_ALLOWED_ORIGINS env var.
-CMD ["sh", "-c", "http-server . -p ${PORT:-8080} -d false --cors --proxy http://localhost:${PORT:-8080}/index.html"]
+CMD ["sh", "-c", "http-server . -p ${PORT:-8080} -d false --cors -c-1 --proxy http://localhost:${PORT:-8080}/index.html"]

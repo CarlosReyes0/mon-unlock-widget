@@ -19,11 +19,15 @@ function isMobileDevice(): boolean {
 /** True when the page runs inside MetaMask/Coinbase in-app browser with injected ethereum. */
 export function hasReliableInjectedProvider(): boolean {
   const eth = (globalThis as {
-    ethereum?: Eip1193Provider & { isMetaMask?: boolean; isCoinbaseWallet?: boolean };
+    ethereum?: Eip1193Provider & {
+      isMetaMask?: boolean;
+      isCoinbaseWallet?: boolean;
+      providers?: Array<{ isMetaMask?: boolean; isCoinbaseWallet?: boolean }>;
+    };
   }).ethereum;
   if (!eth) return false;
-  // In-wallet mobile browsers (MetaMask, Coinbase) work better via injected than WC.
-  return Boolean(eth.isMetaMask || eth.isCoinbaseWallet);
+  if (eth.isMetaMask || eth.isCoinbaseWallet) return true;
+  return Boolean(eth.providers?.some((p) => p.isMetaMask || p.isCoinbaseWallet));
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
