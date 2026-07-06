@@ -288,14 +288,80 @@ export class MonUnlock extends LitElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
-  private isMobile(): boolean {
+  private isMobileViewport(): boolean {
     if (typeof navigator === "undefined") return false;
-    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const ua = navigator.userAgent;
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+    // iPadOS 13+ often reports as Macintosh.
+    if (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua)) return true;
+    if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) {
+      return true;
+    }
+    return false;
   }
 
-  /** Mobile Safari/Chrome without an in-wallet browser — deeplinks and WC are unreliable. */
-  private needsMetaMaskBrowserHint(): boolean {
-    return this.isMobile() && !hasReliableInjectedProvider();
+  private renderUnlockActions() {
+    const inWalletBrowser = hasReliableInjectedProvider();
+    const mobile = this.isMobileViewport();
+
+    if (mobile) {
+      return html`
+        <div class="mon-metamask-hint">
+          ${inWalletBrowser
+            ? html`
+                <p class="text-sm font-medium text-stone-800 dark:text-stone-200">
+                  Wallet browser detected
+                </p>
+                <p class="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                  You&apos;re viewing this page inside a wallet app. Tap Connect below to unlock.
+                </p>
+              `
+            : html`
+                <p class="text-sm font-medium text-stone-800 dark:text-stone-200">
+                  Open this page in MetaMask
+                </p>
+                <p class="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                  Mobile wallets work best when you open the article inside MetaMask&apos;s browser.
+                  Copy the link below, then paste it in MetaMask → Browser.
+                </p>
+                <ol class="mon-metamask-steps">
+                  <li>Copy page link</li>
+                  <li>Open MetaMask → Browser</li>
+                  <li>Paste the link and load this page</li>
+                  <li>Tap Connect wallet to unlock</li>
+                </ol>
+                <button
+                  type="button"
+                  class="mon-btn mon-btn-primary"
+                  @click=${() => this.copyPageUrl()}
+                >
+                  ${this.urlCopied ? "Link copied!" : "Copy page link"}
+                </button>
+              `}
+        </div>
+        ${inWalletBrowser
+          ? html`
+              <button
+                class="mon-btn mon-btn-primary mt-3"
+                ?disabled=${this.loading}
+                @click=${() => this.connect()}
+              >
+                ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
+              </button>
+            `
+          : nothing}
+      `;
+    }
+
+    return html`
+      <button
+        class="mon-btn mon-btn-primary"
+        ?disabled=${this.loading}
+        @click=${() => this.connect()}
+      >
+        ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
+      </button>
+    `;
   }
 
   private async copyPageUrl(): Promise<void> {
@@ -454,42 +520,7 @@ export class MonUnlock extends LitElement {
                       ? "Pay with MON on Monad. Connect wallet to continue."
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
-                  <div class="mt-4">
-                    ${this.needsMetaMaskBrowserHint()
-                      ? html`
-                          <div class="mon-metamask-hint">
-                            <p class="text-sm font-medium text-stone-800 dark:text-stone-200">
-                              Open this page in MetaMask
-                            </p>
-                            <p class="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                              Mobile wallets work best when you open the article inside MetaMask&apos;s
-                              browser. Copy the link below, then paste it in MetaMask → Browser.
-                            </p>
-                            <ol class="mon-metamask-steps">
-                              <li>Copy page link</li>
-                              <li>Open MetaMask → Browser</li>
-                              <li>Paste the link and load this page</li>
-                              <li>Tap Connect wallet to unlock</li>
-                            </ol>
-                            <button
-                              type="button"
-                              class="mon-btn mon-btn-primary"
-                              @click=${() => this.copyPageUrl()}
-                            >
-                              ${this.urlCopied ? "Link copied!" : "Copy page link"}
-                            </button>
-                          </div>
-                        `
-                      : html`
-                          <button
-                            class="mon-btn mon-btn-primary"
-                            ?disabled=${this.loading}
-                            @click=${() => this.connect()}
-                          >
-                            ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
-                          </button>
-                        `}
-                  </div>
+                  <div class="mt-4">${this.renderUnlockActions()}</div>
                 </div>
               `}
         </div>

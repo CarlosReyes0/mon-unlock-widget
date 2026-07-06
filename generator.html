@@ -6,7 +6,7 @@
     <title>Embed Generator — MON Unlock Widget</title>
     <!-- Use local build for Live Preview so style changes are visible immediately -->
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
-    <script type="module" src="/dist/mon-unlock.js"></script>
+    <script type="module" src="/dist/mon-unlock.js?v=20240705"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
     <style>
@@ -144,7 +144,7 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-      const WIDGET_VERSION = "20240704"; // bump this when widget behavior changes
+      const WIDGET_VERSION = "20240705"; // bump this when widget behavior changes
 
       function looksLikeHtml(text) {
         return /<\s*(p|br|div|span|h[1-6]|ul|ol|li|a|strong|em|blockquote|pre|code|table|section|article|img|video|audio|picture|figure|source|iframe)\b/i.test(text);
