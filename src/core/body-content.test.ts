@@ -59,4 +59,16 @@ describe("sanitizeRichHtml", () => {
     const out = sanitizeRichHtml('<iframe src="https://evil.example.com/embed/abc"></iframe>');
     assert.equal(out.includes("iframe"), false);
   });
+
+  it("converts mistaken YouTube shorts/watch in <video> into working iframe embed", () => {
+    const outShorts = sanitizeRichHtml('<video src="https://youtube.com/shorts/QBPmWE5JM3w" controls></video>');
+    assert.ok(outShorts.includes("<iframe"), "should produce iframe");
+    assert.ok(outShorts.includes("youtube.com/embed/QBPmWE5JM3w"), "should have embed id");
+
+    const outWatch = sanitizeRichHtml('<video src="https://www.youtube.com/watch?v=dQw4w9wgccc" controls></video>');
+    assert.ok(outWatch.includes("youtube.com/embed/dQw4w9wgccc"));
+
+    const outYoutu = sanitizeRichHtml('<video src="https://youtu.be/abc123" controls></video>');
+    assert.ok(outYoutu.includes("youtube.com/embed/abc123"));
+  });
 });

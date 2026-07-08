@@ -97,7 +97,7 @@ The body supports safe HTML for rich content. Common examples:
 ### Image
 
 ```html
-<img src="https://example.com/photo.jpg" alt="Describe the image" loading="lazy" />
+<img src="https://picsum.photos/id/1016/800/600" alt="Describe the image" loading="lazy" />
 ```
 
 ### YouTube / Loom / Vimeo embed
@@ -114,7 +114,7 @@ The body supports safe HTML for rich content. Common examples:
 ### Self-hosted MP4
 
 ```html
-<video controls preload="metadata" src="https://example.com/video.mp4"></video>
+<video controls preload="metadata" src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"></video>
 ```
 
 ### What is allowed
@@ -125,7 +125,8 @@ The body supports safe HTML for rich content. Common examples:
 
 ### Troubleshooting media
 
-- Image not showing: confirm the URL is public (not private/auth-protected).
+- Image not showing: confirm the URL is a *direct* link to the image binary (e.g. `https://i.postimg.cc/.../photo.jpg` or `https://picsum.photos/...`), not a web page like `postimg.cc/...` or an HTML gallery. The sanitizer keeps http/https but the browser can only decode real image responses.
+- Video (self-hosted) not playing: must be a direct `.mp4`/`.webm` URL. YouTube/Vimeo share or watch URLs do not work in `<video src>` — use an `<iframe>` embed instead (or paste a YouTube link and the widget will auto-convert it to an embed).
 - Iframe not showing: use an allowlisted host and embed URL format (not watch/share page URL).
 - Works in generator preview but not production: deploy latest widget bundle and refresh cache.
 

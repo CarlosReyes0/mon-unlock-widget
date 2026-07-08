@@ -93,7 +93,7 @@
           <div>
             <label for="body">Body (full article)</label>
             <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
-            <div class="hint">Plain text or HTML. Use &lt;img src="..."&gt; for images, or paste a YouTube/Loom embed iframe.</div>
+            <div class="hint">Plain text or HTML. Use a <strong>direct</strong> image URL (e.g. ending in .jpg or a CDN like picsum) for &lt;img&gt;; use YouTube embed links or direct .mp4 for video.</div>
             <div class="btn-group" style="margin-top:0.5rem;">
               <button class="btn btn-secondary" id="insertImageTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert image template</button>
               <button class="btn btn-secondary" id="insertYoutubeTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert YouTube template</button>
@@ -774,7 +774,7 @@ ${teaserEsc}
         document.getElementById("insertImageTemplate").addEventListener("click", () => {
           insertAtCursor(
             bodyEl,
-            '\n<img src="https://example.com/image.jpg" alt="Describe image" loading="lazy" />\n'
+            '\n<img src="https://picsum.photos/id/1016/800/600" alt="Describe image" loading="lazy" />\n'
           );
         });
         document.getElementById("insertYoutubeTemplate").addEventListener("click", () => {
@@ -786,7 +786,7 @@ ${teaserEsc}
         document.getElementById("insertVideoTemplate").addEventListener("click", () => {
           insertAtCursor(
             bodyEl,
-            '\n<video controls preload="metadata" src="https://example.com/video.mp4"></video>\n'
+            '\n<video controls preload="metadata" src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"></video>\n'
           );
         });
 

@@ -64,11 +64,40 @@ const TAG_ALLOWED_ATTRS: Record<string, Set<string>> = {
 };
 
 function isSafeUrl(value: string, allowedProtocols: string[] = ["http:", "https:"]): boolean {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return false;
   try {
-    const url = new URL(value, "https://example.com");
+    const url = new URL(trimmed, "https://example.com");
     return allowedProtocols.includes(url.protocol);
   } catch {
     return false;
+  }
+}
+
+function youtubeUrlToEmbed(src: string): string | null {
+  try {
+    const u = new URL(src, "https://example.com");
+    const host = u.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
+    let id: string | null = null;
+
+    if (host === "youtube.com" || host === "youtube") {
+      if (u.pathname.startsWith("/shorts/")) {
+        id = u.pathname.split("/")[2]?.split(/[?#]/)[0] || null;
+      } else if (u.pathname.startsWith("/watch")) {
+        id = u.searchParams.get("v");
+      } else if (u.pathname.startsWith("/embed/")) {
+        id = u.pathname.split("/")[2]?.split(/[?#]/)[0] || null;
+      }
+    } else if (host === "youtu.be") {
+      id = u.pathname.slice(1).split(/[?#]/)[0] || null;
+    }
+
+    if (id) {
+      return `https://www.youtube.com/embed/${id}`;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -100,6 +129,28 @@ function sanitizeElement(el: Element) {
     if ((name === "href" || name === "src") && !isSafeUrl(value)) {
       el.removeAttribute(attr.name);
       continue;
+    }
+
+    // If a <video> mistakenly uses a YouTube watch/shorts URL as src (common),
+    // auto-convert it to a working iframe embed so the video actually loads.
+    if (name === "src" && tag === "video") {
+      const embed = youtubeUrlToEmbed(value);
+      if (embed) {
+        const parent = el.parentNode;
+        if (parent && el.ownerDocument) {
+          const iframe = el.ownerDocument.createElement("iframe");
+          iframe.setAttribute("src", embed);
+          iframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture");
+          iframe.setAttribute("allowfullscreen", "");
+          iframe.setAttribute("loading", "lazy");
+          // Transfer any explicit size attrs if present
+          if (el.hasAttribute("width")) iframe.setAttribute("width", el.getAttribute("width")!);
+          if (el.hasAttribute("height")) iframe.setAttribute("height", el.getAttribute("height")!);
+          parent.replaceChild(iframe, el);
+          sanitizeElement(iframe);
+          return;
+        }
+      }
     }
   }
 
