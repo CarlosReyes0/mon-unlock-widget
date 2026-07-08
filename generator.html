@@ -400,10 +400,30 @@ ${teaserEsc}
       }
 
       function copy(text, btnId) {
+        const status = document.getElementById("copyStatus");
         navigator.clipboard.writeText(text).then(() => {
-          const status = document.getElementById("copyStatus");
           status.style.display = "inline";
           setTimeout(() => (status.style.display = "none"), 2000);
+        }).catch(() => {
+          // Same "document not focused" issue can happen here after wallet popups.
+          // The code is already visible in #outputCode, so just highlight it.
+          status.textContent = "Select the code above and press ⌘/Ctrl+C";
+          status.style.display = "inline";
+          setTimeout(() => {
+            status.style.display = "none";
+            status.textContent = "Copied!";
+          }, 2800);
+          // Try to select it for the user
+          const out = document.getElementById("outputCode");
+          if (out) {
+            try {
+              const range = document.createRange();
+              range.selectNodeContents(out);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+            } catch {}
+          }
         });
       }
 
@@ -632,9 +652,10 @@ ${teaserEsc}
                 await doRegister();
               }
             } catch (e) {
-              status.textContent = e.message || "Registration failed";
-              status.style.color = "#ef4444";
-              return;
+              status.textContent = (e.message || "Registration had issues") + " — still generating embed…";
+              status.style.color = "#b45309";
+              // Continue to generate the embed block and attempt metadata sync.
+              // Transient RPC errors often allow the embed + metadata to succeed on retry or partial path.
             }
 
             let embedSig = "";
@@ -647,6 +668,61 @@ ${teaserEsc}
               status.textContent = e.message || "Could not sign embed";
               status.style.color = "#ef4444";
               return;
+            }
+
+            // Best-effort metadata sync (teaser + body) so the dashboard and article-body
+            // endpoint have the content. We do this even if the on-chain step had transient
+            // RPC trouble, because the form values are what the user wants stored.
+            try {
+              const metaStatus = document.getElementById("metadataStatus");
+              if (metaStatus) {
+                metaStatus.style.display = "inline";
+                metaStatus.textContent = "Syncing metadata…";
+                metaStatus.style.color = "#6b7280";
+              }
+              const { keccak256, toBytes, parseEther } = await import("https://esm.sh/viem@2");
+              const metaPayload = {
+                slug: v.articleId,
+                articleIdHash: keccak256(toBytes(v.articleId)),
+                priceWei: parseEther(v.price || "1").toString(),
+                publisher: connectedWallet,
+                teaser: v.teaser,
+                body: v.body,
+              };
+              const metaResult = await syncMetadataToSupabase(metaPayload);
+              if (metaStatus) {
+                if (metaResult.ok) {
+                  metaStatus.textContent = "Metadata saved ✓";
+                  metaStatus.style.color = "#16a34a";
+                } else {
+                  metaStatus.innerHTML = `Metadata sync failed: ${metaResult.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
+                  metaStatus.style.color = "#b45309";
+                  const retryBtn = document.getElementById("retryMetaBtn");
+                  if (retryBtn) {
+                    retryBtn.onclick = async () => {
+                      retryBtn.disabled = true;
+                      retryBtn.textContent = "Retrying…";
+                      const r = await syncMetadataToSupabase(metaPayload);
+                      if (r.ok) {
+                        metaStatus.textContent = "Metadata saved ✓";
+                        metaStatus.style.color = "#16a34a";
+                      } else {
+                        retryBtn.disabled = false;
+                        retryBtn.textContent = "Retry";
+                        metaStatus.innerHTML = `Metadata sync failed: ${r.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
+                        const newBtn = document.getElementById("retryMetaBtn");
+                        if (newBtn) newBtn.onclick = retryBtn.onclick;
+                      }
+                    };
+                  }
+                }
+              }
+            } catch (metaErr) {
+              const metaStatus = document.getElementById("metadataStatus");
+              if (metaStatus) {
+                metaStatus.textContent = "Metadata sync error (non-fatal)";
+                metaStatus.style.color = "#b45309";
+              }
             }
 
             // Produce the on-chain embed when wallet is connected

@@ -109,6 +109,14 @@
           <p style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">Data refreshed from Supabase (populated by the Edge Function indexer).</p>
           <p id="indexerHealth" style="margin-top: 0.4rem; font-size: 0.75rem; color: #6b7280;">Indexer status: checking…</p>
         </div>
+
+        <!-- Fallback embed output (shown when clipboard can't be used right after a wallet signature) -->
+        <div id="embedOutputCard" class="card" style="margin-top: 1rem; display: none;">
+          <h2 class="section-title" style="font-size: 1rem;">Generated embed code</h2>
+          <div id="embedOutputCode" class="output" style="font-size: 0.7rem; max-height: 240px; overflow: auto; white-space: pre; background: #0f172a; color: #e2e8f0; padding: 0.75rem; border-radius: 8px;"></div>
+          <button id="copyLastEmbedBtn" class="btn btn-secondary" style="margin-top: 0.5rem; font-size: 0.8rem;">Copy to clipboard</button>
+          <div style="margin-top: 0.35rem; font-size: 0.7rem; color: #6b7280;">If the button above doesn't work, select the text and press ⌘/Ctrl+C.</div>
+        </div>
       </div>
     </div>
 
@@ -311,12 +319,24 @@
             btn.textContent = "Signing…";
             try {
               const code = await generateEmbedCode(art);
-              await navigator.clipboard.writeText(code);
-              btn.textContent = "Copied!";
-              setTimeout(() => {
-                btn.textContent = orig;
+              // Always log it — useful when clipboard is blocked by focus loss.
+              console.log('%c[mon-unlock dashboard] Generated embed code (copy from here if needed):', 'color:#6b7280', '\n' + code);
+              try {
+                await navigator.clipboard.writeText(code);
+                btn.textContent = "Copied!";
+                setTimeout(() => {
+                  btn.textContent = orig;
+                  btn.disabled = false;
+                }, 1500);
+              } catch (clipErr) {
+                // Common after a wallet signature popup: the document loses "focus"
+                // for the Clipboard API. Show the code visibly instead.
+                console.warn('[dashboard] clipboard writeText failed (document not focused after wallet popup):', clipErr);
+                btn.textContent = "See code below";
                 btn.disabled = false;
-              }, 1500);
+                showGeneratedEmbed(code);
+                // After showing, the user can use the dedicated Copy button (fresh click = focused)
+              }
             } catch (e) {
               btn.textContent = e.message || "Sign failed";
               btn.disabled = false;
@@ -333,6 +353,49 @@
 
       function escapeHtml(str) {
         return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      // Show the generated embed in a visible area (used when direct clipboard write fails
+      // because a wallet signature popup caused the document to lose focus).
+      function showGeneratedEmbed(code) {
+        const card = document.getElementById('embedOutputCard');
+        const pre = document.getElementById('embedOutputCode');
+        if (!card || !pre) {
+          // Last resort
+          alert('Clipboard blocked by browser after wallet popup.\n\nCopy this manually:\n\n' + code);
+          return;
+        }
+        pre.textContent = code;
+        card.style.display = 'block';
+        // Scroll it into view
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        // Wire (or re-wire) the copy button for a clean user gesture
+        const copyBtn = document.getElementById('copyLastEmbedBtn');
+        if (copyBtn) {
+          // Remove previous handlers to avoid stacking
+          const newBtn = copyBtn.cloneNode(true);
+          copyBtn.parentNode.replaceChild(newBtn, copyBtn);
+          newBtn.addEventListener('click', async () => {
+            const originalText = newBtn.textContent;
+            try {
+              await navigator.clipboard.writeText(code);
+              newBtn.textContent = 'Copied!';
+              setTimeout(() => { newBtn.textContent = originalText; }, 1500);
+            } catch (e) {
+              // Ultimate fallback: select the text
+              try {
+                const range = document.createRange();
+                range.selectNodeContents(pre);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+              } catch {}
+              newBtn.textContent = 'Select the text above and press ⌘/Ctrl+C';
+              setTimeout(() => { newBtn.textContent = originalText; }, 3000);
+            }
+          });
+        }
       }
 
       function buildEmbedSignMessage(chainId, contract, articleId, priceWei) {
