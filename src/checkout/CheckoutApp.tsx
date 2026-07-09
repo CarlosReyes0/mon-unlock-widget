@@ -133,10 +133,11 @@ export function CheckoutApp() {
       return;
     }
     try {
-      await fundWallet(address, cardFundConfig(amountMon));
+      await fundWallet({ address, options: cardFundConfig(amountMon) });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not open card checkout.";
       setError(msg);
+    } finally {
       setPhase("ready");
     }
   };
@@ -147,7 +148,7 @@ export function CheckoutApp() {
     setError(null);
     const amountMon = await shortfallMon();
     try {
-      await fundWallet(address, receiveFundConfig(amountMon ?? undefined));
+      await fundWallet({ address, options: receiveFundConfig(amountMon ?? undefined) });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not open receive screen.";
       setError(msg);
@@ -175,9 +176,9 @@ export function CheckoutApp() {
     }
 
     try {
-      await fundWallet(address, cardFundConfig(amountMon));
+      await fundWallet({ address, options: cardFundConfig(amountMon) });
     } catch {
-      await fundWallet(address, receiveFundConfig(amountMon));
+      await fundWallet({ address, options: receiveFundConfig(amountMon) });
     }
 
     // Funding can take a moment to settle — poll briefly.

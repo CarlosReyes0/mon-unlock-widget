@@ -46,6 +46,11 @@ if (!appId) {
           },
           defaultChain: monad,
           supportedChains: [monad],
+          fundingMethodConfig: {
+            moonpay: {
+              useSandbox: false,
+            },
+          },
         }}
       >
         <CheckoutApp />
