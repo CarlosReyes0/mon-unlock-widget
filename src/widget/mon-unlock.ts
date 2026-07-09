@@ -11,6 +11,8 @@ import {
   parseMonAmount,
   truncateAddress,
   hasReliableInjectedProvider,
+  buildCheckoutUrl,
+  isCheckoutMessage,
   type Article,
   type WalletState,
   looksLikeHtml,
@@ -50,11 +52,17 @@ export class MonUnlock extends LitElement {
   @state() private fetchedBody: string | null = null;
 
   @state() private urlCopied = false;
+  @state() private checkoutOpen = false;
+  @state() private showMetaMaskHelp = false;
 
   private walletManager = new WalletManager();
   private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
   private isOnchain = false;
   private unsubWallet?: () => void;
+  private checkoutPopup: Window | null = null;
+  private onCheckoutMessage = (event: MessageEvent) => {
+    void this.handleCheckoutMessage(event);
+  };
 
   override createRenderRoot() {
     return this;
@@ -62,6 +70,7 @@ export class MonUnlock extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
+    window.addEventListener("message", this.onCheckoutMessage);
     this.unsubWallet = this.walletManager.subscribe((s) => {
       this.wallet = s;
       // Re-check access (local cache or on-chain) whenever wallet changes
@@ -76,6 +85,8 @@ export class MonUnlock extends LitElement {
 
   override disconnectedCallback() {
     super.disconnectedCallback();
+    window.removeEventListener("message", this.onCheckoutMessage);
+    this.closeCheckoutUi();
     this.unsubWallet?.();
   }
 
@@ -300,35 +311,182 @@ export class MonUnlock extends LitElement {
     return false;
   }
 
+  private closeCheckoutUi() {
+    this.checkoutOpen = false;
+    if (this.checkoutPopup && !this.checkoutPopup.closed) {
+      try {
+        this.checkoutPopup.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.checkoutPopup = null;
+  }
+
+  private async handleCheckoutMessage(event: MessageEvent) {
+    if (!isCheckoutMessage(event.data)) return;
+    if (!this.article) return;
+
+    // Only accept messages for this article.
+    if (event.data.articleId !== this.article.id) return;
+
+    // Origin must match our checkout host.
+    let expectedOrigin: string;
+    try {
+      expectedOrigin = new URL(buildCheckoutUrl({
+        articleId: this.article.id,
+        title: this.article.title,
+        price: this.price,
+        contract: this.unlockContract.trim(),
+        embedSig: this.embedSig,
+        parentOrigin: window.location.origin,
+      })).origin;
+    } catch {
+      return;
+    }
+    if (event.origin !== expectedOrigin) return;
+
+    if (event.data.type === "mon:checkout-closed") {
+      this.closeCheckoutUi();
+      return;
+    }
+
+    // mon:unlocked — verify on-chain before revealing.
+    this.closeCheckoutUi();
+    this.loading = true;
+    this.error = null;
+    try {
+      const address = event.data.address;
+      this.wallet = { connected: true, address };
+      if (event.data.txHash) this.txHash = event.data.txHash;
+
+      if (this.isOnchain) {
+        const ok = await (this.unlockService as OnchainUnlockService).checkOnchainAccess(
+          this.article.id,
+          address
+        );
+        if (!ok) {
+          this.error = "Payment received, but unlock is not visible yet. Tap Continue again in a moment.";
+          this.unlocked = false;
+          return;
+        }
+        this.unlocked = true;
+        await this.fetchBodyIfNeeded();
+      } else {
+        this.unlocked = true;
+      }
+      this.emit("mon:unlocked", {
+        article: this.article,
+        record: {
+          articleId: this.article.id,
+          wallet: address,
+          unlockedAt: Date.now(),
+          mode: "onchain" as const,
+          txHash: event.data.txHash,
+        },
+      });
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Could not confirm unlock.";
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private openPrivyCheckout() {
+    if (!this.article) return;
+    if (!this.isOnchain || !this.unlockContract.trim()) {
+      // Demo mode: fall back to existing connect flow.
+      void this.connect();
+      return;
+    }
+
+    this.error = null;
+    const url = buildCheckoutUrl({
+      articleId: this.article.id,
+      title: this.article.title,
+      price: this.price,
+      contract: this.unlockContract.trim(),
+      embedSig: this.embedSig,
+      parentOrigin: window.location.origin,
+    });
+
+    this.checkoutOpen = true;
+    const popup = window.open(
+      url,
+      "mon-unlock-checkout",
+      "popup=yes,width=420,height=720,noopener=no"
+    );
+    if (!popup) {
+      // Popup blocked — navigate top-level as fallback.
+      window.location.href = url;
+      return;
+    }
+    this.checkoutPopup = popup;
+  }
+
+  private startMetaMaskPath() {
+    const inWalletBrowser = hasReliableInjectedProvider();
+    if (this.isMobileViewport() && !inWalletBrowser) {
+      this.showMetaMaskHelp = true;
+      return;
+    }
+    this.showMetaMaskHelp = false;
+    void this.connect();
+  }
+
   private renderUnlockActions() {
     const inWalletBrowser = hasReliableInjectedProvider();
-    const mobile = this.isMobileViewport();
+    const onchain = this.isOnchain;
 
-    if (mobile) {
+    // Demo mode: single connect button (simulated unlock).
+    if (!onchain) {
       return html`
-        <div class="mon-metamask-hint">
-          ${inWalletBrowser
-            ? html`
-                <p class="text-sm font-medium text-stone-800 dark:text-stone-200">
-                  Wallet browser detected
-                </p>
-                <p class="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                  You&apos;re viewing this page inside a wallet app. Tap Connect below to unlock.
-                </p>
-              `
-            : html`
+        <button
+          class="mon-btn mon-btn-primary"
+          ?disabled=${this.loading}
+          @click=${() => this.connect()}
+        >
+          ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
+        </button>
+      `;
+    }
+
+    return html`
+      <div class="mon-unlock-actions">
+        <button
+          type="button"
+          class="mon-btn mon-btn-primary"
+          ?disabled=${this.loading || this.checkoutOpen}
+          @click=${() => this.openPrivyCheckout()}
+        >
+          ${this.checkoutOpen ? "Checkout open…" : this.loading ? "Unlocking…" : "Continue"}
+        </button>
+        <p class="mon-unlock-hint">Pay with email or Google. No MetaMask needed.</p>
+
+        <button
+          type="button"
+          class="mon-btn mon-btn-secondary"
+          ?disabled=${this.loading || this.checkoutOpen}
+          @click=${() => this.startMetaMaskPath()}
+        >
+          Use MetaMask
+        </button>
+
+        ${this.showMetaMaskHelp
+          ? html`
+              <div class="mon-metamask-hint mt-3">
                 <p class="text-sm font-medium text-stone-800 dark:text-stone-200">
                   Open this page in MetaMask
                 </p>
                 <p class="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                  Mobile wallets work best when you open the article inside MetaMask&apos;s browser.
-                  Copy the link below, then paste it in MetaMask → Browser.
+                  On mobile, MetaMask works best inside its browser. Copy the link, then paste it in
+                  MetaMask → Browser.
                 </p>
                 <ol class="mon-metamask-steps">
                   <li>Copy page link</li>
                   <li>Open MetaMask → Browser</li>
                   <li>Paste the link and load this page</li>
-                  <li>Tap Connect wallet to unlock</li>
+                  <li>Tap Use MetaMask again</li>
                 </ol>
                 <button
                   type="button"
@@ -337,30 +495,10 @@ export class MonUnlock extends LitElement {
                 >
                   ${this.urlCopied ? "Link copied!" : "Copy page link"}
                 </button>
-              `}
-        </div>
-        ${inWalletBrowser
-          ? html`
-              <button
-                class="mon-btn mon-btn-primary mt-3"
-                ?disabled=${this.loading}
-                @click=${() => this.connect()}
-              >
-                ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
-              </button>
+              </div>
             `
           : nothing}
-      `;
-    }
-
-    return html`
-      <button
-        class="mon-btn mon-btn-primary"
-        ?disabled=${this.loading}
-        @click=${() => this.connect()}
-      >
-        ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
-      </button>
+      </div>
     `;
   }
 
@@ -517,7 +655,7 @@ export class MonUnlock extends LitElement {
                   </p>
                   <p class="mt-1 text-xs text-stone-500">
                     ${this.isOnchain
-                      ? "Pay with MON on Monad. Connect wallet to continue."
+                      ? "Pay with MON on Monad. Continue with email, or use MetaMask."
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">${this.renderUnlockActions()}</div>

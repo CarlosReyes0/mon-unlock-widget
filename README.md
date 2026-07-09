@@ -132,9 +132,19 @@ The body supports safe HTML for rich content. Common examples:
 
 ## Behavior
 
-- **Connect wallet to unlock** — real MON payment on Monad testnet when `unlock-contract` is provided.
+- **Continue** (default) — opens hosted Privy checkout on this CDN (`/unlock.html`): email/Google login, buy MON if needed, pay on-chain. No MetaMask required for readers.
+- **Use MetaMask** — existing injected-wallet path (desktop extension or MetaMask in-app browser).
 - Without `unlock-contract` the widget falls back to demo mode (localStorage only).
-- No MetaMask in dev? Falls back to a demo wallet for local testing.
+- Writers still use MetaMask in the generator/dashboard to register articles and sign embeds.
+
+### Privy checkout setup
+
+1. Create an app at [dashboard.privy.io](https://dashboard.privy.io).
+2. Allowlist `https://mon-unlock-widget-production.up.railway.app` (and `http://localhost:5173` for local `vite`).
+3. Enable embedded wallets + funding for native MON on Monad (chain id `143`).
+4. Set Railway build arg / env `VITE_PRIVY_APP_ID` and redeploy (baked into `/unlock.html` at build time).
+
+See `.env.example`.
 
 ## Events (optional, for developers)
 

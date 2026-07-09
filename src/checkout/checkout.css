@@ -1,0 +1,157 @@
+:root {
+  --ink: #1c1917;
+  --muted: #57534e;
+  --paper: #f7f4ef;
+  --card: #fffdf9;
+  --line: #e7e0d6;
+  --sage: #5b7c5a;
+  --sage-dark: #456344;
+  --danger: #b91c1c;
+  --ok: #166534;
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #efe8dc 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #e4ebe3 0%, transparent 50%),
+    var(--paper);
+}
+
+.checkout-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.checkout-card {
+  width: min(100%, 26rem);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.75rem 1.5rem;
+  box-shadow: 0 18px 50px rgba(28, 25, 23, 0.08);
+}
+
+.checkout-brand {
+  margin: 0 0 0.75rem;
+  font-family: Literata, Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.checkout-card h1 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.checkout-title {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.checkout-price {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.checkout-price span {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.checkout-copy,
+.checkout-status {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.checkout-status.ok {
+  color: var(--ok);
+}
+
+.checkout-error {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.checkout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.checkout-btn {
+  appearance: none;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.8rem 1.1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkout-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.checkout-btn.primary {
+  background: var(--sage);
+  color: #fff;
+}
+
+.checkout-btn.primary:hover:not(:disabled) {
+  background: var(--sage-dark);
+}
+
+.checkout-btn.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.checkout-link {
+  display: block;
+  margin: 1rem auto 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
