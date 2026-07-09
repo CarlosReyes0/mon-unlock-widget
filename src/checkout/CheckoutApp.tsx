@@ -10,12 +10,7 @@ import {
 import { OnchainUnlockService } from "../core/unlock.js";
 import { formatMon, parseMonAmount } from "../core/types.js";
 import { monadMainnet } from "../core/chains.js";
-import {
-  cardFundConfig,
-  hasRampBuy,
-  openRampBuy,
-  receiveFundConfig,
-} from "./funding.js";
+import { cardFundConfig, openRampBuy, receiveFundConfig } from "./funding.js";
 
 type CheckoutQuery = {
   articleId: string;
@@ -127,16 +122,22 @@ export function CheckoutApp() {
     setPhase("funding");
     setError(null);
     const amountMon = (await shortfallMon()) ?? "1";
-    if (hasRampBuy()) {
-      openRampBuy(address, amountMon);
-      setPhase("ready");
-      return;
-    }
+    // Ramp first: supports MON in US states MoonPay blocks (e.g. Texas).
+    openRampBuy(address, amountMon);
+    setError("Finish buying MON in the Ramp tab, then tap Pay again. MoonPay is unavailable in some US states (including Texas).");
+    setPhase("ready");
+  };
+
+  const buyMonCoinbase = async () => {
+    if (!address) return;
+    setPhase("funding");
+    setError(null);
+    const amountMon = (await shortfallMon()) ?? "1";
     try {
       await fundWallet({ address, options: cardFundConfig(amountMon) });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not open card checkout.";
-      setError(msg);
+      const msg = e instanceof Error ? e.message : "Could not open Coinbase checkout.";
+      setError(`${msg} Try Buy MON with Ramp, or Receive MON if you already have funds.`);
     } finally {
       setPhase("ready");
     }
@@ -168,26 +169,8 @@ export function CheckoutApp() {
     setError(null);
     const amountMon = (await shortfallMon()) ?? formatEther(need);
 
-    if (hasRampBuy()) {
-      openRampBuy(address, amountMon);
-      setError("Complete your card purchase in the new tab, then tap Pay again.");
-      setPhase("ready");
-      return false;
-    }
-
-    try {
-      await fundWallet({ address, options: cardFundConfig(amountMon) });
-    } catch {
-      await fundWallet({ address, options: receiveFundConfig(amountMon) });
-    }
-
-    // Funding can take a moment to settle — poll briefly.
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 1500));
-      bal = (await refreshBalance()) ?? 0n;
-      if (bal >= need) return true;
-    }
-    setError("Funds are still arriving. Wait a moment, then tap Pay again.");
+    openRampBuy(address, amountMon);
+    setError("Not enough MON. Finish buying in the Ramp tab, then tap Pay again.");
     setPhase("ready");
     return false;
   };
@@ -325,7 +308,15 @@ export function CheckoutApp() {
                 disabled={phase === "paying" || phase === "funding" || !address}
                 onClick={() => void buyMon()}
               >
-                Buy MON with card
+                Buy MON with Ramp
+              </button>
+              <button
+                type="button"
+                className="checkout-btn ghost"
+                disabled={phase === "paying" || phase === "funding" || !address}
+                onClick={() => void buyMonCoinbase()}
+              >
+                Buy with Coinbase
               </button>
               <button
                 type="button"
@@ -337,9 +328,8 @@ export function CheckoutApp() {
               </button>
             </div>
             <p className="checkout-hint">
-              {hasRampBuy()
-                ? "Buy MON opens Ramp Network (card, Apple Pay, bank). Receive MON shows your deposit address."
-                : "Buy MON opens MoonPay for native MON on Monad. Receive MON shows your deposit address."}
+              Ramp works in US states where MoonPay is blocked (including Texas). Coinbase is an
+              alternate card path. Receive MON shows your deposit address.
             </p>
 
             <button type="button" className="checkout-link" onClick={() => logout()}>

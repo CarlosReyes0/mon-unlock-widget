@@ -4,9 +4,8 @@ import { monad } from "viem/chains";
 const RAMP_HOST_API_KEY = (import.meta.env.VITE_RAMP_HOST_API_KEY as string | undefined)?.trim() ?? "";
 
 /**
- * Card buy via Privy → MoonPay for native MON on Monad.
- * Requires @privy-io/react-auth ≥3.x (adds MON_MON / Monad funding support).
- * On v2, Privy could not map Monad native currency and fell back to Receive-only.
+ * Card buy via Privy. Prefer Coinbase over MoonPay — MoonPay blocks several US states
+ * including Texas, so MoonPay-first always fails for those readers.
  */
 export function cardFundConfig(amountMon: string): FundWalletConfig {
   return {
@@ -14,7 +13,7 @@ export function cardFundConfig(amountMon: string): FundWalletConfig {
     amount: amountMon,
     asset: "native-currency",
     defaultFundingMethod: "card",
-    card: { preferredProvider: "moonpay" },
+    card: { preferredProvider: "coinbase" },
   };
 }
 
@@ -31,30 +30,25 @@ export function receiveFundConfig(amountMon?: string): FundWalletConfig {
   };
 }
 
-export function hasRampBuy(): boolean {
-  return Boolean(RAMP_HOST_API_KEY);
-}
-
-/** Ramp Network supports native MON on Monad (MONAD_MON). Requires a host API key from Ramp. */
-export function buildRampBuyUrl(address: string, amountMon?: string): string | null {
-  if (!RAMP_HOST_API_KEY) return null;
+/** Ramp Network supports MON on Monad in the US (including states MoonPay blocks). */
+export function buildRampBuyUrl(address: string, _amountMon?: string): string {
   const params = new URLSearchParams({
-    hostApiKey: RAMP_HOST_API_KEY,
     hostAppName: "MON Unlock",
+    hostLogoUrl: "https://mon-unlock-widget-production.up.railway.app/favicon.ico",
     defaultFlow: "ONRAMP",
     outAsset: "MONAD_MON",
     userAddress: address,
     enabledCryptoAssets: "MONAD_MON",
+    inAsset: "USD",
   });
-  if (amountMon) {
-    params.set("inAsset", "USD");
+  if (RAMP_HOST_API_KEY) {
+    params.set("hostApiKey", RAMP_HOST_API_KEY);
   }
   return `https://app.rampnetwork.com/?${params.toString()}`;
 }
 
 export function openRampBuy(address: string, amountMon?: string): boolean {
   const url = buildRampBuyUrl(address, amountMon);
-  if (!url) return false;
   window.open(url, "_blank", "noopener,noreferrer");
   return true;
 }
