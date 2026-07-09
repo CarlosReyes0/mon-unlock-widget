@@ -20,24 +20,32 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build --mode lib",
+    "build": "tsc && vite build --mode lib && vite build --mode checkout",
+    "build:widget": "tsc && vite build --mode lib",
+    "build:checkout": "vite build --mode checkout",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js"
+    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js"
   },
   "license": "MIT",
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
+    "@privy-io/react-auth": "^2.25.0",
     "@walletconnect/ethereum-provider": "2.18.0",
     "lean-qr": "^2.5.3",
     "lit": "^3.3.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "viem": "^2.52.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^25.9.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.0.3",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",

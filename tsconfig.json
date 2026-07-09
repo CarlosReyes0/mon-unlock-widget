@@ -13,8 +13,9 @@
     "rootDir": "./src",
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "jsx": "react-jsx"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "dist-checkout", "src/checkout/**"]
 }

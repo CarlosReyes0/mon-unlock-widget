@@ -94,6 +94,30 @@ mon-unlock {
   cursor: not-allowed;
 }
 
+.mon-unlock-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.mon-unlock-hint {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  color: #78716c;
+  text-align: center;
+}
+
+.mon-btn-secondary {
+  background: #fff;
+  color: #1c1917;
+  border: 1px solid #d6d3d1;
+}
+
+.mon-btn-secondary:hover:not(:disabled) {
+  background: #fafaf9;
+}
+
 .mon-metamask-hint {
   border-radius: 10px;
   border: 1px solid #ddd6fe;

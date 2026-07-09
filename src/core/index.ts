@@ -4,3 +4,4 @@ export * from "./wallet.js";
 export * from "./chains.js";
 export * from "./embed-signature.js";
 export * from "./body-content.js";
+export * from "./checkout-protocol.js";
