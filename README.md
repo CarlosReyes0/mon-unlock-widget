@@ -142,7 +142,9 @@ The body supports safe HTML for rich content. Common examples:
 1. Create an app at [dashboard.privy.io](https://dashboard.privy.io).
 2. Allowlist `https://mon-unlock-widget-production.up.railway.app` (and `http://localhost:5173` for local `vite`).
 3. Enable embedded wallets + funding for native MON on Monad (chain id `143`).
-4. Set Railway build arg / env `VITE_PRIVY_APP_ID` and redeploy (baked into `/unlock.html` at build time).
+4. In **Account Funding**, enable **MoonPay**. Checkout calls MoonPay with currency `MON_MON` (native MON on Monad) — not Privy's generic receive flow.
+5. (Optional) Set `VITE_RAMP_HOST_API_KEY` from [Ramp Network](https://docs.rampnetwork.com/web/quick-start-hosted) to use Ramp instead of MoonPay for card buys.
+6. Set Railway build arg / env `VITE_PRIVY_APP_ID` (and optionally `VITE_RAMP_HOST_API_KEY`) and redeploy (baked into `/unlock.html` at build time).
 
 See `.env.example`.
 

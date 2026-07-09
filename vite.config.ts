@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         "import.meta.env.VITE_PRIVY_APP_ID": JSON.stringify(env.VITE_PRIVY_APP_ID || ""),
+        "import.meta.env.VITE_RAMP_HOST_API_KEY": JSON.stringify(env.VITE_RAMP_HOST_API_KEY || ""),
       },
       build: {
         outDir: "dist-checkout",

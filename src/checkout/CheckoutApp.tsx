@@ -10,6 +10,12 @@ import {
 import { OnchainUnlockService } from "../core/unlock.js";
 import { formatMon, parseMonAmount } from "../core/types.js";
 import { monadMainnet } from "../core/chains.js";
+import {
+  cardFundConfig,
+  hasRampBuy,
+  openRampBuy,
+  receiveFundConfig,
+} from "./funding.js";
 
 type CheckoutQuery = {
   articleId: string;
@@ -106,6 +112,50 @@ export function CheckoutApp() {
     });
   };
 
+  const shortfallMon = async (): Promise<string | null> => {
+    if (!address) return null;
+    const gasBuffer = parseEther("0.02");
+    const need = priceWei + gasBuffer;
+    const bal = (await refreshBalance()) ?? 0n;
+    if (bal >= need) return null;
+    const shortfall = need > bal ? need - bal : need;
+    return formatEther(shortfall);
+  };
+
+  const buyMon = async () => {
+    if (!address) return;
+    setPhase("funding");
+    setError(null);
+    const amountMon = (await shortfallMon()) ?? "1";
+    if (hasRampBuy()) {
+      openRampBuy(address, amountMon);
+      setPhase("ready");
+      return;
+    }
+    try {
+      await fundWallet(address, cardFundConfig(amountMon));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not open card checkout.";
+      setError(msg);
+      setPhase("ready");
+    }
+  };
+
+  const receiveMon = async () => {
+    if (!address) return;
+    setPhase("funding");
+    setError(null);
+    const amountMon = await shortfallMon();
+    try {
+      await fundWallet(address, receiveFundConfig(amountMon ?? undefined));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not open receive screen.";
+      setError(msg);
+    } finally {
+      setPhase("ready");
+    }
+  };
+
   const ensureFunded = async (): Promise<boolean> => {
     if (!address || !query) return false;
     const gasBuffer = parseEther("0.02");
@@ -115,15 +165,20 @@ export function CheckoutApp() {
 
     setPhase("funding");
     setError(null);
-    const shortfall = need > bal ? need - bal : need;
-    // fundWallet amount is a decimal string of native MON.
-    const amountMon = formatEther(shortfall);
+    const amountMon = (await shortfallMon()) ?? formatEther(need);
 
-    await fundWallet(address, {
-      chain: monad,
-      amount: amountMon,
-      asset: "native-currency",
-    });
+    if (hasRampBuy()) {
+      openRampBuy(address, amountMon);
+      setError("Complete your card purchase in the new tab, then tap Pay again.");
+      setPhase("ready");
+      return false;
+    }
+
+    try {
+      await fundWallet(address, cardFundConfig(amountMon));
+    } catch {
+      await fundWallet(address, receiveFundConfig(amountMon));
+    }
 
     // Funding can take a moment to settle — poll briefly.
     for (let i = 0; i < 20; i++) {
@@ -241,7 +296,7 @@ export function CheckoutApp() {
             </p>
 
             {phase === "funding" ? (
-              <p className="checkout-status">Add MON to continue…</p>
+              <p className="checkout-status">Opening funding…</p>
             ) : null}
             {phase === "paying" ? <p className="checkout-status">Unlocking…</p> : null}
             {phase === "done" ? (
@@ -266,12 +321,25 @@ export function CheckoutApp() {
               <button
                 type="button"
                 className="checkout-btn ghost"
-                disabled={phase === "paying"}
-                onClick={() => void ensureFunded()}
+                disabled={phase === "paying" || phase === "funding" || !address}
+                onClick={() => void buyMon()}
               >
-                Buy MON
+                Buy MON with card
+              </button>
+              <button
+                type="button"
+                className="checkout-btn ghost"
+                disabled={phase === "paying" || phase === "funding" || !address}
+                onClick={() => void receiveMon()}
+              >
+                Receive MON
               </button>
             </div>
+            <p className="checkout-hint">
+              {hasRampBuy()
+                ? "Buy MON opens Ramp Network (card, Apple Pay, bank). Receive MON shows your deposit address."
+                : "Buy MON opens MoonPay for native MON on Monad. Receive MON shows your deposit address."}
+            </p>
 
             <button type="button" className="checkout-link" onClick={() => logout()}>
               Use a different account
