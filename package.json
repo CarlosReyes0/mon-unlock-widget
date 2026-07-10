@@ -24,7 +24,7 @@
     "build:widget": "tsc && vite build --mode lib",
     "build:checkout": "vite build --mode checkout",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js"
+    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js"
   },
   "license": "MIT",
   "engines": {

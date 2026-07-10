@@ -17,6 +17,28 @@ export function cardFundConfig(amountMon: string): FundWalletConfig {
   };
 }
 
+/** Buy USDC on Monad (card). Used when we swap USDC → MON for unlock. */
+export function cardFundUsdcConfig(amountUsdc: string): FundWalletConfig {
+  return {
+    chain: monad,
+    amount: amountUsdc,
+    asset: "USDC",
+    defaultFundingMethod: "card",
+    card: { preferredProvider: "coinbase" },
+  };
+}
+
+/** Tiny MON top-up so the reader can pay gas for approve/swap/unlock. */
+export function cardFundGasMonConfig(amountMon = "0.05"): FundWalletConfig {
+  return {
+    chain: monad,
+    amount: amountMon,
+    asset: "native-currency",
+    defaultFundingMethod: "card",
+    card: { preferredProvider: "coinbase" },
+  };
+}
+
 /** Deposit-address / QR path when the user already has MON elsewhere. */
 export function receiveFundConfig(amountMon?: string): FundWalletConfig {
   return {
@@ -31,14 +53,14 @@ export function receiveFundConfig(amountMon?: string): FundWalletConfig {
 }
 
 /** Ramp Network supports MON on Monad in the US (including states MoonPay blocks). */
-export function buildRampBuyUrl(address: string, _amountMon?: string): string {
+export function buildRampBuyUrl(address: string, outAsset: "MONAD_MON" | "MONAD_USDC" = "MONAD_MON"): string {
   const params = new URLSearchParams({
     hostAppName: "MON Unlock",
     hostLogoUrl: "https://mon-unlock-widget-production.up.railway.app/favicon.ico",
     defaultFlow: "ONRAMP",
-    outAsset: "MONAD_MON",
+    outAsset,
     userAddress: address,
-    enabledCryptoAssets: "MONAD_MON",
+    enabledCryptoAssets: outAsset,
     inAsset: "USD",
   });
   if (RAMP_HOST_API_KEY) {
@@ -47,8 +69,8 @@ export function buildRampBuyUrl(address: string, _amountMon?: string): string {
   return `https://app.rampnetwork.com/?${params.toString()}`;
 }
 
-export function openRampBuy(address: string, amountMon?: string): boolean {
-  const url = buildRampBuyUrl(address, amountMon);
+export function openRampBuy(address: string, outAsset: "MONAD_MON" | "MONAD_USDC" = "MONAD_MON"): boolean {
+  const url = buildRampBuyUrl(address, outAsset);
   window.open(url, "_blank", "noopener,noreferrer");
   return true;
 }

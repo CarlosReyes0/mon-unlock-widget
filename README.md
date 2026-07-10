@@ -132,7 +132,7 @@ The body supports safe HTML for rich content. Common examples:
 
 ## Behavior
 
-- **Continue** (default) — opens hosted Privy checkout on this CDN (`/unlock.html`): email/Google login, buy MON if needed, pay on-chain. No MetaMask required for readers.
+- **Continue** (default) — opens hosted Privy checkout on this CDN (`/unlock.html`): email/Google login, buy USDC or MON if needed, swap USDC→MON on PancakeSwap when needed, pay on-chain. No MetaMask required for readers.
 - **Use MetaMask** — existing injected-wallet path (desktop extension or MetaMask in-app browser).
 - Without `unlock-contract` the widget falls back to demo mode (localStorage only).
 - Writers still use MetaMask in the generator/dashboard to register articles and sign embeds.
@@ -141,12 +141,14 @@ The body supports safe HTML for rich content. Common examples:
 
 1. Create an app at [dashboard.privy.io](https://dashboard.privy.io).
 2. Allowlist `https://mon-unlock-widget-production.up.railway.app` (and `http://localhost:5173` for local `vite`).
-3. Enable embedded wallets + funding for native MON on Monad (chain id `143`).
-4. In **Account Funding**, enable **Coinbase** (and optionally MoonPay). Checkout prefers **Ramp Network** for card buys — MoonPay is unavailable in Texas and several other US states.
-5. (Optional) Set `VITE_RAMP_HOST_API_KEY` from [Ramp Network](https://docs.rampnetwork.com/web/quick-start-hosted) for partner branding / higher limits. Buy MON still opens Ramp without it.
+3. Enable embedded wallets + funding for **MON** and **USDC** on Monad (chain id `143`).
+4. In **Account Funding**, enable **Coinbase** (and optionally MoonPay). Checkout prefers **Ramp Network** / Coinbase for card buys — MoonPay is unavailable in Texas and several other US states.
+5. (Optional) Set `VITE_RAMP_HOST_API_KEY` from [Ramp Network](https://docs.rampnetwork.com/web/quick-start-hosted) for partner branding / higher limits.
 6. Set Railway build arg / env `VITE_PRIVY_APP_ID` (and optionally `VITE_RAMP_HOST_API_KEY`) and redeploy (baked into `/unlock.html` at build time).
 
 Requires `@privy-io/react-auth` **≥ 3.x** (Monad funding). Privy 2.x falls back to Receive-only for Monad.
+
+**USDC without a new contract:** checkout can buy USDC, swap USDC→WMON on PancakeSwap V3, unwrap to MON, then call the existing `unlock()`. Existing articles keep working. A tiny MON balance is still needed for gas.
 
 See `.env.example`.
 
