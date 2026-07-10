@@ -13,6 +13,7 @@ import { monadMainnet } from "../core/chains.js";
 import {
   cardFundGasMonConfig,
   cardFundUsdcConfig,
+  openCardBuy,
   openRampBuy,
   receiveFundConfig,
 } from "./funding.js";
@@ -150,15 +151,23 @@ export function CheckoutApp() {
     if (mon >= GAS_RESERVE) return true;
     setPhase("funding");
     setError(null);
-    try {
-      await fundWallet({ address, options: cardFundGasMonConfig("0.05") });
-    } catch {
-      openRampBuy(address, "MONAD_MON");
+    // Coinbase first (Texas). Privy fundWallet second. Ramp last (not Texas).
+    const viaCoinbase = await openCardBuy(address, "MON", "0.05");
+    if (!viaCoinbase) {
+      try {
+        await fundWallet({ address, options: cardFundGasMonConfig("0.05") });
+      } catch {
+        openRampBuy(address, "MONAD_MON");
+        setError(
+          "Need a tiny bit of MON for network fees. Finish the buy tab, then tap Pay with USDC again."
+        );
+        setPhase("ready");
+        return false;
+      }
+    } else {
       setError(
-        "Need a tiny bit of MON for network fees. Finish buying ~0.05 MON, then tap Pay with USDC again."
+        "Need a tiny bit of MON for network fees. Finish buying ~0.05 MON in Coinbase, then tap Pay with USDC again."
       );
-      setPhase("ready");
-      return false;
     }
     // Poll briefly for gas MON.
     for (let i = 0; i < 20; i++) {
@@ -178,11 +187,16 @@ export function CheckoutApp() {
     try {
       const need = await estimateUsdcForMon(priceWei + GAS_RESERVE);
       const amount = formatUsdc(need);
-      try {
-        await fundWallet({ address, options: cardFundUsdcConfig(amount) });
-      } catch {
-        openRampBuy(address, "MONAD_USDC");
-        setError("Finish buying USDC in the Ramp tab, then tap Pay with USDC.");
+      const viaCoinbase = await openCardBuy(address, "USDC", amount);
+      if (viaCoinbase) {
+        setError("Finish buying USDC in the Coinbase tab, then tap Pay with USDC.");
+      } else {
+        try {
+          await fundWallet({ address, options: cardFundUsdcConfig(amount) });
+        } catch {
+          openRampBuy(address, "MONAD_USDC");
+          setError("Finish buying USDC in the open tab, then tap Pay with USDC.");
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not open USDC checkout.";
@@ -231,10 +245,13 @@ export function CheckoutApp() {
     if (usdc < usdcNeeded) {
       setPhase("funding");
       const amount = formatUsdc(usdcNeeded);
-      try {
-        await fundWallet({ address, options: cardFundUsdcConfig(amount) });
-      } catch {
-        openRampBuy(address, "MONAD_USDC");
+      const viaCoinbase = await openCardBuy(address, "USDC", amount);
+      if (!viaCoinbase) {
+        try {
+          await fundWallet({ address, options: cardFundUsdcConfig(amount) });
+        } catch {
+          openRampBuy(address, "MONAD_USDC");
+        }
       }
       // Poll for USDC arrival.
       for (let i = 0; i < 30; i++) {
@@ -458,8 +475,8 @@ export function CheckoutApp() {
             </div>
             <p className="checkout-hint">
               Pay with USDC buys dollars (when needed), swaps to MON on Monad, then unlocks — no new
-              contract. Works with Coinbase/Ramp in US states where MoonPay is blocked (including
-              Texas). A tiny bit of MON is needed for network fees.
+              contract. Card buys use Coinbase (works in Texas). A tiny bit of MON is needed for
+              network fees.
             </p>
 
             <button type="button" className="checkout-link" onClick={() => logout()}>

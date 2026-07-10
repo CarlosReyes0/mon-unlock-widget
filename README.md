@@ -142,13 +142,19 @@ The body supports safe HTML for rich content. Common examples:
 1. Create an app at [dashboard.privy.io](https://dashboard.privy.io).
 2. Allowlist `https://mon-unlock-widget-production.up.railway.app` (and `http://localhost:5173` for local `vite`).
 3. Enable embedded wallets + funding for **MON** and **USDC** on Monad (chain id `143`).
-4. In **Account Funding**, enable **Coinbase** (and optionally MoonPay). Checkout prefers **Ramp Network** / Coinbase for card buys — MoonPay is unavailable in Texas and several other US states.
-5. (Optional) Set `VITE_RAMP_HOST_API_KEY` from [Ramp Network](https://docs.rampnetwork.com/web/quick-start-hosted) for partner branding / higher limits.
-6. Set Railway build arg / env `VITE_PRIVY_APP_ID` (and optionally `VITE_RAMP_HOST_API_KEY`) and redeploy (baked into `/unlock.html` at build time).
+4. In **Account Funding**, enable **Coinbase** (and optionally MoonPay). Checkout opens **Coinbase Onramp** via a server session token (required since mid-2025) — this is what works in Texas. Ramp remains as a fallback for other regions; MoonPay is unavailable in Texas.
+5. Create a **Secret API Key** in [Coinbase Developer Platform](https://portal.cdp.coinbase.com) (API Keys → Secret API Keys). On Railway, set runtime env:
+   - `CDP_API_KEY_ID` — Key ID (UUID)
+   - `CDP_API_KEY_SECRET` — Key secret (Ed25519 or EC)
+   These power `POST /api/coinbase/session-token` on the CDN. Never use `VITE_` for these.
+6. (Optional) Set `VITE_RAMP_HOST_API_KEY` from [Ramp Network](https://docs.rampnetwork.com/web/quick-start-hosted) for partner branding / higher limits outside Texas.
+7. Set Railway build arg / env `VITE_PRIVY_APP_ID` (and optionally `VITE_RAMP_HOST_API_KEY`) and redeploy (baked into `/unlock.html` at build time). Also set the CDP secrets above on the **runtime** service (not only build).
 
 Requires `@privy-io/react-auth` **≥ 3.x** (Monad funding). Privy 2.x falls back to Receive-only for Monad.
 
 **USDC without a new contract:** checkout can buy USDC, swap USDC→WMON on PancakeSwap V3, unwrap to MON, then call the existing `unlock()`. Existing articles keep working. A tiny MON balance is still needed for gas.
+
+**Texas note:** Ramp does not work in Texas — leave Ramp configured; Coinbase is the path that must succeed. Mapping Project ID / Key ID / Secret in the Privy dashboard alone is not enough after Coinbase’s session-token requirement; the Railway `CDP_*` secrets + `/api/coinbase/session-token` are what open `pay.coinbase.com`.
 
 See `.env.example`.
 

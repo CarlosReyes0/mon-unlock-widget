@@ -23,14 +23,16 @@
     "build": "tsc && vite build --mode lib && vite build --mode checkout",
     "build:widget": "tsc && vite build --mode lib",
     "build:checkout": "vite build --mode checkout",
+    "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js"
+    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js && node --test server/index.test.mjs"
   },
   "license": "MIT",
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "^1.52.0",
     "@privy-io/react-auth": "^3.34.0",
     "@walletconnect/ethereum-provider": "2.18.0",
     "lean-qr": "^2.5.3",

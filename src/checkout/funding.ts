@@ -6,6 +6,9 @@ const RAMP_HOST_API_KEY = (import.meta.env.VITE_RAMP_HOST_API_KEY as string | un
 /**
  * Card buy via Privy. Prefer Coinbase over MoonPay — MoonPay blocks several US states
  * including Texas, so MoonPay-first always fails for those readers.
+ *
+ * Note: Ramp Network also blocks Texas. Prefer openCoinbaseBuy() (session-token URL)
+ * for card buys; keep Privy fundWallet as a secondary path when Coinbase is unavailable.
  */
 export function cardFundConfig(amountMon: string): FundWalletConfig {
   return {
@@ -52,7 +55,49 @@ export function receiveFundConfig(amountMon?: string): FundWalletConfig {
   };
 }
 
-/** Ramp Network supports MON on Monad in the US (including states MoonPay blocks). */
+export type BuyAsset = "USDC" | "MON";
+
+/**
+ * Ask our CDN for a Coinbase Onramp URL (session token minted server-side with CDP keys).
+ * Returns null when the endpoint is missing/unconfigured or the request fails.
+ */
+export async function fetchCoinbaseBuyUrl(
+  address: string,
+  asset: BuyAsset,
+  amount?: string
+): Promise<string | null> {
+  try {
+    const res = await fetch("/api/coinbase/session-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        address,
+        asset,
+        amount,
+        redirectUrl: window.location.href,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url?: string };
+    return typeof data.url === "string" && data.url.startsWith("https://") ? data.url : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Open Coinbase Onramp in a new tab. Returns false if session token is unavailable. */
+export async function openCoinbaseBuy(
+  address: string,
+  asset: BuyAsset,
+  amount?: string
+): Promise<boolean> {
+  const url = await fetchCoinbaseBuyUrl(address, asset, amount);
+  if (!url) return false;
+  window.open(url, "_blank", "noopener,noreferrer");
+  return true;
+}
+
+/** Ramp Network — kept for non-Texas regions; Ramp blocks Texas. */
 export function buildRampBuyUrl(address: string, outAsset: "MONAD_MON" | "MONAD_USDC" = "MONAD_MON"): string {
   const params = new URLSearchParams({
     hostAppName: "MON Unlock",
@@ -73,4 +118,17 @@ export function openRampBuy(address: string, outAsset: "MONAD_MON" | "MONAD_USDC
   const url = buildRampBuyUrl(address, outAsset);
   window.open(url, "_blank", "noopener,noreferrer");
   return true;
+}
+
+/**
+ * Prefer Coinbase (works in Texas). Caller should try Privy fundWallet next;
+ * use openRampBuy only as last resort (Ramp blocks Texas).
+ */
+export async function openCardBuy(
+  address: string,
+  asset: BuyAsset,
+  amount?: string
+): Promise<"coinbase" | null> {
+  const opened = await openCoinbaseBuy(address, asset, amount);
+  return opened ? "coinbase" : null;
 }
