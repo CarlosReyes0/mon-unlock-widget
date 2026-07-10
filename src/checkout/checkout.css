@@ -81,6 +81,12 @@ body {
   color: var(--muted);
 }
 
+.checkout-usd {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: var(--muted);
+}
+
 .checkout-copy,
 .checkout-status {
   margin: 0 0 1rem;
