@@ -106,7 +106,11 @@
         <!-- Wallet connection (always visible) -->
         <div style="margin-top: 1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
           <button class="btn btn-secondary" id="connectWalletBtn">Connect wallet</button>
-          <span id="walletStatus" style="font-size:0.875rem; color:#6b7280;"></span>
+          <div id="walletConnected" style="display:none; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+            <span id="walletStatus" style="font-size:0.875rem; color:#6b7280;"></span>
+            <button class="btn btn-secondary" id="switchWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch</button>
+            <button class="btn btn-secondary" id="disconnectWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Disconnect</button>
+          </div>
         </div>
 
         <div style="margin-top: 1rem;">
@@ -196,6 +200,7 @@
 
       // === Wallet persistence (survives reloads) ===
       let connectedWallet = null;
+      let walletListenersBound = false;
 
       function saveWallet(addr) {
         try { localStorage.setItem(WALLET_KEY, addr); } catch {}
@@ -207,41 +212,57 @@
         try { localStorage.removeItem(WALLET_KEY); } catch {}
       }
 
+      function getInjectedProvider() {
+        const eth = window.ethereum;
+        if (!eth) return null;
+        if (Array.isArray(eth.providers) && eth.providers.length) {
+          return eth.providers.find((p) => p.isMetaMask) || eth.providers[0];
+        }
+        return eth;
+      }
+
       function updateWalletUI() {
-        const btn = document.getElementById("connectWalletBtn");
+        const connectBtn = document.getElementById("connectWalletBtn");
+        const connectedEl = document.getElementById("walletConnected");
         const status = document.getElementById("walletStatus");
         const copyBtn = document.getElementById("copyFull");
-        if (!btn) return;
-
-        // Remove any previous listeners to avoid duplicates
-        btn.onclick = null;
+        if (!connectBtn || !connectedEl || !status) return;
 
         if (connectedWallet) {
-          btn.textContent = "Disconnect";
-          btn.onclick = disconnectWallet;
-          status.innerHTML = `Connected: <span class="mono">${connectedWallet.slice(0,6)}…${connectedWallet.slice(-4)}</span>`;
+          connectBtn.style.display = "none";
+          connectedEl.style.display = "flex";
+          status.innerHTML = `Connected: <span class="mono">${connectedWallet.slice(0, 6)}…${connectedWallet.slice(-4)}</span>`;
           copyBtn.textContent = "Copy and register embed block";
         } else {
-          btn.textContent = "Connect wallet";
-          btn.onclick = connectWallet;
+          connectBtn.style.display = "inline-flex";
+          connectBtn.disabled = false;
+          connectBtn.textContent = "Connect wallet";
+          connectedEl.style.display = "none";
           status.textContent = "";
           copyBtn.textContent = "Copy full embed block";
         }
       }
 
       async function connectWallet() {
-        const eth = window.ethereum;
+        const eth = getInjectedProvider();
         if (!eth) {
           alert("MetaMask or another Web3 wallet is required.");
           return;
         }
+        const btn = document.getElementById("connectWalletBtn");
+        btn.disabled = true;
+        btn.textContent = "Connecting…";
         try {
           const accounts = await eth.request({ method: "eth_requestAccounts" });
-          connectedWallet = accounts[0];
+          const address = accounts?.[0];
+          if (!address) throw new Error("No account selected");
+          connectedWallet = address;
           saveWallet(connectedWallet);
           updateWalletUI();
+          bindWalletListeners();
         } catch (e) {
           alert(e.message || "Failed to connect wallet.");
+          updateWalletUI();
         }
       }
 
@@ -251,12 +272,108 @@
         updateWalletUI();
       }
 
-      function restoreWallet() {
+      /**
+       * Force MetaMask's account picker. wallet_requestPermissions alone often
+       * re-approves the active account without opening the switcher — revoke first.
+       */
+      async function switchWallet() {
+        const switchBtn = document.getElementById("switchWalletBtn");
+        const status = document.getElementById("walletStatus");
+        const prevStatus = status.innerHTML;
+        switchBtn.disabled = true;
+
+        try {
+          const eth = getInjectedProvider();
+          if (!eth) throw new Error("No Web3 wallet found.");
+
+          try {
+            await eth.request({
+              method: "wallet_revokePermissions",
+              params: [{ eth_accounts: {} }],
+            });
+          } catch (revokeErr) {
+            console.warn("[generator] wallet_revokePermissions unavailable:", revokeErr);
+            await eth.request({
+              method: "wallet_requestPermissions",
+              params: [{ eth_accounts: {} }],
+            });
+          }
+
+          const accounts = await eth.request({ method: "eth_requestAccounts" });
+          const newAddress = accounts?.[0];
+          if (!newAddress) {
+            disconnectWallet();
+            return;
+          }
+
+          if (newAddress.toLowerCase() === connectedWallet?.toLowerCase()) {
+            status.innerHTML =
+              prevStatus +
+              ` <span style="color:#6b7280">(same account — pick another in MetaMask)</span>`;
+            return;
+          }
+
+          connectedWallet = newAddress;
+          saveWallet(connectedWallet);
+          updateWalletUI();
+        } catch (e) {
+          if (e?.code === 4001 || /reject|denied|cancel/i.test(String(e?.message || e))) {
+            status.innerHTML = prevStatus;
+            return;
+          }
+          console.warn("[generator] switchWallet failed:", e);
+          status.innerHTML =
+            prevStatus +
+            ` <span style="color:#b45309">(${e?.message || "Switch failed"})</span>`;
+        } finally {
+          switchBtn.disabled = false;
+        }
+      }
+
+      function onAccountsChanged(accounts) {
+        const next = accounts?.[0];
+        if (!next) {
+          disconnectWallet();
+          return;
+        }
+        if (next.toLowerCase() === connectedWallet?.toLowerCase()) return;
+        connectedWallet = next;
+        saveWallet(connectedWallet);
+        updateWalletUI();
+      }
+
+      function bindWalletListeners() {
+        if (walletListenersBound) return;
+        const eth = getInjectedProvider();
+        if (!eth?.on) return;
+        eth.on("accountsChanged", onAccountsChanged);
+        walletListenersBound = true;
+      }
+
+      async function restoreWallet() {
         const saved = loadWallet();
-        if (saved) {
+        const eth = getInjectedProvider();
+        if (saved && eth) {
+          try {
+            const accounts = await eth.request({ method: "eth_accounts" });
+            const active = accounts?.[0];
+            if (active) {
+              // Prefer the wallet MetaMask currently has selected for this site.
+              connectedWallet = active;
+              saveWallet(connectedWallet);
+            } else {
+              // Permission gone — clear stale localStorage.
+              connectedWallet = null;
+              clearWallet();
+            }
+          } catch {
+            connectedWallet = saved;
+          }
+        } else if (saved) {
           connectedWallet = saved;
         }
         updateWalletUI();
+        if (connectedWallet) bindWalletListeners();
       }
 
       function getValues() {
@@ -442,6 +559,10 @@ ${teaserEsc}
       }
 
       function wireEvents() {
+        document.getElementById("connectWalletBtn").addEventListener("click", connectWallet);
+        document.getElementById("switchWalletBtn").addEventListener("click", switchWallet);
+        document.getElementById("disconnectWalletBtn").addEventListener("click", disconnectWallet);
+
         fields.forEach((f) => {
           const el = document.getElementById(f);
           if (!el) return;
@@ -467,7 +588,7 @@ ${teaserEsc}
             status.textContent = "Registering article on Monad…";
 
             try {
-              const eth = window.ethereum;
+              const eth = getInjectedProvider();
               if (!eth) throw new Error("Wallet connection lost. Please reconnect.");
 
               const { keccak256, toBytes, createWalletClient, custom, parseEther, createPublicClient, http } = await import("https://esm.sh/viem@2");
@@ -660,7 +781,7 @@ ${teaserEsc}
 
             let embedSig = "";
             try {
-              const eth = window.ethereum;
+              const eth = getInjectedProvider();
               const priceWei = (await import("https://esm.sh/viem@2")).parseEther(v.price || "1");
               status.textContent = "Signing embed…";
               embedSig = await signEmbed(eth, connectedWallet, v.articleId, priceWei);
@@ -797,11 +918,10 @@ ${teaserEsc}
         }, 0);
       }
 
-      function init() {
+      async function init() {
         loadDraft();
-        restoreWallet();
         wireEvents();
-        // Ensure button handler is attached even if restoreWallet had no saved wallet
+        await restoreWallet();
         updateWalletUI();
       }
 
