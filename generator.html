@@ -10,20 +10,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
     <style>
-      body { font-family: "DM Sans", system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; color: #111827; background: #fff; }
+      body { font-family: "DM Sans", system-ui, -apple-system, sans-serif; max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; color: #111827; background: #fff; }
       .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
       .badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 9999px; }
       h1 { font-size: 2rem; font-weight: 800; margin: 0; }
-      .grid { display: grid; grid-template-columns: minmax(380px, 420px) 1fr; gap: 2rem; align-items: start; }
-      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-      .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+      .grid { display: grid; grid-template-columns: minmax(520px, 1.05fr) minmax(420px, 0.95fr); gap: 2.25rem; align-items: start; }
+      @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+      .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.75rem 1.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
       label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #374151; }
-      input, textarea, select { width: 100%; padding: 0.75rem 1rem; font-size: 1rem; border: 1px solid #d1d5db; border-radius: 10px; font-family: inherit; background: #fff; color: #111827; }
+      input, textarea, select { width: 100%; padding: 0.8rem 1rem; font-size: 1rem; border: 1px solid #d1d5db; border-radius: 10px; font-family: inherit; background: #fff; color: #111827; box-sizing: border-box; }
       input:focus, textarea:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1); }
-      textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; }
-      .row { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; }
-      .hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem; }
-      .section-title { font-size: 1.125rem; font-weight: 700; margin: 0 0 1rem; }
+      textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; line-height: 1.55; }
+      textarea#teaser { min-height: 160px; }
+      textarea#body { min-height: 280px; }
+      .field { margin-bottom: 1.25rem; }
+      .field:last-child { margin-bottom: 0; }
+      .row { display: grid; grid-template-columns: 2fr 1fr; gap: 1.15rem; }
+      .hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.35rem; line-height: 1.45; }
+      .section-title { font-size: 1.125rem; font-weight: 700; margin: 0 0 1.25rem; }
       .preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
       .preview-pane { min-height: 420px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 8px; padding: 2rem; border: 1px solid #e5e7eb; }
       .preview-pane > * { width: 100%; max-width: 42rem; }
@@ -62,12 +66,12 @@
         <div class="card">
           <h2 class="section-title">Article details</h2>
 
-          <div style="margin-bottom: 1rem;">
+          <div class="field">
             <label for="title">Title</label>
             <input id="title" type="text" placeholder="Why Every Founder Should Own Their Reader Relationship" />
           </div>
 
-          <div class="row" style="margin-bottom: 1rem;">
+          <div class="row field">
             <div>
               <label for="author">Author</label>
               <input id="author" type="text" placeholder="Your Name" />
@@ -78,19 +82,19 @@
             </div>
           </div>
 
-          <div style="margin-bottom: 1rem;">
+          <div class="field">
             <label for="articleId">Article ID (slug)</label>
             <input id="articleId" type="text" placeholder="founder-manifesto" />
             <div class="hint">Used to derive a unique on-chain ID. Keep it short and stable.</div>
           </div>
 
-          <div style="margin-bottom: 1rem;">
+          <div class="field">
             <label for="teaser">Teaser (free preview)</label>
             <textarea id="teaser" placeholder="Write a short preview that entices readers to unlock..."></textarea>
             <div class="hint">Plain text or simple HTML. Shown to everyone.</div>
           </div>
 
-          <div>
+          <div class="field">
             <label for="body">Body (full article)</label>
             <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
             <div class="hint">Plain text or HTML. Use a <strong>direct</strong> image URL (e.g. ending in .jpg or a CDN like picsum) for &lt;img&gt;; use YouTube embed links or direct .mp4 for video.</div>
