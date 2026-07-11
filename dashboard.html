@@ -156,6 +156,7 @@
 
       let currentWallet = null;
       let myArticles = [];
+      let suppressAccountsChanged = false;
       const INDEXER_CONTRACT = "0x038446b1f736e254cc0e256b20d74823c41eeadb";
 
       function formatArticleIdForDisplay(slug, hash) {
@@ -534,67 +535,119 @@ ${teaser}
         document.getElementById("articlesEmpty").style.display = "block";
       }
 
+      function accountsFromPermissions(permissions) {
+        if (!Array.isArray(permissions)) return [];
+        for (const perm of permissions) {
+          if (perm?.parentCapability !== "eth_accounts") continue;
+          const caveat = (perm.caveats || []).find(
+            (c) => c?.type === "restrictReturnedAccounts" && Array.isArray(c.value)
+          );
+          if (caveat?.value?.length) return caveat.value.map(String);
+        }
+        return [];
+      }
+
+      function pickSwitchedAddress(candidates, previous) {
+        const list = (candidates || []).filter(Boolean);
+        if (!list.length) return null;
+        if (!previous) return list[0];
+        const different = list.find((a) => a.toLowerCase() !== previous.toLowerCase());
+        return different || list[0];
+      }
+
       /**
-       * Force MetaMask's account picker. wallet_requestPermissions alone often
-       * re-approves the active account without opening the switcher — revoke first.
+       * Force MetaMask's account picker. Ignore accountsChanged during the flow —
+       * revoke emits [] and would clear state, then a stale event can snap back to
+       * the previous active account.
        */
       async function switchWallet() {
         const switchBtn = document.getElementById("switchBtn");
         const status = document.getElementById("walletStatus");
         const prevStatus = status.innerHTML;
+        const previous = currentWallet;
         switchBtn.disabled = true;
+        suppressAccountsChanged = true;
 
         try {
           const eth = getInjectedProvider();
           if (!eth) throw new Error("No Web3 wallet found.");
 
-          // 1) Revoke site permission so the next request shows the account picker.
           try {
             await eth.request({
               method: "wallet_revokePermissions",
               params: [{ eth_accounts: {} }],
             });
           } catch (revokeErr) {
-            // Older wallets may not support revoke — fall back to requestPermissions.
             console.warn("[dashboard] wallet_revokePermissions unavailable:", revokeErr);
-            await eth.request({
+          }
+
+          // Prefer accounts from the permission response (what the user checked).
+          let permitted = [];
+          try {
+            const permissions = await eth.request({
               method: "wallet_requestPermissions",
               params: [{ eth_accounts: {} }],
             });
+            permitted = accountsFromPermissions(permissions);
+          } catch (permErr) {
+            // User cancelled, or wallet only supports eth_requestAccounts.
+            if (permErr?.code === 4001) throw permErr;
+            console.warn("[dashboard] wallet_requestPermissions failed:", permErr);
           }
 
-          // 2) Request accounts again (opens picker after revoke).
-          const accounts = await eth.request({ method: "eth_requestAccounts" });
-          const newAddress = accounts?.[0];
+          const requested = await eth.request({ method: "eth_requestAccounts" });
+          const active = await eth.request({ method: "eth_accounts" });
+
+          // Prefer a newly permitted account that differs from the previous one.
+          // Fall back to the wallet's active account when that itself changed.
+          const newAddress =
+            pickSwitchedAddress(permitted, previous) ||
+            pickSwitchedAddress(requested, previous) ||
+            pickSwitchedAddress(active, previous);
+
           if (!newAddress) {
             disconnectWallet();
             return;
           }
 
-          if (newAddress.toLowerCase() === currentWallet?.toLowerCase()) {
+          if (previous && newAddress.toLowerCase() === previous.toLowerCase()) {
+            await applyConnectedWallet(newAddress);
             status.innerHTML =
-              prevStatus +
-              ` <span style="color:#6b7280">(same account — pick another in MetaMask)</span>`;
+              document.getElementById("walletStatus").innerHTML +
+              ` <span style="color:#6b7280">(same account — in MetaMask, click the account you want, then Switch again)</span>`;
             return;
           }
 
           await applyConnectedWallet(newAddress);
         } catch (e) {
-          // User cancelled — keep current connection.
           if (e?.code === 4001 || /reject|denied|cancel/i.test(String(e?.message || e))) {
-            status.innerHTML = prevStatus;
+            // Restore previous selection if revoke cleared the provider mid-flow.
+            if (previous && !currentWallet) {
+              try {
+                await applyConnectedWallet(previous);
+              } catch {
+                status.innerHTML = prevStatus;
+              }
+            } else {
+              status.innerHTML = prevStatus;
+            }
             return;
           }
           console.warn("[dashboard] switchWallet failed:", e);
           status.innerHTML =
-            prevStatus +
+            (currentWallet ? document.getElementById("walletStatus").innerHTML : prevStatus) +
             ` <span style="color:#b45309">(${e?.message || "Switch failed"})</span>`;
         } finally {
           switchBtn.disabled = false;
+          // Ignore stale accountsChanged from revoke/reconnect for a beat.
+          setTimeout(() => {
+            suppressAccountsChanged = false;
+          }, 750);
         }
       }
 
       function onAccountsChanged(accounts) {
+        if (suppressAccountsChanged) return;
         const next = accounts?.[0];
         if (!next) {
           disconnectWallet();

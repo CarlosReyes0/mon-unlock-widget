@@ -201,6 +201,7 @@
       // === Wallet persistence (survives reloads) ===
       let connectedWallet = null;
       let walletListenersBound = false;
+      let suppressAccountsChanged = false;
 
       function saveWallet(addr) {
         try { localStorage.setItem(WALLET_KEY, addr); } catch {}
@@ -219,6 +220,26 @@
           return eth.providers.find((p) => p.isMetaMask) || eth.providers[0];
         }
         return eth;
+      }
+
+      function accountsFromPermissions(permissions) {
+        if (!Array.isArray(permissions)) return [];
+        for (const perm of permissions) {
+          if (perm?.parentCapability !== "eth_accounts") continue;
+          const caveat = (perm.caveats || []).find(
+            (c) => c?.type === "restrictReturnedAccounts" && Array.isArray(c.value)
+          );
+          if (caveat?.value?.length) return caveat.value.map(String);
+        }
+        return [];
+      }
+
+      function pickSwitchedAddress(candidates, previous) {
+        const list = (candidates || []).filter(Boolean);
+        if (!list.length) return null;
+        if (!previous) return list[0];
+        const different = list.find((a) => a.toLowerCase() !== previous.toLowerCase());
+        return different || list[0];
       }
 
       function updateWalletUI() {
@@ -273,14 +294,16 @@
       }
 
       /**
-       * Force MetaMask's account picker. wallet_requestPermissions alone often
-       * re-approves the active account without opening the switcher — revoke first.
+       * Force MetaMask's account picker. Ignore accountsChanged during the flow —
+       * revoke emits [] and would clear state, then a stale event can snap back.
        */
       async function switchWallet() {
         const switchBtn = document.getElementById("switchWalletBtn");
         const status = document.getElementById("walletStatus");
         const prevStatus = status.innerHTML;
+        const previous = connectedWallet;
         switchBtn.disabled = true;
+        suppressAccountsChanged = true;
 
         try {
           const eth = getInjectedProvider();
@@ -293,44 +316,68 @@
             });
           } catch (revokeErr) {
             console.warn("[generator] wallet_revokePermissions unavailable:", revokeErr);
-            await eth.request({
+          }
+
+          let permitted = [];
+          try {
+            const permissions = await eth.request({
               method: "wallet_requestPermissions",
               params: [{ eth_accounts: {} }],
             });
+            permitted = accountsFromPermissions(permissions);
+          } catch (permErr) {
+            if (permErr?.code === 4001) throw permErr;
+            console.warn("[generator] wallet_requestPermissions failed:", permErr);
           }
 
-          const accounts = await eth.request({ method: "eth_requestAccounts" });
-          const newAddress = accounts?.[0];
+          const requested = await eth.request({ method: "eth_requestAccounts" });
+          const active = await eth.request({ method: "eth_accounts" });
+
+          const newAddress =
+            pickSwitchedAddress(permitted, previous) ||
+            pickSwitchedAddress(requested, previous) ||
+            pickSwitchedAddress(active, previous);
+
           if (!newAddress) {
             disconnectWallet();
-            return;
-          }
-
-          if (newAddress.toLowerCase() === connectedWallet?.toLowerCase()) {
-            status.innerHTML =
-              prevStatus +
-              ` <span style="color:#6b7280">(same account — pick another in MetaMask)</span>`;
             return;
           }
 
           connectedWallet = newAddress;
           saveWallet(connectedWallet);
           updateWalletUI();
+          bindWalletListeners();
+
+          if (previous && newAddress.toLowerCase() === previous.toLowerCase()) {
+            status.innerHTML =
+              status.innerHTML +
+              ` <span style="color:#6b7280">(same account — in MetaMask, click the account you want, then Switch again)</span>`;
+          }
         } catch (e) {
           if (e?.code === 4001 || /reject|denied|cancel/i.test(String(e?.message || e))) {
-            status.innerHTML = prevStatus;
+            if (previous && !connectedWallet) {
+              connectedWallet = previous;
+              saveWallet(connectedWallet);
+              updateWalletUI();
+            } else {
+              status.innerHTML = prevStatus;
+            }
             return;
           }
           console.warn("[generator] switchWallet failed:", e);
           status.innerHTML =
-            prevStatus +
+            (connectedWallet ? status.innerHTML : prevStatus) +
             ` <span style="color:#b45309">(${e?.message || "Switch failed"})</span>`;
         } finally {
           switchBtn.disabled = false;
+          setTimeout(() => {
+            suppressAccountsChanged = false;
+          }, 750);
         }
       }
 
       function onAccountsChanged(accounts) {
+        if (suppressAccountsChanged) return;
         const next = accounts?.[0];
         if (!next) {
           disconnectWallet();
