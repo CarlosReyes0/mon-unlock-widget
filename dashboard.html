@@ -460,6 +460,41 @@ ${teaser}
         document.getElementById("totalRevenue").textContent = formatMon(totalRevenue) + " MON";
       }
 
+      function getInjectedProvider() {
+        const eth = window.ethereum;
+        if (!eth) return null;
+        // Prefer MetaMask when multiple wallets inject (Coinbase, Rabby, etc.).
+        if (Array.isArray(eth.providers) && eth.providers.length) {
+          return eth.providers.find((p) => p.isMetaMask) || eth.providers[0];
+        }
+        return eth;
+      }
+
+      async function applyConnectedWallet(address, { reload = true } = {}) {
+        const eth = getInjectedProvider();
+        if (!eth || !address) return;
+
+        currentWallet = address;
+
+        const chainIdHex = await eth.request({ method: "eth_chainId" });
+        const chainId = parseInt(chainIdHex, 16);
+        const net = NETWORKS[chainId] || NETWORKS[143];
+        window.__currentNetwork = net;
+
+        const status = document.getElementById("walletStatus");
+        status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0, 6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
+
+        document.getElementById("connectBtn").style.display = "none";
+        document.getElementById("connectBtn").disabled = false;
+        document.getElementById("connectBtn").textContent = "Connect wallet";
+        document.getElementById("walletConnected").style.display = "flex";
+
+        myArticles = [];
+        renderArticles();
+        updateStats();
+        if (reload) loadFromSupabase(currentWallet);
+      }
+
       async function connectWallet() {
         const status = document.getElementById("walletStatus");
         const btn = document.getElementById("connectBtn");
@@ -467,33 +502,14 @@ ${teaser}
         btn.textContent = "Connecting…";
 
         try {
-          const eth = window.ethereum;
+          const eth = getInjectedProvider();
           if (!eth) throw new Error("No Web3 wallet found. Please install MetaMask or another wallet.");
 
           const accounts = await eth.request({ method: "eth_requestAccounts" });
           const address = accounts?.[0];
           if (!address) throw new Error("No account selected");
 
-          currentWallet = address;
-
-          // Detect chain
-          const chainIdHex = await eth.request({ method: "eth_chainId" });
-          const chainId = parseInt(chainIdHex, 16);
-          const net = NETWORKS[chainId] || NETWORKS[143];
-
-          window.__currentNetwork = net; // expose for register flow
-
-          status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
-
-          // Toggle UI
-          document.getElementById("connectBtn").style.display = "none";
-          document.getElementById("walletConnected").style.display = "flex";
-
-          renderArticles();
-          updateStats();
-
-          // Load data from Supabase (populated by the Edge Function Indexer)
-          loadFromSupabase(currentWallet);
+          await applyConnectedWallet(address);
         } catch (e) {
           status.textContent = e.message || "Connection failed";
           btn.disabled = false;
@@ -505,54 +521,93 @@ ${teaser}
       function disconnectWallet() {
         currentWallet = null;
         window.__currentNetwork = null;
+        myArticles = [];
 
         document.getElementById("connectBtn").style.display = "inline-flex";
+        document.getElementById("connectBtn").disabled = false;
+        document.getElementById("connectBtn").textContent = "Connect wallet";
         document.getElementById("walletConnected").style.display = "none";
-
-        // Clear status text
         document.getElementById("walletStatus").textContent = "";
+
+        renderArticles();
+        updateStats();
+        document.getElementById("articlesEmpty").style.display = "block";
       }
 
+      /**
+       * Force MetaMask's account picker. wallet_requestPermissions alone often
+       * re-approves the active account without opening the switcher — revoke first.
+       */
       async function switchWallet() {
+        const switchBtn = document.getElementById("switchBtn");
+        const status = document.getElementById("walletStatus");
+        const prevStatus = status.innerHTML;
+        switchBtn.disabled = true;
+
         try {
-          const eth = window.ethereum;
-          if (!eth) return;
+          const eth = getInjectedProvider();
+          if (!eth) throw new Error("No Web3 wallet found.");
 
-          // Use wallet_requestPermissions to force the account picker
-          await eth.request({
-            method: "wallet_requestPermissions",
-            params: [{ eth_accounts: {} }],
-          });
+          // 1) Revoke site permission so the next request shows the account picker.
+          try {
+            await eth.request({
+              method: "wallet_revokePermissions",
+              params: [{ eth_accounts: {} }],
+            });
+          } catch (revokeErr) {
+            // Older wallets may not support revoke — fall back to requestPermissions.
+            console.warn("[dashboard] wallet_revokePermissions unavailable:", revokeErr);
+            await eth.request({
+              method: "wallet_requestPermissions",
+              params: [{ eth_accounts: {} }],
+            });
+          }
 
-          // After permission grant, get the selected account
-          const accounts = await eth.request({ method: "eth_accounts" });
+          // 2) Request accounts again (opens picker after revoke).
+          const accounts = await eth.request({ method: "eth_requestAccounts" });
           const newAddress = accounts?.[0];
-
-          if (!newAddress) return;
-
-          // If user picked the same account, do nothing
-          if (newAddress.toLowerCase() === currentWallet?.toLowerCase()) {
+          if (!newAddress) {
+            disconnectWallet();
             return;
           }
 
-          currentWallet = newAddress;
+          if (newAddress.toLowerCase() === currentWallet?.toLowerCase()) {
+            status.innerHTML =
+              prevStatus +
+              ` <span style="color:#6b7280">(same account — pick another in MetaMask)</span>`;
+            return;
+          }
 
-          // Re-detect chain
-          const chainIdHex = await eth.request({ method: "eth_chainId" });
-          const chainId = parseInt(chainIdHex, 16);
-          const net = NETWORKS[chainId] || NETWORKS[143];
-          window.__currentNetwork = net;
-
-          document.getElementById("walletStatus").innerHTML = `Connected: <span class="mono">${currentWallet.slice(0,6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
-
-          renderArticles();
-          updateStats();
-
-          // Load data from Supabase
-          loadFromSupabase(currentWallet);
+          await applyConnectedWallet(newAddress);
         } catch (e) {
-          // User cancelled the permission prompt — do nothing
+          // User cancelled — keep current connection.
+          if (e?.code === 4001 || /reject|denied|cancel/i.test(String(e?.message || e))) {
+            status.innerHTML = prevStatus;
+            return;
+          }
+          console.warn("[dashboard] switchWallet failed:", e);
+          status.innerHTML =
+            prevStatus +
+            ` <span style="color:#b45309">(${e?.message || "Switch failed"})</span>`;
+        } finally {
+          switchBtn.disabled = false;
         }
+      }
+
+      function onAccountsChanged(accounts) {
+        const next = accounts?.[0];
+        if (!next) {
+          disconnectWallet();
+          return;
+        }
+        if (next.toLowerCase() === currentWallet?.toLowerCase()) return;
+        applyConnectedWallet(next);
+      }
+
+      function onChainChanged() {
+        // MetaMask recommends reload on chain change; refresh label + data instead.
+        if (!currentWallet) return;
+        applyConnectedWallet(currentWallet);
       }
 
       function clearLegacyLocalStorage() {
@@ -573,6 +628,13 @@ ${teaser}
         document.getElementById("connectBtn").addEventListener("click", connectWallet);
         document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
         document.getElementById("switchBtn").addEventListener("click", switchWallet);
+
+        // Keep dashboard in sync when the user switches account/network in the extension.
+        const eth = getInjectedProvider();
+        if (eth?.on) {
+          eth.on("accountsChanged", onAccountsChanged);
+          eth.on("chainChanged", onChainChanged);
+        }
 
         // Refresh button for Supabase data
         const refreshBtn = document.getElementById("refreshOnchainBtn");
