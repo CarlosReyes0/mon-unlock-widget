@@ -16,7 +16,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 export const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
 export const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-export const WIDGET_VERSION = "20240713";
+export const WIDGET_VERSION = "20240714";
 export const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
 export const REGISTER_ARTICLE_URL =
   "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";

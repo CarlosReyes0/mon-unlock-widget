@@ -88,4 +88,15 @@ describe("sanitizeRichHtml", () => {
     const outShare = sanitizeRichHtml('<iframe src="https://youtu.be/abc123xyz"></iframe>');
     assert.ok(outShare.includes("youtube.com/embed/abc123xyz"));
   });
+
+  it("preserves blank-line paragraph spacing in mixed HTML + plain text", () => {
+    const out = sanitizeRichHtml(
+      '<img src="https://example.com/a.jpg" alt="x">\n\nFirst paragraph.\n\nSecond paragraph.'
+    );
+    assert.ok(out.includes("First paragraph."), "keeps text");
+    assert.ok(out.includes("<br"), "converts newlines to br");
+    // Two blank-line gaps → multiple <br> between the sentences
+    const between = out.slice(out.indexOf("First paragraph."), out.indexOf("Second paragraph."));
+    assert.ok((between.match(/<br\s*\/?>/gi) || []).length >= 2, "paragraph gap becomes multiple br");
+  });
 });

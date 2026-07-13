@@ -203,6 +203,40 @@ function sanitizeElement(el: Element) {
   }
 }
 
+/**
+ * Writers often mix HTML media tags with plain paragraphs that use blank lines.
+ * HTML collapses those newlines — turn them into <br> so spacing matches the textarea.
+ */
+function preservePlainTextNewlines(root: Element, doc: Document) {
+  const skipParents = new Set(["pre", "code", "script", "style", "textarea"]);
+  const textNodes: Text[] = [];
+
+  const visit = (node: Node) => {
+    if (node.nodeType === 3 /* TEXT_NODE */) {
+      textNodes.push(node as Text);
+      return;
+    }
+    if (node.nodeType !== 1 /* ELEMENT_NODE */) return;
+    const tag = (node as Element).tagName.toLowerCase();
+    if (skipParents.has(tag)) return;
+    for (const child of Array.from(node.childNodes)) visit(child);
+  };
+  visit(root);
+
+  for (const textNode of textNodes) {
+    const value = textNode.nodeValue;
+    if (!value || !value.includes("\n")) continue;
+
+    const parts = value.split("\n");
+    const frag = doc.createDocumentFragment();
+    parts.forEach((part, i) => {
+      if (part) frag.appendChild(doc.createTextNode(part));
+      if (i < parts.length - 1) frag.appendChild(doc.createElement("br"));
+    });
+    textNode.parentNode?.replaceChild(frag, textNode);
+  }
+}
+
 export function sanitizeRichHtml(rawHtml: string): string {
   if (!rawHtml.trim()) return "";
   if (typeof DOMParser === "undefined") return rawHtml;
@@ -219,6 +253,8 @@ export function sanitizeRichHtml(rawHtml: string): string {
   for (const script of Array.from(root.querySelectorAll("script,style,link,meta,object,embed"))) {
     script.remove();
   }
+
+  preservePlainTextNewlines(root, doc);
 
   return root.innerHTML;
 }

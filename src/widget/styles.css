@@ -148,6 +148,14 @@ mon-unlock {
   font-size: 1.0625rem;
 }
 
+.mon-body p {
+  margin: 0 0 1em;
+}
+
+.mon-body p:last-child {
+  margin-bottom: 0;
+}
+
 .mon-body img,
 .mon-body video {
   display: block;

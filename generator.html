@@ -6,7 +6,7 @@
     <title>Embed Generator — MON Unlock Widget</title>
     <!-- Use local build for Live Preview so style changes are visible immediately -->
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
-    <script type="module" src="/dist/mon-unlock.js?v=20240713"></script>
+    <script type="module" src="/dist/mon-unlock.js?v=20240714"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
     <style>
@@ -97,13 +97,25 @@
           <div class="field">
             <label for="body">Body (full article)</label>
             <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
-            <div class="hint">Plain text or HTML. Use a <strong>direct</strong> image URL (e.g. ending in .jpg or a CDN like picsum) for &lt;img&gt;; for YouTube use an embed URL (<code>youtube.com/embed/…</code>) or a normal watch link — watch/share links are auto-converted.</div>
+            <div class="hint" style="margin-top:0.5rem;">
+              <strong>Photos</strong> — use a <em>direct</em> image file URL in <code>&lt;img src&gt;</code>:<br>
+              ✅ <code>https://i.postimg.cc/….jpg</code> &nbsp; ✅ <code>https://picsum.photos/800/500</code><br>
+              ❌ gallery pages like <code>postimg.cc/…</code> or Google Images result links
+            </div>
+            <div class="hint" style="margin-top:0.5rem;">
+              <strong>YouTube</strong> — paste into <code>&lt;iframe src&gt;</code> (or use the button):<br>
+              ✅ <code>https://www.youtube.com/embed/VIDEO_ID</code> &nbsp; ✅ watch/share links (auto-converted)<br>
+              ❌ don’t put a YouTube link in <code>&lt;video src&gt;</code>
+            </div>
+            <div class="hint" style="margin-top:0.5rem;">
+              <strong>MP4 / WebM</strong> — direct file URL in <code>&lt;video src&gt;</code> (e.g. ends in <code>.mp4</code>).
+            </div>
             <div class="btn-group" style="margin-top:0.5rem;">
               <button class="btn btn-secondary" id="insertImageTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert image template</button>
               <button class="btn btn-secondary" id="insertYoutubeTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert YouTube template</button>
               <button class="btn btn-secondary" id="insertVideoTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert MP4 template</button>
             </div>
-            <div class="hint" style="margin-top:0.35rem;">Use trusted hosts only. Iframe embeds are allowlisted in the widget (YouTube, Vimeo, Loom).</div>
+            <div class="hint" style="margin-top:0.35rem;">Blank lines in plain text are kept as paragraph spacing. Iframes allowlisted: YouTube, Vimeo, Loom.</div>
           </div>
         </div>
 
@@ -152,7 +164,7 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-      const WIDGET_VERSION = "20240713"; // bump this when widget behavior changes
+      const WIDGET_VERSION = "20240714"; // bump this when widget behavior changes
 
       function looksLikeHtml(text) {
         return /<\s*(p|br|div|span|h[1-6]|ul|ol|li|a|strong|em|blockquote|pre|code|table|section|article|img|video|audio|picture|figure|source|iframe)\b/i.test(text);
