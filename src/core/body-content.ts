@@ -166,8 +166,28 @@ function sanitizeElement(el: Element) {
       el.remove();
       return;
     }
+
+    // Writers often paste youtube.com/watch?... into iframe src. That page refuses
+    // to render in an iframe — rewrite to /embed/VIDEO_ID when possible.
+    const youtubeEmbed = youtubeUrlToEmbed(src);
+    if (youtubeEmbed) {
+      el.setAttribute("src", youtubeEmbed);
+      if (!el.hasAttribute("allow")) {
+        el.setAttribute(
+          "allow",
+          "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        );
+      }
+      if (!el.hasAttribute("allowfullscreen")) {
+        el.setAttribute("allowfullscreen", "");
+      }
+      if (!el.hasAttribute("loading")) {
+        el.setAttribute("loading", "lazy");
+      }
+    }
+
     try {
-      const url = new URL(src);
+      const url = new URL(el.getAttribute("src") || src);
       if (!ALLOWED_IFRAME_HOSTS.has(url.hostname.toLowerCase())) {
         el.remove();
         return;

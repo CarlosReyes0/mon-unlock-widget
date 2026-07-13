@@ -71,4 +71,21 @@ describe("sanitizeRichHtml", () => {
     const outYoutu = sanitizeRichHtml('<video src="https://youtu.be/abc123" controls></video>');
     assert.ok(outYoutu.includes("youtube.com/embed/abc123"));
   });
+
+  it("rewrites YouTube watch/shorts URLs inside <iframe src> to /embed/", () => {
+    const outWatch = sanitizeRichHtml(
+      '<iframe src="https://www.youtube.com/watch?v=yUSvGpmOw10" allowfullscreen></iframe>'
+    );
+    assert.ok(outWatch.includes("<iframe"), "iframe should remain");
+    assert.ok(outWatch.includes("youtube.com/embed/yUSvGpmOw10"), "should rewrite to embed URL");
+    assert.equal(outWatch.includes("/watch?v="), false, "watch URL should be gone");
+
+    const outShorts = sanitizeRichHtml(
+      '<iframe src="https://www.youtube.com/shorts/QBPmWE5JM3w"></iframe>'
+    );
+    assert.ok(outShorts.includes("youtube.com/embed/QBPmWE5JM3w"));
+
+    const outShare = sanitizeRichHtml('<iframe src="https://youtu.be/abc123xyz"></iframe>');
+    assert.ok(outShare.includes("youtube.com/embed/abc123xyz"));
+  });
 });

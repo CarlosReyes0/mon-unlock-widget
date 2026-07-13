@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Writer Dashboard — MON Unlock</title>
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
-    <script type="module" src="/dist/mon-unlock.js?v=20240706"></script>
+    <script type="module" src="/dist/mon-unlock.js?v=20240713"></script>
     <!-- Supabase Client for reading dashboard data -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -419,7 +419,7 @@
           throw new Error("This row is hash-only. Re-save article metadata in the generator to set a slug.");
         }
         const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
-        const WIDGET_VERSION = "20240706"; // bump when widget behavior changes
+        const WIDGET_VERSION = "20240713"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
           : (article.title || shortHash(article.articleId) || 'Article');

@@ -6,7 +6,7 @@
     <title>Embed Generator — MON Unlock Widget</title>
     <!-- Use local build for Live Preview so style changes are visible immediately -->
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
-    <script type="module" src="/dist/mon-unlock.js?v=20240706"></script>
+    <script type="module" src="/dist/mon-unlock.js?v=20240713"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet" />
     <style>
@@ -97,7 +97,7 @@
           <div class="field">
             <label for="body">Body (full article)</label>
             <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
-            <div class="hint">Plain text or HTML. Use a <strong>direct</strong> image URL (e.g. ending in .jpg or a CDN like picsum) for &lt;img&gt;; use YouTube embed links or direct .mp4 for video.</div>
+            <div class="hint">Plain text or HTML. Use a <strong>direct</strong> image URL (e.g. ending in .jpg or a CDN like picsum) for &lt;img&gt;; for YouTube use an embed URL (<code>youtube.com/embed/…</code>) or a normal watch link — watch/share links are auto-converted.</div>
             <div class="btn-group" style="margin-top:0.5rem;">
               <button class="btn btn-secondary" id="insertImageTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert image template</button>
               <button class="btn btn-secondary" id="insertYoutubeTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert YouTube template</button>
@@ -152,7 +152,7 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
-      const WIDGET_VERSION = "20240706"; // bump this when widget behavior changes
+      const WIDGET_VERSION = "20240713"; // bump this when widget behavior changes
 
       function looksLikeHtml(text) {
         return /<\s*(p|br|div|span|h[1-6]|ul|ol|li|a|strong|em|blockquote|pre|code|table|section|article|img|video|audio|picture|figure|source|iframe)\b/i.test(text);
