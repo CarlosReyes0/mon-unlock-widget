@@ -97,7 +97,9 @@ export class MonUnlock extends LitElement {
     }
     this.persistFiatSession(returned.fiatSession);
     clearFiatReturnParams();
-    // verifyFiatAccess runs via restoreFiatSession / explicit call below
+    // Do not rely only on localStorage restore — Safari private mode / quota
+    // can fail writes while this.fiatSession is already set in memory.
+    void this.verifyFiatAccess();
   }
 
   private fiatStorageKey(articleId: string) {
@@ -109,8 +111,10 @@ export class MonUnlock extends LitElement {
     try {
       const token = localStorage.getItem(this.fiatStorageKey(this.articleId));
       if (token) {
+        const alreadyLoaded = this.fiatSession === token;
         this.fiatSession = token;
-        void this.verifyFiatAccess();
+        // consumeFiatReturnParams may have already started verify for this token.
+        if (!alreadyLoaded) void this.verifyFiatAccess();
       }
     } catch {
       /* ignore */
@@ -758,7 +762,12 @@ export class MonUnlock extends LitElement {
                 <div class="mb-6 whitespace-pre-wrap text-base" style="color:#000">${a.teaser}</div>
                 ${this.renderBody(this.fetchedBody || a.body)}
                 <p class="mt-6 text-xs text-black">
-                  Unlocked · ${truncateAddress(this.wallet.address!)}
+                  Unlocked ·
+                  ${this.wallet.address
+                    ? truncateAddress(this.wallet.address)
+                    : this.fiatSession
+                      ? "Card / Apple Pay"
+                      : "Paid"}
                   ${this.txHash
                     ? html`· <a href="https://monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
                     : nothing}
