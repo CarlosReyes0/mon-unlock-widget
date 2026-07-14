@@ -4,6 +4,10 @@ export const CHECKOUT_MESSAGE_SOURCE = "mon-unlock-checkout" as const;
 
 export const DEFAULT_CHECKOUT_ORIGIN = "https://mon-unlock-widget-production.up.railway.app";
 
+/** Query params written onto the article URL after a successful fiat pay (mobile / same-tab). */
+export const FIAT_SESSION_PARAM = "mon_fiat_session";
+export const FIAT_ARTICLE_PARAM = "mon_article_id";
+
 export type CheckoutUnlockedMessage = {
   source: typeof CHECKOUT_MESSAGE_SOURCE;
   type: "mon:unlocked";
@@ -32,6 +36,8 @@ export type CheckoutParams = {
   contract: string;
   embedSig: string;
   parentOrigin: string;
+  /** Full article page URL — used to send mobile / same-tab users back after pay. */
+  returnUrl?: string;
 };
 
 export function getCheckoutBaseUrl(): string {
@@ -61,7 +67,57 @@ export function buildCheckoutUrl(params: CheckoutParams, baseUrl = getCheckoutBa
   url.searchParams.set("contract", params.contract);
   if (params.embedSig) url.searchParams.set("embedSig", params.embedSig);
   url.searchParams.set("parentOrigin", params.parentOrigin);
+  if (params.returnUrl) {
+    try {
+      const ret = new URL(params.returnUrl);
+      if (ret.protocol === "http:" || ret.protocol === "https:") {
+        url.searchParams.set("returnUrl", ret.toString());
+      }
+    } catch {
+      /* ignore invalid returnUrl */
+    }
+  }
   return url.toString();
+}
+
+/** Article URL + fiat session so the widget can unlock after a same-tab mobile checkout. */
+export function buildArticleReturnUrl(
+  returnUrl: string,
+  params: { articleId: string; fiatSession: string }
+): string {
+  const url = new URL(returnUrl);
+  url.searchParams.set(FIAT_SESSION_PARAM, params.fiatSession);
+  url.searchParams.set(FIAT_ARTICLE_PARAM, params.articleId);
+  return url.toString();
+}
+
+export function readFiatReturnFromLocation(
+  search = typeof window !== "undefined" ? window.location.search : ""
+): {
+  articleId: string;
+  fiatSession: string;
+} | null {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const fiatSession = params.get(FIAT_SESSION_PARAM)?.trim() ?? "";
+  const articleId = params.get(FIAT_ARTICLE_PARAM)?.trim() ?? "";
+  if (!fiatSession || !articleId) return null;
+  return { articleId, fiatSession };
+}
+
+/** Remove fiat return params from the address bar without reloading. */
+export function clearFiatReturnParams(): void {
+  if (typeof window === "undefined" || !window.history?.replaceState) return;
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(FIAT_SESSION_PARAM) && !url.searchParams.has(FIAT_ARTICLE_PARAM)) {
+      return;
+    }
+    url.searchParams.delete(FIAT_SESSION_PARAM);
+    url.searchParams.delete(FIAT_ARTICLE_PARAM);
+    window.history.replaceState({}, "", url.toString());
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isCheckoutMessage(data: unknown): data is CheckoutMessage {

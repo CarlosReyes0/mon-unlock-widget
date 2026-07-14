@@ -63,6 +63,15 @@ async function confirmUnlock(paymentIntentId: string): Promise<string> {
   return data.sessionToken;
 }
 
+/** Stripe may bounce back to unlock.html with payment_intent + redirect_status. */
+function readStripeRedirectIntent(): { paymentIntentId: string; status: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const paymentIntentId = params.get("payment_intent")?.trim() ?? "";
+  const status = params.get("redirect_status")?.trim() ?? "";
+  if (!paymentIntentId.startsWith("pi_")) return null;
+  return { paymentIntentId, status };
+}
+
 type InnerProps = {
   paymentIntentId: string;
   onUnlocked: (sessionToken: string) => void;
@@ -80,6 +89,7 @@ function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: Inner
     onBusy(true);
     onError("");
     try {
+      // Keep full unlock query (incl. returnUrl) so a redirect can finish unlock.
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         redirect: "if_required",
@@ -109,7 +119,6 @@ function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: Inner
     <div className="checkout-fiat">
       <ExpressCheckoutElement
         options={{
-          // Show wallets even if this browser has no card saved yet (still needs Safari/device + domain).
           paymentMethods: {
             applePay: "always",
             googlePay: "always",
@@ -131,7 +140,7 @@ function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: Inner
           setMethodsReady(Boolean(availablePaymentMethods));
           if (availablePaymentMethods && !availablePaymentMethods.applePay) {
             console.info(
-              "[mon-unlock] Apple Pay unavailable here. Use Safari on a Mac/iPhone with Wallet set up, and register mon-unlock-widget-production.up.railway.app in Stripe → Settings → Payment methods → Apple Pay (sandbox + live)."
+              "[mon-unlock] Apple Pay unavailable here. Use Safari on a Mac/iPhone with Wallet set up, and register mon-unlock-widget-production.up.railway.app in Stripe → Payment method domains."
             );
           }
         }}
@@ -152,7 +161,6 @@ function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: Inner
 type Props = {
   articleId: string;
   title: string;
-  /** USD cents charged via Stripe (from MON≈USD estimate). */
   amountUsdCents: number;
   onUnlocked: (sessionToken: string) => void;
   onError: (message: string) => void;
@@ -161,7 +169,7 @@ type Props = {
 
 /**
  * Apple Pay / Google Pay / Link via Stripe Express Checkout Element.
- * Mounts when VITE_STRIPE_PUBLISHABLE_KEY is set and amount ≥ $0.50.
+ * Also completes unlock when Stripe redirects back with payment_intent in the URL.
  */
 export function StripeFiatPay({
   articleId,
@@ -174,8 +182,42 @@ export function StripeFiatPay({
   const promise = useMemo(() => getStripePromise(), []);
   const [intent, setIntent] = useState<CreateIntentResult | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [finishingRedirect, setFinishingRedirect] = useState(false);
+
+  // Complete payment when Stripe redirected back to unlock.html.
+  useEffect(() => {
+    const redirected = readStripeRedirectIntent();
+    if (!redirected) return;
+    let cancelled = false;
+    setFinishingRedirect(true);
+    onBusy(true);
+    void (async () => {
+      try {
+        if (redirected.status && redirected.status !== "succeeded") {
+          throw new Error("Payment was not completed. You can try again.");
+        }
+        const sessionToken = await confirmUnlock(redirected.paymentIntentId);
+        if (!cancelled) onUnlocked(sessionToken);
+      } catch (e) {
+        if (!cancelled) {
+          onError(e instanceof Error ? e.message : "Could not finish payment.");
+          setBootError(e instanceof Error ? e.message : "Could not finish payment.");
+        }
+      } finally {
+        if (!cancelled) {
+          setFinishingRedirect(false);
+          onBusy(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onBusy, onError, onUnlocked]);
 
   useEffect(() => {
+    if (finishingRedirect) return;
+    if (readStripeRedirectIntent()) return;
     if (!promise || amountUsdCents < 50) return;
     let cancelled = false;
     onBusy(true);
@@ -196,9 +238,13 @@ export function StripeFiatPay({
     return () => {
       cancelled = true;
     };
-  }, [promise, articleId, title, amountUsdCents, onBusy, onError]);
+  }, [promise, articleId, title, amountUsdCents, onBusy, onError, finishingRedirect]);
 
   if (!promise) return null;
+
+  if (finishingRedirect) {
+    return <p className="checkout-status">Confirming payment…</p>;
+  }
 
   if (bootError) {
     return <p className="checkout-error">{bootError}</p>;

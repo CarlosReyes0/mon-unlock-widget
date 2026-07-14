@@ -13,6 +13,8 @@ import {
   hasReliableInjectedProvider,
   buildCheckoutUrl,
   isCheckoutMessage,
+  readFiatReturnFromLocation,
+  clearFiatReturnParams,
   type Article,
   type WalletState,
   looksLikeHtml,
@@ -82,7 +84,20 @@ export class MonUnlock extends LitElement {
       }
     });
     this.loadArticle();
+    this.consumeFiatReturnParams();
     this.restoreFiatSession();
+  }
+
+  /** After mobile same-tab checkout, article URL includes mon_fiat_session. */
+  private consumeFiatReturnParams() {
+    const returned = readFiatReturnFromLocation();
+    if (!returned) return;
+    if (this.articleId && returned.articleId !== this.articleId.trim()) {
+      return;
+    }
+    this.persistFiatSession(returned.fiatSession);
+    clearFiatReturnParams();
+    // verifyFiatAccess runs via restoreFiatSession / explicit call below
   }
 
   private fiatStorageKey(articleId: string) {
@@ -117,9 +132,11 @@ export class MonUnlock extends LitElement {
     if (!this.article || !this.fiatSession) return;
     this.loading = true;
     this.error = null;
+    this.checkoutOpen = false;
     try {
-      const ok = await this.fetchBodyIfNeeded({ fiatSession: this.fiatSession });
-      if (ok) {
+      const slotted = this.slotHtml("body");
+      const ok = await this.fetchBodyIfNeeded({ fiatSession: this.fiatSession, maxAttempts: 4 });
+      if (ok || slotted) {
         this.unlocked = true;
         this.emit("mon:unlocked", {
           article: this.article,
@@ -131,6 +148,8 @@ export class MonUnlock extends LitElement {
             fiatSession: this.fiatSession,
           },
         });
+      } else {
+        this.error = "Payment received, but the article could not be loaded. Refresh and try again.";
       }
     } finally {
       this.loading = false;
@@ -290,7 +309,10 @@ export class MonUnlock extends LitElement {
    *  from the article-body Edge Function after a successful unlock.
    *  @returns true when body was fetched or already present / slotted.
    */
-  private async fetchBodyIfNeeded(opts?: { fiatSession?: string }): Promise<boolean> {
+  private async fetchBodyIfNeeded(opts?: {
+    fiatSession?: string;
+    maxAttempts?: number;
+  }): Promise<boolean> {
     if (!this.article) return false;
     if (this.fetchedBody) return true;
     const slottedBody = this.slotHtml("body");
@@ -314,9 +336,9 @@ export class MonUnlock extends LitElement {
     }
 
     const url = `${apiBase}/article-body?${params.toString()}`;
+    const maxAttempts = Math.max(1, opts?.maxAttempts ?? (fiatSession ? 4 : 10));
 
-    // Retry with backoff — on-chain check can lag; fiat is usually immediate.
-    for (let attempt = 0; attempt < 10; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const res = await fetch(url, {
           headers: {
@@ -338,7 +360,7 @@ export class MonUnlock extends LitElement {
           return false;
         }
       } catch (e) {
-        if (attempt === 9) {
+        if (attempt === maxAttempts - 1) {
           console.warn("[mon-unlock] failed to fetch body after unlock", e);
           return false;
         }
@@ -414,15 +436,15 @@ export class MonUnlock extends LitElement {
     try {
       if (event.data.fiatSession) {
         this.persistFiatSession(event.data.fiatSession);
-        const ok = await this.fetchBodyIfNeeded({ fiatSession: event.data.fiatSession });
-        if (!ok && this.isOnchain) {
-          // Slotted body embeds still unlock visually.
-          const slotted = this.slotHtml("body");
-          if (!slotted) {
-            this.error = "Payment received, but article is not available yet. Refresh in a moment.";
-            this.unlocked = false;
-            return;
-          }
+        const slotted = this.slotHtml("body");
+        const ok = await this.fetchBodyIfNeeded({
+          fiatSession: event.data.fiatSession,
+          maxAttempts: 4,
+        });
+        if (!ok && !slotted) {
+          this.error = "Payment received, but article is not available yet. Refresh in a moment.";
+          this.unlocked = false;
+          return;
         }
         this.unlocked = true;
         this.emit("mon:unlocked", {
@@ -495,7 +517,16 @@ export class MonUnlock extends LitElement {
       contract: this.unlockContract.trim(),
       embedSig: this.embedSig,
       parentOrigin: window.location.origin,
+      returnUrl: window.location.href,
     });
+
+    // Mobile: same-tab navigation so Apple Pay can return to the article reliably.
+    // Desktop: popup when allowed; fall back to same-tab if blocked.
+    if (this.isMobileViewport()) {
+      this.checkoutOpen = true;
+      window.location.assign(url);
+      return;
+    }
 
     this.checkoutOpen = true;
     const popup = window.open(
@@ -504,8 +535,7 @@ export class MonUnlock extends LitElement {
       "popup=yes,width=420,height=720,noopener=no"
     );
     if (!popup) {
-      // Popup blocked — navigate top-level as fallback.
-      window.location.href = url;
+      window.location.assign(url);
       return;
     }
     this.checkoutPopup = popup;

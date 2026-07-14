@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
 import {
   CHECKOUT_MESSAGE_SOURCE,
+  buildArticleReturnUrl,
   postCheckoutMessage,
   type CheckoutMessage,
 } from "../core/checkout-protocol.js";
@@ -17,6 +18,7 @@ type CheckoutQuery = {
   contract: Address;
   embedSig: string;
   parentOrigin: string;
+  returnUrl: string | null;
 };
 
 function readQuery(): CheckoutQuery | null {
@@ -27,6 +29,7 @@ function readQuery(): CheckoutQuery | null {
   const contract = (params.get("contract")?.trim() ?? "") as Address;
   const embedSig = params.get("embedSig")?.trim() ?? "";
   const parentOrigin = params.get("parentOrigin")?.trim() ?? "";
+  const returnUrlRaw = params.get("returnUrl")?.trim() ?? "";
 
   if (!articleId || !price || !contract?.startsWith("0x") || !parentOrigin) {
     return null;
@@ -36,11 +39,93 @@ function readQuery(): CheckoutQuery | null {
   } catch {
     return null;
   }
-  return { articleId, title, price, contract, embedSig, parentOrigin };
+
+  let returnUrl: string | null = null;
+  if (returnUrlRaw) {
+    try {
+      const u = new URL(returnUrlRaw);
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        returnUrl = u.toString();
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return { articleId, title, price, contract, embedSig, parentOrigin, returnUrl };
+}
+
+function hasOpener(): boolean {
+  try {
+    return Boolean(window.opener && !window.opener.closed);
+  } catch {
+    return false;
+  }
 }
 
 function notifyParent(parentOrigin: string, message: CheckoutMessage) {
   postCheckoutMessage(window.opener ?? window.parent, parentOrigin, message);
+}
+
+/** Finish checkout: notify opener when possible; always send mobile/same-tab users back to the article. */
+function finishCheckout(
+  query: CheckoutQuery,
+  message: CheckoutMessage,
+  opts?: { preferRedirect?: boolean }
+) {
+  const openerAlive = hasOpener();
+  if (openerAlive) {
+    notifyParent(query.parentOrigin, message);
+  }
+
+  const fiatSession =
+    message.type === "mon:unlocked" && message.fiatSession ? message.fiatSession : null;
+
+  // Same-tab / mobile: no reliable opener — bounce back to the article with the session.
+  const shouldRedirect =
+    Boolean(query.returnUrl) &&
+    (opts?.preferRedirect || !openerAlive || message.type === "mon:checkout-closed");
+
+  if (shouldRedirect && query.returnUrl) {
+    if (fiatSession) {
+      window.location.replace(
+        buildArticleReturnUrl(query.returnUrl, {
+          articleId: query.articleId,
+          fiatSession,
+        })
+      );
+      return;
+    }
+    // Cancel / closed — return to article without unlock params.
+    window.location.replace(query.returnUrl);
+    return;
+  }
+
+  if (openerAlive) {
+    try {
+      window.close();
+    } catch {
+      /* ignore */
+    }
+    // iOS often ignores window.close(); fall back to article redirect.
+    if (fiatSession && query.returnUrl) {
+      window.setTimeout(() => {
+        window.location.replace(
+          buildArticleReturnUrl(query.returnUrl!, {
+            articleId: query.articleId,
+            fiatSession,
+          })
+        );
+      }, 400);
+    }
+  } else if (fiatSession && query.returnUrl) {
+    window.location.replace(
+      buildArticleReturnUrl(query.returnUrl, {
+        articleId: query.articleId,
+        fiatSession,
+      })
+    );
+  }
 }
 
 export function CheckoutApp() {
@@ -73,26 +158,21 @@ export function CheckoutApp() {
     };
   }, [query, priceWei]);
 
-  const closeWith = (message: CheckoutMessage) => {
-    if (query) notifyParent(query.parentOrigin, message);
-    try {
-      window.close();
-    } catch {
-      /* ignore */
-    }
-  };
-
   const onCancel = () => {
     if (!query) {
       window.close();
       return;
     }
-    closeWith({
-      source: CHECKOUT_MESSAGE_SOURCE,
-      type: "mon:checkout-closed",
-      articleId: query.articleId,
-      reason: "cancelled",
-    });
+    finishCheckout(
+      query,
+      {
+        source: CHECKOUT_MESSAGE_SOURCE,
+        type: "mon:checkout-closed",
+        articleId: query.articleId,
+        reason: "cancelled",
+      },
+      { preferRedirect: true }
+    );
   };
 
   if (!query) {
@@ -116,13 +196,17 @@ export function CheckoutApp() {
 
   const onFiatUnlocked = (sessionToken: string) => {
     setPhaseDone(true);
-    closeWith({
+    finishCheckout(query, {
       source: CHECKOUT_MESSAGE_SOURCE,
       type: "mon:unlocked",
       articleId: query.articleId,
       fiatSession: sessionToken,
       mode: "fiat",
     });
+  };
+
+  const onCryptoClose = (message: CheckoutMessage) => {
+    finishCheckout(query, message);
   };
 
   return (
@@ -182,7 +266,7 @@ export function CheckoutApp() {
             contract={query.contract}
             embedSig={query.embedSig}
             usdEstimate={usdEstimate}
-            onCloseWith={closeWith}
+            onCloseWith={onCryptoClose}
             disabled={fiatBusy || phaseDone}
           />
         ) : null}
