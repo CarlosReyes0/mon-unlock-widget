@@ -63,8 +63,23 @@ export class MonUnlock extends LitElement {
   private isOnchain = false;
   private unsubWallet?: () => void;
   private checkoutPopup: Window | null = null;
+  private loadingSafetyTimer: ReturnType<typeof setTimeout> | null = null;
   private onCheckoutMessage = (event: MessageEvent) => {
     void this.handleCheckoutMessage(event);
+  };
+  /** Safari back/forward cache can freeze the page mid-checkout with buttons stuck. */
+  private onPageShow = (event: PageTransitionEvent) => {
+    if (!event.persisted && !this.checkoutOpen) return;
+    this.checkoutOpen = false;
+    this.checkoutPopup = null;
+    if (this.unlocked) return;
+    this.loading = false;
+    this.clearLoadingSafetyTimer();
+    if (this.fiatSession) {
+      void this.verifyFiatAccess();
+    } else {
+      this.restoreFiatSession();
+    }
   };
 
   override createRenderRoot() {
@@ -74,6 +89,7 @@ export class MonUnlock extends LitElement {
   override connectedCallback() {
     super.connectedCallback();
     window.addEventListener("message", this.onCheckoutMessage);
+    window.addEventListener("pageshow", this.onPageShow);
     this.unsubWallet = this.walletManager.subscribe((s) => {
       this.wallet = s;
       // Re-check access (local cache or on-chain) whenever wallet changes
@@ -131,12 +147,38 @@ export class MonUnlock extends LitElement {
     }
   }
 
+  private clearLoadingSafetyTimer() {
+    if (this.loadingSafetyTimer != null) {
+      clearTimeout(this.loadingSafetyTimer);
+      this.loadingSafetyTimer = null;
+    }
+  }
+
+  private armLoadingSafetyTimer(message: string) {
+    this.clearLoadingSafetyTimer();
+    this.loadingSafetyTimer = setTimeout(() => {
+      this.loadingSafetyTimer = null;
+      if (!this.loading || this.unlocked) return;
+      this.loading = false;
+      this.checkoutOpen = false;
+      this.error = message;
+    }, 20_000);
+  }
+
+  /** Status line after unlock — must never throw (fiat has no wallet address). */
+  private unlockedStatusLabel(): string {
+    if (this.wallet.address) return truncateAddress(this.wallet.address);
+    if (this.fiatSession) return "Card / Apple Pay";
+    return "Paid";
+  }
+
   /** Fiat (Stripe) entitlement — no wallet required. */
   private async verifyFiatAccess() {
     if (!this.article || !this.fiatSession) return;
     this.loading = true;
     this.error = null;
     this.checkoutOpen = false;
+    this.armLoadingSafetyTimer("Unlock is taking too long. Pull to refresh and try again.");
     try {
       const slotted = this.slotHtml("body");
       const ok = await this.fetchBodyIfNeeded({ fiatSession: this.fiatSession, maxAttempts: 4 });
@@ -156,6 +198,7 @@ export class MonUnlock extends LitElement {
         this.error = "Payment received, but the article could not be loaded. Refresh and try again.";
       }
     } finally {
+      this.clearLoadingSafetyTimer();
       this.loading = false;
     }
   }
@@ -163,6 +206,8 @@ export class MonUnlock extends LitElement {
   override disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("message", this.onCheckoutMessage);
+    window.removeEventListener("pageshow", this.onPageShow);
+    this.clearLoadingSafetyTimer();
     this.closeCheckoutUi();
     this.unsubWallet?.();
   }
@@ -344,12 +389,20 @@ export class MonUnlock extends LitElement {
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const res = await fetch(url, {
-          headers: {
-            apikey: anonKey,
-            Authorization: `Bearer ${anonKey}`,
-          },
-        });
+        const controller = new AbortController();
+        const abortTimer = setTimeout(() => controller.abort(), 8_000);
+        let res: Response;
+        try {
+          res = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              apikey: anonKey,
+              Authorization: `Bearer ${anonKey}`,
+            },
+          });
+        } finally {
+          clearTimeout(abortTimer);
+        }
 
         if (res.ok) {
           const data = (await res.json()) as { body?: string };
@@ -437,6 +490,7 @@ export class MonUnlock extends LitElement {
     this.closeCheckoutUi();
     this.loading = true;
     this.error = null;
+    this.armLoadingSafetyTimer("Unlock is taking too long. Pull to refresh and try again.");
     try {
       if (event.data.fiatSession) {
         this.persistFiatSession(event.data.fiatSession);
@@ -501,6 +555,7 @@ export class MonUnlock extends LitElement {
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Could not confirm unlock.";
     } finally {
+      this.clearLoadingSafetyTimer();
       this.loading = false;
     }
   }
@@ -762,12 +817,7 @@ export class MonUnlock extends LitElement {
                 <div class="mb-6 whitespace-pre-wrap text-base" style="color:#000">${a.teaser}</div>
                 ${this.renderBody(this.fetchedBody || a.body)}
                 <p class="mt-6 text-xs text-black">
-                  Unlocked ·
-                  ${this.wallet.address
-                    ? truncateAddress(this.wallet.address)
-                    : this.fiatSession
-                      ? "Card / Apple Pay"
-                      : "Paid"}
+                  Unlocked · ${this.unlockedStatusLabel()}
                   ${this.txHash
                     ? html`· <a href="https://monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
                     : nothing}
