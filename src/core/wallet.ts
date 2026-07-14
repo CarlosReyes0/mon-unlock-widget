@@ -354,7 +354,8 @@ export class WalletManager {
   }
 }
 
-export function truncateAddress(addr: string): string {
+export function truncateAddress(addr: string | null | undefined): string {
+  if (!addr) return "Wallet";
   if (addr.startsWith("0xDemo")) return "Demo wallet";
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
