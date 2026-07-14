@@ -25,7 +25,7 @@
     "build:checkout": "vite build --mode checkout",
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js && node --test server/index.test.mjs server/stripe-idempotency.test.mjs"
+    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js dist/core/wallet.test.js && node --test server/index.test.mjs server/stripe-idempotency.test.mjs"
   },
   "license": "MIT",
   "engines": {
