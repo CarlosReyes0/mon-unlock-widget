@@ -175,8 +175,35 @@ export async function createPaymentIntent(input) {
   };
 }
 
+/** Postgres unique_violation (23505) from PostgREST / Supabase. */
+export function isUniqueViolation(err) {
+  const code = err?.details?.code;
+  const msg = String(err?.message || "");
+  return code === "23505" || /duplicate key value violates unique constraint/i.test(msg);
+}
+
+/**
+ * @param {string} paymentIntentId
+ * @param {string} [sessionToken]
+ */
+async function findExistingFiatUnlock(paymentIntentId, sessionToken) {
+  const byIntent = await supabase(
+    `fiat_unlocks?select=id,session_token&stripe_payment_intent_id=eq.${encodeURIComponent(paymentIntentId)}&limit=1`
+  );
+  if (Array.isArray(byIntent) && byIntent[0]) return byIntent[0];
+
+  if (sessionToken) {
+    const bySession = await supabase(
+      `fiat_unlocks?select=id,session_token&session_token=eq.${encodeURIComponent(sessionToken)}&limit=1`
+    );
+    if (Array.isArray(bySession) && bySession[0]) return bySession[0];
+  }
+  return null;
+}
+
 /**
  * Idempotent: grant unlock + queue USDC payout job.
+ * Safe when webhook and /api/stripe/confirm race on the same PaymentIntent.
  * @param {Stripe.PaymentIntent} intent
  */
 export async function grantFiatUnlockFromIntent(intent) {
@@ -199,38 +226,53 @@ export async function grantFiatUnlockFromIntent(intent) {
     throw err;
   }
 
-  // Already granted?
-  const existing = await supabase(
-    `fiat_unlocks?select=id,session_token&stripe_payment_intent_id=eq.${encodeURIComponent(intent.id)}&limit=1`
-  );
-  if (Array.isArray(existing) && existing[0]) {
+  // Already granted? (common path when confirm runs after webhook)
+  const existing = await findExistingFiatUnlock(intent.id, sessionToken);
+  if (existing) {
     return {
       granted: true,
       already: true,
-      sessionToken: existing[0].session_token,
-      fiatUnlockId: existing[0].id,
+      sessionToken: existing.session_token,
+      fiatUnlockId: existing.id,
     };
   }
 
-  const rows = await supabase("fiat_unlocks", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: [
-      {
-        article_id: articleId,
-        article_id_hash: articleIdHash,
-        publisher,
-        session_token: sessionToken,
-        stripe_payment_intent_id: intent.id,
-        amount_cents: amountCents,
-        currency: intent.currency || "usd",
-        buyer_email: intent.receipt_email || null,
-        status: "succeeded",
-      },
-    ],
-  });
+  let unlock;
+  try {
+    const rows = await supabase("fiat_unlocks", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: [
+        {
+          article_id: articleId,
+          article_id_hash: articleIdHash,
+          publisher,
+          session_token: sessionToken,
+          stripe_payment_intent_id: intent.id,
+          amount_cents: amountCents,
+          currency: intent.currency || "usd",
+          buyer_email: intent.receipt_email || null,
+          status: "succeeded",
+        },
+      ],
+    });
+    unlock = Array.isArray(rows) ? rows[0] : rows;
+  } catch (e) {
+    // Concurrent webhook + confirm both passed the pre-check; loser hits unique constraint.
+    if (isUniqueViolation(e)) {
+      const raced = await findExistingFiatUnlock(intent.id, sessionToken);
+      if (raced) {
+        return {
+          granted: true,
+          already: true,
+          sessionToken: raced.session_token,
+          fiatUnlockId: raced.id,
+        };
+      }
+    }
+    throw e;
+  }
 
-  const unlock = Array.isArray(rows) ? rows[0] : rows;
   if (!unlock?.id) {
     const err = new Error("fiat_unlock_insert_failed");
     err.status = 502;
