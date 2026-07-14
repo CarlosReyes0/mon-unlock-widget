@@ -8,9 +8,18 @@ RUN npm ci --legacy-peer-deps
 
 COPY . .
 
-# Prefer Railway/runtime env VITE_PRIVY_APP_ID. Optional ARG for explicit build-arg wiring.
+# Prefer Railway/runtime env for Vite keys. ARG wiring makes them available in Docker builds.
 ARG VITE_PRIVY_APP_ID=
 ENV VITE_PRIVY_APP_ID=${VITE_PRIVY_APP_ID}
+
+ARG VITE_STRIPE_PUBLISHABLE_KEY=
+ENV VITE_STRIPE_PUBLISHABLE_KEY=${VITE_STRIPE_PUBLISHABLE_KEY}
+
+ARG VITE_RAMP_HOST_API_KEY=
+ENV VITE_RAMP_HOST_API_KEY=${VITE_RAMP_HOST_API_KEY}
+
+ARG VITE_CHECKOUT_ORIGIN=
+ENV VITE_CHECKOUT_ORIGIN=${VITE_CHECKOUT_ORIGIN}
 
 RUN npm run build
 
