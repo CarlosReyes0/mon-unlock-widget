@@ -22,6 +22,10 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     CDP_API_KEY_SECRET: "",
     CDP_API_KEY: "",
     CDP_API_SECRET: "",
+    STRIPE_SECRET_KEY: "",
+    STRIPE_WEBHOOK_SECRET: "",
+    SUPABASE_URL: "",
+    SUPABASE_SERVICE_ROLE_KEY: "",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -64,6 +68,29 @@ test("POST /api/coinbase/session-token rejects invalid address", async () => {
   assert.equal(res.status, 400);
   const body = await res.json();
   assert.equal(body.error, "invalid_address");
+});
+
+test("GET /api/stripe/health reports stripeConfigured=false without secrets", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/stripe/health`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.stripeConfigured, false);
+});
+
+test("POST /api/stripe/create-intent returns 503 without Stripe secrets", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/stripe/create-intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      articleId: "demo",
+      amountUsdCents: 199,
+      title: "Demo",
+    }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "stripe_not_configured");
 });
 
 test("GET / serves index.html", async () => {

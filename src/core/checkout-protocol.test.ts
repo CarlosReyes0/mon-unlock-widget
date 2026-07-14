@@ -42,7 +42,21 @@ describe("isCheckoutMessage", () => {
     );
   });
 
+  it("accepts fiat unlocked messages", () => {
+    assert.equal(
+      isCheckoutMessage({
+        source: CHECKOUT_MESSAGE_SOURCE,
+        type: "mon:unlocked",
+        articleId: "a",
+        fiatSession: "session-uuid",
+        mode: "fiat",
+      }),
+      true
+    );
+  });
+
   it("rejects foreign messages", () => {
     assert.equal(isCheckoutMessage({ type: "mon:unlocked" }), false);
   });
 });
+

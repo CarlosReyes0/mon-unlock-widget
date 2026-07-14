@@ -1,5 +1,5 @@
 /**
- * Production server: static CDN assets + Coinbase Onramp session tokens.
+ * Production server: static CDN assets + Coinbase Onramp + Stripe fiat unlock.
  *
  * Coinbase requires a server-side session token (JWT from CDP Secret API Key)
  * for every onramp open. Secrets stay here — never in the checkout bundle.
@@ -7,6 +7,8 @@
  * Runtime env (Railway):
  *   CDP_API_KEY_ID / CDP_API_KEY       — Secret API Key ID (UUID)
  *   CDP_API_KEY_SECRET / CDP_API_SECRET — Secret (Ed25519 or EC PEM)
+ *   STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
+ *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
  *   PORT                               — listen port (Railway sets this)
  */
 import http from "node:http";
@@ -14,6 +16,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
+import {
+  stripeConfigured,
+  supabaseConfigured,
+  createPaymentIntent,
+  confirmPaymentIntent,
+  handleStripeWebhook,
+  createConnectOnboardingLink,
+  processPendingPayouts,
+  getUnlockBySession,
+} from "./stripe.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -54,7 +66,10 @@ const MIME = {
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Stripe-Signature, Authorization"
+  );
 }
 
 function sendJson(res, status, body) {
@@ -298,6 +313,117 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // --- Stripe fiat unlock ---
+  if (method === "GET" && url.pathname === "/api/stripe/health") {
+    return sendJson(res, 200, {
+      ok: true,
+      stripeConfigured: stripeConfigured(),
+      supabaseConfigured: supabaseConfigured(),
+    });
+  }
+
+  if (method === "POST" && url.pathname === "/api/stripe/create-intent") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await createPaymentIntent({
+        articleId: parsed.articleId,
+        amountUsdCents: parsed.amountUsdCents,
+        buyerEmail: parsed.buyerEmail,
+        title: parsed.title,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      if (e?.message === "stripe_not_configured" || e?.message === "supabase_not_configured") {
+        return sendJson(res, 503, { error: e.message });
+      }
+      console.error("[stripe] create-intent:", e?.message || e, e?.details || "");
+      return sendJson(res, status, { error: e?.message || "create_intent_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/stripe/confirm") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await confirmPaymentIntent(parsed.paymentIntentId);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      console.error("[stripe] confirm:", e?.message || e);
+      return sendJson(res, status, { error: e?.message || "confirm_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/stripe/webhook") {
+    try {
+      const raw = await readBody(req, 256_000);
+      const result = await handleStripeWebhook(raw, req.headers["stripe-signature"]);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 400;
+      console.error("[stripe] webhook:", e?.message || e);
+      return sendJson(res, status, { error: e?.message || "webhook_failed" });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/stripe/unlock-status") {
+    try {
+      const session = url.searchParams.get("session") || "";
+      const unlock = await getUnlockBySession(session);
+      if (!unlock || unlock.status !== "succeeded") {
+        return sendJson(res, 404, { unlocked: false });
+      }
+      return sendJson(res, 200, {
+        unlocked: true,
+        articleId: unlock.article_id,
+        articleIdHash: unlock.article_id_hash,
+        sessionToken: unlock.session_token,
+      });
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "status_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/stripe/connect/onboard") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const origin = `https://${req.headers.host || "localhost"}`;
+      const result = await createConnectOnboardingLink({
+        publisher: parsed.publisher,
+        refreshUrl:
+          typeof parsed.refreshUrl === "string" && parsed.refreshUrl.startsWith("https://")
+            ? parsed.refreshUrl
+            : `${origin}/dashboard.html`,
+        returnUrl:
+          typeof parsed.returnUrl === "string" && parsed.returnUrl.startsWith("https://")
+            ? parsed.returnUrl
+            : `${origin}/dashboard.html`,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      console.error("[stripe] connect onboard:", e?.message || e);
+      return sendJson(res, status, { error: e?.message || "onboard_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/stripe/payouts/process") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await processPendingPayouts({ limit: parsed.limit });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      console.error("[stripe] payouts:", e?.message || e);
+      return sendJson(res, status, { error: e?.message || "payouts_failed" });
+    }
+  }
+
   if (method === "GET" || method === "HEAD") {
     return serveStatic(req, res, url.pathname);
   }
@@ -309,6 +435,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)})`
+    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()})`
   );
 });

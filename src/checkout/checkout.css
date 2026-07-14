@@ -87,6 +87,20 @@ body {
   color: var(--muted);
 }
 
+.checkout-fiat {
+  margin: 0 0 0.75rem;
+}
+
+.checkout-divider {
+  margin: 1.25rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
 .checkout-copy,
 .checkout-status {
   margin: 0 0 1rem;

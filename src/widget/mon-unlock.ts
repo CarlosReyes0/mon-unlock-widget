@@ -50,6 +50,7 @@ export class MonUnlock extends LitElement {
   @state() private error: string | null = null;
   @state() private txHash: string | null = null;
   @state() private fetchedBody: string | null = null;
+  @state() private fiatSession: string | null = null;
 
   @state() private urlCopied = false;
   @state() private checkoutOpen = false;
@@ -81,6 +82,59 @@ export class MonUnlock extends LitElement {
       }
     });
     this.loadArticle();
+    this.restoreFiatSession();
+  }
+
+  private fiatStorageKey(articleId: string) {
+    return `mon-fiat-session:${articleId}`;
+  }
+
+  private restoreFiatSession() {
+    if (!this.articleId || typeof localStorage === "undefined") return;
+    try {
+      const token = localStorage.getItem(this.fiatStorageKey(this.articleId));
+      if (token) {
+        this.fiatSession = token;
+        void this.verifyFiatAccess();
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private persistFiatSession(token: string) {
+    this.fiatSession = token;
+    if (!this.articleId || typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem(this.fiatStorageKey(this.articleId), token);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Fiat (Stripe) entitlement — no wallet required. */
+  private async verifyFiatAccess() {
+    if (!this.article || !this.fiatSession) return;
+    this.loading = true;
+    this.error = null;
+    try {
+      const ok = await this.fetchBodyIfNeeded({ fiatSession: this.fiatSession });
+      if (ok) {
+        this.unlocked = true;
+        this.emit("mon:unlocked", {
+          article: this.article,
+          record: {
+            articleId: this.article.id,
+            wallet: null,
+            unlockedAt: Date.now(),
+            mode: "fiat" as const,
+            fiatSession: this.fiatSession,
+          },
+        });
+      }
+    } finally {
+      this.loading = false;
+    }
   }
 
   override disconnectedCallback() {
@@ -234,13 +288,17 @@ export class MonUnlock extends LitElement {
 
   /** If the publisher did not provide a slotted body, fetch the real content
    *  from the article-body Edge Function after a successful unlock.
+   *  @returns true when body was fetched or already present / slotted.
    */
-  private async fetchBodyIfNeeded() {
-    if (!this.article || this.fetchedBody) return;
+  private async fetchBodyIfNeeded(opts?: { fiatSession?: string }): Promise<boolean> {
+    if (!this.article) return false;
+    if (this.fetchedBody) return true;
     const slottedBody = this.slotHtml("body");
-    if (slottedBody) return; // already have body from the embed — no need to fetch
+    if (slottedBody) return true; // already have body from the embed — no need to fetch
 
-    if (!this.wallet.address) return;
+    const fiatSession = opts?.fiatSession || this.fiatSession;
+    const reader = this.wallet.address;
+    if (!fiatSession && !reader) return false;
 
     const apiBase = "https://flczjqljgntmkanipugo.supabase.co/functions/v1";
     const anonKey =
@@ -248,16 +306,16 @@ export class MonUnlock extends LitElement {
 
     const params = new URLSearchParams({
       article_id: this.article.id,
-      reader: this.wallet.address,
     });
+    if (reader) params.set("reader", reader);
+    if (fiatSession) params.set("fiat_session", fiatSession);
     if (this.unlockContract?.trim()) {
       params.set("unlock_contract", this.unlockContract.trim());
     }
 
     const url = `${apiBase}/article-body?${params.toString()}`;
 
-    // Retry with backoff — the edge function's independent on-chain check (via public RPC)
-    // can lag behind the wallet provider's view right after a confirmed tx. Keep trying on 403.
+    // Retry with backoff — on-chain check can lag; fiat is usually immediate.
     for (let attempt = 0; attempt < 10; attempt++) {
       try {
         const res = await fetch(url, {
@@ -272,27 +330,25 @@ export class MonUnlock extends LitElement {
           if (data.body) {
             this.fetchedBody = data.body;
           }
-          return;
+          return true;
         }
 
-        // Only continue retrying on 403 (unlock not yet visible to the edge function's RPC).
-        // Any other status is a hard failure.
         if (res.status !== 403) {
           console.warn("[mon-unlock] article-body fetch returned", res.status);
-          return;
+          return false;
         }
       } catch (e) {
         if (attempt === 9) {
           console.warn("[mon-unlock] failed to fetch body after unlock", e);
-          return;
+          return false;
         }
       }
 
-      // Exponential backoff: ~300ms, 450ms, 675ms, ... up to ~5s total wait.
       const delay = Math.floor(300 * Math.pow(1.5, attempt));
       await new Promise((r) => setTimeout(r, delay));
     }
     console.warn("[mon-unlock] exhausted retries fetching body after unlock");
+    return false;
   }
 
   private emit(name: string, detail: unknown) {
@@ -351,12 +407,42 @@ export class MonUnlock extends LitElement {
       return;
     }
 
-    // mon:unlocked — verify on-chain before revealing.
+    // mon:unlocked — fiat session or on-chain wallet.
     this.closeCheckoutUi();
     this.loading = true;
     this.error = null;
     try {
+      if (event.data.fiatSession) {
+        this.persistFiatSession(event.data.fiatSession);
+        const ok = await this.fetchBodyIfNeeded({ fiatSession: event.data.fiatSession });
+        if (!ok && this.isOnchain) {
+          // Slotted body embeds still unlock visually.
+          const slotted = this.slotHtml("body");
+          if (!slotted) {
+            this.error = "Payment received, but article is not available yet. Refresh in a moment.";
+            this.unlocked = false;
+            return;
+          }
+        }
+        this.unlocked = true;
+        this.emit("mon:unlocked", {
+          article: this.article,
+          record: {
+            articleId: this.article.id,
+            wallet: null,
+            unlockedAt: Date.now(),
+            mode: "fiat" as const,
+            fiatSession: event.data.fiatSession,
+          },
+        });
+        return;
+      }
+
       const address = event.data.address;
+      if (!address) {
+        this.error = "Unlock message missing wallet or session.";
+        return;
+      }
       this.wallet = { connected: true, address };
       if (event.data.txHash) this.txHash = event.data.txHash;
 
@@ -366,7 +452,8 @@ export class MonUnlock extends LitElement {
           address
         );
         if (!ok) {
-          this.error = "Payment received, but unlock is not visible yet. Tap Continue again in a moment.";
+          this.error =
+            "Payment received, but unlock is not visible yet. Tap Continue again in a moment.";
           this.unlocked = false;
           return;
         }

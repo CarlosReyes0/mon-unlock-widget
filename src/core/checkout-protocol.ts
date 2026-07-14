@@ -8,8 +8,12 @@ export type CheckoutUnlockedMessage = {
   source: typeof CHECKOUT_MESSAGE_SOURCE;
   type: "mon:unlocked";
   articleId: string;
-  address: string;
+  /** On-chain / Privy path */
+  address?: string;
   txHash?: string;
+  /** Stripe fiat path — session token proves entitlement in Supabase */
+  fiatSession?: string;
+  mode?: "onchain" | "fiat";
 };
 
 export type CheckoutClosedMessage = {
@@ -65,7 +69,10 @@ export function isCheckoutMessage(data: unknown): data is CheckoutMessage {
   const msg = data as Partial<CheckoutMessage>;
   if (msg.source !== CHECKOUT_MESSAGE_SOURCE) return false;
   if (msg.type === "mon:unlocked") {
-    return typeof msg.articleId === "string" && typeof msg.address === "string";
+    if (typeof msg.articleId !== "string") return false;
+    const hasAddress = typeof msg.address === "string" && msg.address.length > 0;
+    const hasFiat = typeof msg.fiatSession === "string" && msg.fiatSession.length > 0;
+    return hasAddress || hasFiat;
   }
   if (msg.type === "mon:checkout-closed") {
     return typeof msg.articleId === "string";

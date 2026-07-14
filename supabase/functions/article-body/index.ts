@@ -1,10 +1,11 @@
 // Edge Function: article-body
-// Returns the full article body only if the requesting wallet has unlocked it.
-// Called by the widget after a successful on-chain payment.
+// Returns the full article body only if the requesting wallet has unlocked it
+// OR a valid Stripe fiat_session exists.
 //
 // Unlock verification order:
-// 1. Supabase unlocks table (indexer backfill / dashboard)
-// 2. On-chain hasUnlocked() — instant after payment, no indexer wait
+// 1. Fiat session (Stripe) via fiat_unlocks
+// 2. Supabase unlocks table (indexer backfill / dashboard)
+// 3. On-chain hasUnlocked() — instant after payment, no indexer wait
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createPublicClient, http, keccak256, toBytes } from 'https://esm.sh/viem@2';
@@ -65,6 +66,22 @@ async function hasUnlockedOnChain(
   }
 }
 
+async function hasFiatUnlock(articleIdHash: string, fiatSession: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('fiat_unlocks')
+    .select('id')
+    .eq('article_id_hash', articleIdHash)
+    .eq('session_token', fiatSession)
+    .eq('status', 'succeeded')
+    .limit(1);
+
+  if (error) {
+    console.error('Fiat unlock check failed:', error);
+    return false;
+  }
+  return Boolean(data && data.length > 0);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers });
@@ -77,23 +94,28 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const articleId = url.searchParams.get('article_id'); // human-readable slug
-    const articleIdHash = url.searchParams.get('article_id_hash');
+    const articleIdHashParam = url.searchParams.get('article_id_hash');
     const reader = url.searchParams.get('reader')?.toLowerCase();
+    const fiatSession = url.searchParams.get('fiat_session')?.trim();
     const unlockContract =
       (url.searchParams.get('unlock_contract') ||
         Deno.env.get('CONTRACT_ADDRESS') ||
         DEFAULT_CONTRACT) as `0x${string}`;
 
-    if (!reader) {
-      return new Response(JSON.stringify({ error: 'reader (wallet) is required' }), { status: 400, headers });
+    if (!reader && !fiatSession) {
+      return new Response(
+        JSON.stringify({ error: 'reader (wallet) or fiat_session is required' }),
+        { status: 400, headers }
+      );
     }
 
-    if (!articleId && !articleIdHash) {
-      return new Response(JSON.stringify({ error: 'article_id or article_id_hash is required' }), { status: 400, headers });
+    if (!articleId && !articleIdHashParam) {
+      return new Response(JSON.stringify({ error: 'article_id or article_id_hash is required' }), {
+        status: 400,
+        headers,
+      });
     }
 
-    // Find the article by slug, then by on-chain hash derived from the slug.
-    // Indexer rows often have article_id=null (chain events only emit the hash).
     let article: { article_id_hash: string; body: string | null } | null = null;
 
     if (articleId) {
@@ -105,7 +127,10 @@ Deno.serve(async (req) => {
 
       if (slugError) {
         console.error('Article lookup failed:', slugError);
-        return new Response(JSON.stringify({ error: 'Failed to load article' }), { status: 500, headers });
+        return new Response(JSON.stringify({ error: 'Failed to load article' }), {
+          status: 500,
+          headers,
+        });
       }
 
       if (bySlug && bySlug.length > 0) {
@@ -120,12 +145,14 @@ Deno.serve(async (req) => {
 
         if (hashError) {
           console.error('Article hash lookup failed:', hashError);
-          return new Response(JSON.stringify({ error: 'Failed to load article' }), { status: 500, headers });
+          return new Response(JSON.stringify({ error: 'Failed to load article' }), {
+            status: 500,
+            headers,
+          });
         }
 
         if (byHash && byHash.length > 0) {
           article = byHash[0];
-          // Backfill slug so future lookups and the dashboard resolve the human-readable id.
           await supabase
             .from('articles')
             .update({ article_id: articleId, updated_at: new Date().toISOString() })
@@ -133,16 +160,19 @@ Deno.serve(async (req) => {
             .is('article_id', null);
         }
       }
-    } else if (articleIdHash) {
+    } else if (articleIdHashParam) {
       const { data: byHash, error: hashError } = await supabase
         .from('articles')
         .select('article_id_hash, body')
-        .eq('article_id_hash', articleIdHash)
+        .eq('article_id_hash', articleIdHashParam)
         .limit(1);
 
       if (hashError) {
         console.error('Article hash lookup failed:', hashError);
-        return new Response(JSON.stringify({ error: 'Failed to load article' }), { status: 500, headers });
+        return new Response(JSON.stringify({ error: 'Failed to load article' }), {
+          status: 500,
+          headers,
+        });
       }
 
       if (byHash && byHash.length > 0) {
@@ -154,24 +184,33 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Article not found' }), { status: 404, headers });
     }
 
-    // Check if this reader has unlocked it
-    const { data: unlocks, error: unlockError } = await supabase
-      .from('unlocks')
-      .select('id')
-      .eq('article_id_hash', article.article_id_hash)
-      .eq('reader', reader)
-      .limit(1);
+    let isUnlocked = false;
 
-    if (unlockError) {
-      console.error('Unlock check failed:', unlockError);
-      return new Response(JSON.stringify({ error: 'Failed to verify unlock' }), { status: 500, headers });
+    if (fiatSession) {
+      isUnlocked = await hasFiatUnlock(article.article_id_hash, fiatSession);
     }
 
-    let isUnlocked = Boolean(unlocks && unlocks.length > 0);
+    if (!isUnlocked && reader) {
+      const { data: unlocks, error: unlockError } = await supabase
+        .from('unlocks')
+        .select('id')
+        .eq('article_id_hash', article.article_id_hash)
+        .eq('reader', reader)
+        .limit(1);
 
-    // Fall back to on-chain truth so body appears immediately after payment.
-    if (!isUnlocked && article.article_id_hash) {
-      isUnlocked = await hasUnlockedOnChain(article.article_id_hash, reader, unlockContract);
+      if (unlockError) {
+        console.error('Unlock check failed:', unlockError);
+        return new Response(JSON.stringify({ error: 'Failed to verify unlock' }), {
+          status: 500,
+          headers,
+        });
+      }
+
+      isUnlocked = Boolean(unlocks && unlocks.length > 0);
+
+      if (!isUnlocked && article.article_id_hash) {
+        isUnlocked = await hasUnlockedOnChain(article.article_id_hash, reader, unlockContract);
+      }
     }
 
     if (!isUnlocked) {
@@ -181,6 +220,9 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ body: article.body || '' }), { status: 200, headers });
   } catch (e: any) {
     console.error('article-body error:', e);
-    return new Response(JSON.stringify({ error: e?.message || 'Invalid request' }), { status: 400, headers });
+    return new Response(JSON.stringify({ error: e?.message || 'Invalid request' }), {
+      status: 400,
+      headers,
+    });
   }
 });
