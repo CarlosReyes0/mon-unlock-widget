@@ -108,8 +108,32 @@ function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: Inner
   return (
     <div className="checkout-fiat">
       <ExpressCheckoutElement
+        options={{
+          // Show wallets even if this browser has no card saved yet (still needs Safari/device + domain).
+          paymentMethods: {
+            applePay: "always",
+            googlePay: "always",
+            link: "auto",
+            paypal: "never",
+            amazonPay: "auto",
+            klarna: "auto",
+          },
+          buttonTheme: {
+            applePay: "black",
+          },
+          layout: {
+            maxColumns: 2,
+            maxRows: 3,
+            overflow: "auto",
+          },
+        }}
         onReady={({ availablePaymentMethods }) => {
           setMethodsReady(Boolean(availablePaymentMethods));
+          if (availablePaymentMethods && !availablePaymentMethods.applePay) {
+            console.info(
+              "[mon-unlock] Apple Pay unavailable here. Use Safari on a Mac/iPhone with Wallet set up, and register mon-unlock-widget-production.up.railway.app in Stripe → Settings → Payment methods → Apple Pay (sandbox + live)."
+            );
+          }
         }}
         onConfirm={() => {
           void onConfirm();
@@ -117,7 +141,7 @@ function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: Inner
       />
       {!methodsReady ? (
         <p className="checkout-hint">
-          Apple Pay and Google Pay show when available on this device. Otherwise use the card option
+          Apple Pay and Google Pay show when available on this device. Otherwise use the wallets
           Stripe presents.
         </p>
       ) : null}
