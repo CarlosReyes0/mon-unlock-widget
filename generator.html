@@ -47,16 +47,17 @@
     <nav id="topnav" style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
       <a href="/" data-nav="home" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
       <a href="/generator.html" data-nav="embed" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Create embed</a>
+      <a href="/account.html" data-nav="account" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Publisher account</a>
       <a href="/dashboard.html" data-nav="dashboard" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Writer dashboard</a>
     </nav>
     <script>
-      (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
+      (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='account'&&p.includes('account'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
     </script>
 
     <div class="header">
       <div>
         <h1>Embed Generator</h1>
-        <p style="margin: 0.5rem 0 0; color: #6b7280;">Create a working paywall block in under 2 minutes. No account required.</p>
+        <p style="margin: 0.5rem 0 0; color: #6b7280;">Create a working paywall block in under 2 minutes. Sign in with email, Google, or a wallet.</p>
       </div>
     </div>
 
@@ -119,15 +120,20 @@
           </div>
         </div>
 
-        <!-- Wallet connection (always visible) -->
-        <div style="margin-top: 1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-          <button class="btn btn-secondary" id="connectWalletBtn">Connect wallet</button>
-          <div id="walletConnected" style="display:none; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <!-- Publisher account: email / Google / wallet (Privy) -->
+        <div style="margin-top: 1rem;">
+          <div style="font-size:0.75rem; font-weight:600; color:#57534e; margin-bottom:0.45rem;">Publisher account</div>
+          <div id="mon-publisher-auth"></div>
+          <div id="walletConnected" style="display:none; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem;">
             <span id="walletStatus" style="font-size:0.875rem; color:#6b7280;"></span>
-            <button class="btn btn-secondary" id="switchWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch</button>
+            <button class="btn btn-secondary" id="switchWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch wallet</button>
             <button class="btn btn-secondary" id="disconnectWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Disconnect</button>
           </div>
+          <p style="margin:0.45rem 0 0; font-size:0.75rem; color:#6b7280;">
+            Prefer a dedicated page? <a href="/account.html" style="color:inherit;">Create publisher account</a>
+          </p>
         </div>
+        <button class="btn btn-secondary" id="connectWalletBtn" style="display:none;" aria-hidden="true">Connect wallet</button>
 
         <div style="margin-top: 1rem;">
           <button class="btn btn-primary" id="copyFull">Copy full embed block</button>
@@ -161,6 +167,8 @@
       Powered by the live widget at <a href="https://mon-unlock-widget-production.up.railway.app" target="_blank" style="color:inherit;">mon-unlock-widget-production.up.railway.app</a>
     </footer>
 
+    <link rel="stylesheet" href="/publisher-auth.css" />
+    <script type="module" src="/publisher-auth.js"></script>
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
@@ -230,6 +238,7 @@
       }
 
       function getInjectedProvider() {
+        if (window.__monPublisherProvider) return window.__monPublisherProvider;
         const eth = window.ethereum;
         if (!eth) return null;
         if (Array.isArray(eth.providers) && eth.providers.length) {
@@ -237,6 +246,34 @@
         }
         return eth;
       }
+
+      function applyPublisherAuth(detail) {
+        if (detail?.address) {
+          connectedWallet = detail.address;
+          saveWallet(connectedWallet);
+          updateWalletUI();
+          // Privy owns sign-out; hide legacy switch/disconnect for embedded accounts.
+          const isPrivy = detail.source === "privy";
+          const switchBtn = document.getElementById("switchWalletBtn");
+          const disconnectBtn = document.getElementById("disconnectWalletBtn");
+          if (switchBtn) switchBtn.style.display = isPrivy ? "none" : "inline-flex";
+          if (disconnectBtn) disconnectBtn.style.display = isPrivy ? "none" : "inline-flex";
+        } else if (!getInjectedProvider() || window.__monPublisherReady === false) {
+          // Only clear when Privy explicitly signed out (not during initial load).
+          if (detail === null && window.MonPublisherAuth) {
+            connectedWallet = null;
+            clearWallet();
+            updateWalletUI();
+          }
+        }
+      }
+
+      window.addEventListener("mon-publisher-auth", (ev) => {
+        applyPublisherAuth(ev.detail);
+      });
+      window.addEventListener("mon-publisher-auth-fallback-wallet", () => {
+        connectWallet();
+      });
 
       function accountsFromPermissions(permissions) {
         if (!Array.isArray(permissions)) return [];
@@ -259,21 +296,17 @@
       }
 
       function updateWalletUI() {
-        const connectBtn = document.getElementById("connectWalletBtn");
         const connectedEl = document.getElementById("walletConnected");
         const status = document.getElementById("walletStatus");
         const copyBtn = document.getElementById("copyFull");
-        if (!connectBtn || !connectedEl || !status) return;
+        if (!connectedEl || !status || !copyBtn) return;
 
         if (connectedWallet) {
-          connectBtn.style.display = "none";
-          connectedEl.style.display = "flex";
+          // Privy inline UI already shows identity; keep a compact status for register flow.
+          connectedEl.style.display = window.__monPublisherAddress ? "none" : "flex";
           status.innerHTML = `Connected: <span class="mono">${connectedWallet.slice(0, 6)}…${connectedWallet.slice(-4)}</span>`;
           copyBtn.textContent = "Copy and register embed block";
         } else {
-          connectBtn.style.display = "inline-flex";
-          connectBtn.disabled = false;
-          connectBtn.textContent = "Connect wallet";
           connectedEl.style.display = "none";
           status.textContent = "";
           copyBtn.textContent = "Copy full embed block";
@@ -283,12 +316,9 @@
       async function connectWallet() {
         const eth = getInjectedProvider();
         if (!eth) {
-          alert("MetaMask or another Web3 wallet is required.");
+          alert("Sign in with email/Google above, or install MetaMask.");
           return;
         }
-        const btn = document.getElementById("connectWalletBtn");
-        btn.disabled = true;
-        btn.textContent = "Connecting…";
         try {
           const accounts = await eth.request({ method: "eth_requestAccounts" });
           const address = accounts?.[0];
@@ -622,9 +652,9 @@ ${teaserEsc}
       }
 
       function wireEvents() {
-        document.getElementById("connectWalletBtn").addEventListener("click", connectWallet);
-        document.getElementById("switchWalletBtn").addEventListener("click", switchWallet);
-        document.getElementById("disconnectWalletBtn").addEventListener("click", disconnectWallet);
+        document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
+        document.getElementById("switchWalletBtn")?.addEventListener("click", switchWallet);
+        document.getElementById("disconnectWalletBtn")?.addEventListener("click", disconnectWallet);
 
         fields.forEach((f) => {
           const el = document.getElementById(f);

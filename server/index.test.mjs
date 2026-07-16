@@ -93,6 +93,17 @@ test("POST /api/stripe/create-intent returns 503 without Stripe secrets", async 
   assert.equal(body.error, "stripe_not_configured");
 });
 
+test("POST /api/stripe/payouts/process returns 503 without cron secret", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/stripe/payouts/process`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ limit: 1 }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "payout_cron_not_configured");
+});
+
 test("GET / serves index.html", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/`);
   assert.equal(res.status, 200);

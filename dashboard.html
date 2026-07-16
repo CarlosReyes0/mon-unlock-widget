@@ -43,16 +43,17 @@
     <nav id="topnav" style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
       <a href="/" data-nav="home" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
       <a href="/generator.html" data-nav="embed" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Create embed</a>
+      <a href="/account.html" data-nav="account" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Publisher account</a>
       <a href="/dashboard.html" data-nav="dashboard" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Writer dashboard</a>
     </nav>
     <script>
-      (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
+      (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='account'&&p.includes('account'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
     </script>
 
     <div class="header">
       <div>
         <h1>Writer Dashboard</h1>
-        <p style="margin: 0.5rem 0 0; color: #6b7280;">Connect your wallet to register articles and track revenue.</p>
+        <p style="margin: 0.5rem 0 0; color: #6b7280;">Sign in to track revenue and set up Stripe payouts. MetaMask is optional.</p>
       </div>
     </div>
 
@@ -62,13 +63,26 @@
         <div class="card">
           <h2 class="section-title">Publisher identity</h2>
           <div id="walletSection">
-            <button class="btn btn-primary" id="connectBtn">Connect wallet</button>
-            <div id="walletConnected" style="display:none; align-items:center; gap:0.75rem;">
+            <div id="mon-publisher-auth"></div>
+            <button class="btn btn-primary" id="connectBtn" style="display:none;" aria-hidden="true">Connect wallet</button>
+            <div id="walletConnected" style="display:none; align-items:center; gap:0.75rem; margin-top:0.5rem;">
               <p id="walletStatus" style="margin:0; font-size:0.875rem; color:#6b7280;"></p>
               <button class="btn btn-secondary" id="switchBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch</button>
               <button class="btn btn-secondary" id="disconnectBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Disconnect</button>
             </div>
+            <p style="margin:0.55rem 0 0; font-size:0.75rem; color:#6b7280;">
+              <a href="/account.html" style="color:inherit;">Create publisher account</a> with email or Google.
+            </p>
           </div>
+        </div>
+
+        <div class="card" style="margin-top:1.25rem;">
+          <h2 class="section-title">Stripe payouts</h2>
+          <p style="margin:0 0 0.75rem; font-size:0.875rem; color:#6b7280; line-height:1.45;">
+            When readers unlock with Apple Pay / card, funds land on the platform Stripe account, then transfer to <strong>your</strong> Connect account. You do not wait for a manual payout from the site owner.
+          </p>
+          <button class="btn btn-primary" id="stripeOnboardBtn" disabled>Set up Stripe payouts</button>
+          <p id="stripePayoutStatus" style="margin:0.55rem 0 0; font-size:0.75rem; color:#6b7280;"></p>
         </div>
       </div>
 
@@ -121,9 +135,11 @@
     </div>
 
     <footer style="margin-top: 4rem; font-size: 0.875rem; color: #6b7280; text-align: center;">
-      Wallet address = your identity. No accounts, no email.
+      Publisher identity = your wallet (email/Google embedded wallet or MetaMask). Fiat payouts use Stripe Connect.
     </footer>
 
+    <link rel="stylesheet" href="/publisher-auth.css" />
+    <script type="module" src="/publisher-auth.js"></script>
     <script type="module">
       // === Network configuration (Mainnet only) ===
       const NETWORKS = {
@@ -462,6 +478,7 @@ ${teaser}
       }
 
       function getInjectedProvider() {
+        if (window.__monPublisherProvider) return window.__monPublisherProvider;
         const eth = window.ethereum;
         if (!eth) return null;
         // Prefer MetaMask when multiple wallets inject (Coinbase, Rabby, etc.).
@@ -471,24 +488,40 @@ ${teaser}
         return eth;
       }
 
-      async function applyConnectedWallet(address, { reload = true } = {}) {
+      function setStripeOnboardEnabled(enabled) {
+        const btn = document.getElementById("stripeOnboardBtn");
+        if (btn) btn.disabled = !enabled;
+      }
+
+      async function applyConnectedWallet(address, { reload = true, source = "wallet" } = {}) {
         const eth = getInjectedProvider();
-        if (!eth || !address) return;
+        if (!address) return;
 
         currentWallet = address;
 
-        const chainIdHex = await eth.request({ method: "eth_chainId" });
-        const chainId = parseInt(chainIdHex, 16);
-        const net = NETWORKS[chainId] || NETWORKS[143];
+        let net = NETWORKS[143];
+        if (eth) {
+          try {
+            const chainIdHex = await eth.request({ method: "eth_chainId" });
+            const chainId = parseInt(chainIdHex, 16);
+            net = NETWORKS[chainId] || NETWORKS[143];
+          } catch {
+            /* embedded wallets may not support chainId until prompted */
+          }
+        }
         window.__currentNetwork = net;
 
         const status = document.getElementById("walletStatus");
-        status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0, 6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
+        const connectedEl = document.getElementById("walletConnected");
+        // Privy UI already shows identity; only show legacy status for injected wallets.
+        if (source === "privy" || window.__monPublisherAddress) {
+          if (connectedEl) connectedEl.style.display = "none";
+        } else if (status && connectedEl) {
+          status.innerHTML = `Connected: <span class="mono">${currentWallet.slice(0, 6)}…${currentWallet.slice(-4)}</span> on <strong>${net.name}</strong>`;
+          connectedEl.style.display = "flex";
+        }
 
-        document.getElementById("connectBtn").style.display = "none";
-        document.getElementById("connectBtn").disabled = false;
-        document.getElementById("connectBtn").textContent = "Connect wallet";
-        document.getElementById("walletConnected").style.display = "flex";
+        setStripeOnboardEnabled(true);
 
         myArticles = [];
         renderArticles();
@@ -498,24 +531,19 @@ ${teaser}
 
       async function connectWallet() {
         const status = document.getElementById("walletStatus");
-        const btn = document.getElementById("connectBtn");
-        btn.disabled = true;
-        btn.textContent = "Connecting…";
-
         try {
           const eth = getInjectedProvider();
-          if (!eth) throw new Error("No Web3 wallet found. Please install MetaMask or another wallet.");
+          if (!eth) throw new Error("Sign in with email/Google above, or install MetaMask.");
 
           const accounts = await eth.request({ method: "eth_requestAccounts" });
           const address = accounts?.[0];
           if (!address) throw new Error("No account selected");
 
-          await applyConnectedWallet(address);
+          await applyConnectedWallet(address, { source: "wallet" });
         } catch (e) {
-          status.textContent = e.message || "Connection failed";
-          btn.disabled = false;
-          btn.textContent = "Connect wallet";
+          if (status) status.textContent = e.message || "Connection failed";
           document.getElementById("walletConnected").style.display = "none";
+          setStripeOnboardEnabled(false);
         }
       }
 
@@ -524,16 +552,68 @@ ${teaser}
         window.__currentNetwork = null;
         myArticles = [];
 
-        document.getElementById("connectBtn").style.display = "inline-flex";
-        document.getElementById("connectBtn").disabled = false;
-        document.getElementById("connectBtn").textContent = "Connect wallet";
         document.getElementById("walletConnected").style.display = "none";
         document.getElementById("walletStatus").textContent = "";
+        setStripeOnboardEnabled(false);
+        const payoutStatus = document.getElementById("stripePayoutStatus");
+        if (payoutStatus) payoutStatus.textContent = "";
 
         renderArticles();
         updateStats();
         document.getElementById("articlesEmpty").style.display = "block";
       }
+
+      async function startStripeOnboarding() {
+        const status = document.getElementById("stripePayoutStatus");
+        const btn = document.getElementById("stripeOnboardBtn");
+        if (!currentWallet) {
+          if (status) status.textContent = "Sign in first.";
+          return;
+        }
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "Opening Stripe…";
+        }
+        if (status) status.textContent = "";
+        try {
+          const returnUrl = new URL("/dashboard.html", window.location.origin);
+          returnUrl.searchParams.set("stripe_onboard", "return");
+          const refreshUrl = new URL("/dashboard.html", window.location.origin);
+          refreshUrl.searchParams.set("stripe_onboard", "refresh");
+          const res = await fetch("/api/stripe/connect/onboard", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              publisher: currentWallet,
+              returnUrl: returnUrl.toString(),
+              refreshUrl: refreshUrl.toString(),
+            }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || !body.url) {
+            throw new Error(body.error || `onboard_failed_${res.status}`);
+          }
+          window.location.href = body.url;
+        } catch (e) {
+          if (status) status.textContent = e.message || "Could not start Stripe onboarding";
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Set up Stripe payouts";
+          }
+        }
+      }
+
+      window.addEventListener("mon-publisher-auth", (ev) => {
+        const detail = ev.detail;
+        if (detail?.address) {
+          void applyConnectedWallet(detail.address, { source: detail.source || "privy" });
+        } else if (detail === null) {
+          disconnectWallet();
+        }
+      });
+      window.addEventListener("mon-publisher-auth-fallback-wallet", () => {
+        void connectWallet();
+      });
 
       function accountsFromPermissions(permissions) {
         if (!Array.isArray(permissions)) return [];
@@ -678,9 +758,10 @@ ${teaser}
       function init() {
         clearLegacyLocalStorage();
 
-        document.getElementById("connectBtn").addEventListener("click", connectWallet);
-        document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
-        document.getElementById("switchBtn").addEventListener("click", switchWallet);
+        document.getElementById("connectBtn")?.addEventListener("click", connectWallet);
+        document.getElementById("disconnectBtn")?.addEventListener("click", disconnectWallet);
+        document.getElementById("switchBtn")?.addEventListener("click", switchWallet);
+        document.getElementById("stripeOnboardBtn")?.addEventListener("click", () => void startStripeOnboarding());
 
         // Keep dashboard in sync when the user switches account/network in the extension.
         const eth = getInjectedProvider();
@@ -703,8 +784,15 @@ ${teaser}
           });
         }
 
-        // If already connected in this session (from other pages), try to restore
-        // For simplicity we start fresh on each load
+        const params = new URLSearchParams(location.search);
+        const onboard = params.get("stripe_onboard");
+        const payoutStatus = document.getElementById("stripePayoutStatus");
+        if (onboard === "return" && payoutStatus) {
+          payoutStatus.textContent = "Stripe onboarding complete (or in progress). Fiat unlocks will transfer once your Connect account is ready.";
+        } else if (onboard === "refresh" && payoutStatus) {
+          payoutStatus.textContent = "Stripe onboarding was interrupted — click Set up Stripe payouts to continue.";
+        }
+
         document.getElementById("articlesEmpty").style.display = "block";
         refreshIndexerHealth();
       }

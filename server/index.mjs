@@ -391,17 +391,24 @@ const server = http.createServer(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
-      const origin = `https://${req.headers.host || "localhost"}`;
+      const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+      const origin = `${proto}://${req.headers.host || "localhost"}`;
+      const safeUrl = (value, fallback) => {
+        if (typeof value !== "string") return fallback;
+        try {
+          const u = new URL(value);
+          if (u.protocol !== "https:" && u.protocol !== "http:") return fallback;
+          // Only same-host return/refresh URLs (prevent open redirects).
+          if (u.host !== (req.headers.host || "")) return fallback;
+          return u.toString();
+        } catch {
+          return fallback;
+        }
+      };
       const result = await createConnectOnboardingLink({
         publisher: parsed.publisher,
-        refreshUrl:
-          typeof parsed.refreshUrl === "string" && parsed.refreshUrl.startsWith("https://")
-            ? parsed.refreshUrl
-            : `${origin}/dashboard.html`,
-        returnUrl:
-          typeof parsed.returnUrl === "string" && parsed.returnUrl.startsWith("https://")
-            ? parsed.returnUrl
-            : `${origin}/dashboard.html`,
+        refreshUrl: safeUrl(parsed.refreshUrl, `${origin}/dashboard.html`),
+        returnUrl: safeUrl(parsed.returnUrl, `${origin}/dashboard.html`),
       });
       return sendJson(res, 200, result);
     } catch (e) {
@@ -413,6 +420,16 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "POST" && url.pathname === "/api/stripe/payouts/process") {
     try {
+      const cronSecret = (process.env.STRIPE_PAYOUT_CRON_SECRET || "").trim();
+      if (!cronSecret) {
+        return sendJson(res, 503, { error: "payout_cron_not_configured" });
+      }
+      const auth = String(req.headers.authorization || "");
+      const headerSecret = String(req.headers["x-cron-secret"] || "");
+      const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+      if (bearer !== cronSecret && headerSecret !== cronSecret) {
+        return sendJson(res, 401, { error: "unauthorized" });
+      }
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
       const result = await processPendingPayouts({ limit: parsed.limit });
