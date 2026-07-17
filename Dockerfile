@@ -52,6 +52,7 @@ COPY --from=builder /app/agents.md ./agents.md
 COPY --from=builder /app/skill.md ./skill.md
 COPY --from=builder /app/openapi.json ./openapi.json
 COPY --from=builder /app/robots.txt ./robots.txt
+COPY --from=builder /app/favicon.ico ./favicon.ico
 COPY --from=builder /app/.well-known ./.well-known
 COPY --from=builder /app/skills/README.md ./skills/README.md
 COPY --from=builder /app/skills/mon-unlock-embed/README.md ./skills/mon-unlock-embed/README.md
