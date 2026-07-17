@@ -63,4 +63,13 @@ test("GET /connect-demo.html is served", async () => {
   assert.equal(res.status, 200);
   const text = await res.text();
   assert.match(text, /Onboard to collect payments/i);
+  assert.match(text, /site-nav\.js/);
+});
+
+test("GET /site-nav.js is served", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/site-nav.js`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Create embed/);
+  assert.match(text, /Connect sample/);
 });

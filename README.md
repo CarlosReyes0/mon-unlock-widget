@@ -23,10 +23,14 @@ https://mon-unlock-widget-production.up.railway.app
 
 Pages:
 - `/` – Homepage
-- `/demo.html` – Full interactive testnet demo (real MON payments)
+- `/generator.html` – Create embed
+- `/account.html` – Publisher account (email / Google / wallet)
+- `/dashboard.html` – Writer dashboard + Stripe payouts
 - `/embed-example.html` – Clean copy-paste embed reference
-- `/connect-demo.html` – Stripe Connect sample (Accounts v2 onboarding + products)
-- `/connect-store.html` – Sample storefront (destination charges)
+- `/connect-demo.html` – Dev: Stripe Connect sample (not in main nav)
+- `/connect-store.html` – Dev: sample storefront
+
+Product nav is shared via `site-nav.js`: **Home · Create embed · Account · Dashboard**. Connect sample links live in the page footer under Dev tools.
 
 ## Stripe Connect sample (Accounts v2)
 
