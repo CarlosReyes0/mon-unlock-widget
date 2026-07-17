@@ -5,6 +5,9 @@ dist-checkout/
 .env.local
 .DS_Store
 
+# Connect sample local seller map
+server/data/
+
 # Foundry
 cache/
 out/
