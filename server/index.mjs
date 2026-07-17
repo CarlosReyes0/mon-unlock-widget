@@ -26,6 +26,18 @@ import {
   processPendingPayouts,
   getUnlockBySession,
 } from "./stripe.mjs";
+import {
+  connectSampleConfigured,
+  createConnectedAccount,
+  createOnboardingLink,
+  getAccountOnboardingStatus,
+  handleConnectThinWebhook,
+  createPlatformProduct,
+  listPlatformProducts,
+  createDestinationCheckout,
+  getCheckoutSession,
+  listLocalSellers,
+} from "./connect-sample.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -438,6 +450,163 @@ const server = http.createServer(async (req, res) => {
       const status = e?.status || 500;
       console.error("[stripe] payouts:", e?.message || e);
       return sendJson(res, status, { error: e?.message || "payouts_failed" });
+    }
+  }
+
+  // --- Stripe Connect sample (Accounts v2 + destination charges) ---
+  const requestOrigin = () => {
+    const proto = String(req.headers["x-forwarded-proto"] || "http").split(",")[0].trim();
+    return `${proto}://${req.headers.host || "localhost"}`;
+  };
+
+  if (method === "GET" && url.pathname === "/api/connect-sample/health") {
+    return sendJson(res, 200, {
+      ok: true,
+      stripeConfigured: connectSampleConfigured(),
+    });
+  }
+
+  if (method === "GET" && url.pathname === "/api/connect-sample/sellers") {
+    try {
+      return sendJson(res, 200, { sellers: listLocalSellers() });
+    } catch (e) {
+      return sendJson(res, e?.status || 500, {
+        error: e?.code || "sellers_failed",
+        message: e?.message || "sellers_failed",
+      });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/connect-sample/accounts") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await createConnectedAccount(parsed);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      console.error("[connect-sample] accounts:", e?.message || e);
+      return sendJson(res, status, {
+        error: e?.code || "account_create_failed",
+        message: e?.message || "account_create_failed",
+      });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/connect-sample/account-link") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const origin = requestOrigin();
+      const accountId = String(parsed.accountId || "").trim();
+      const result = await createOnboardingLink({
+        accountId,
+        returnUrl: `${origin}/connect-demo.html?accountId=${encodeURIComponent(accountId)}`,
+        refreshUrl: `${origin}/connect-demo.html?accountId=${encodeURIComponent(accountId)}&refresh=1`,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      console.error("[connect-sample] account-link:", e?.message || e);
+      return sendJson(res, status, {
+        error: e?.code || "account_link_failed",
+        message: e?.message || "account_link_failed",
+      });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/connect-sample/account-status") {
+    try {
+      const accountId = url.searchParams.get("accountId") || "";
+      const result = await getAccountOnboardingStatus(accountId);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, {
+        error: e?.code || "account_status_failed",
+        message: e?.message || "account_status_failed",
+      });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/connect-sample/products") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await createPlatformProduct(parsed);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      console.error("[connect-sample] products:", e?.message || e);
+      return sendJson(res, status, {
+        error: e?.code || "product_create_failed",
+        message: e?.message || "product_create_failed",
+      });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/connect-sample/products") {
+    try {
+      const result = await listPlatformProducts();
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, {
+        error: e?.code || "product_list_failed",
+        message: e?.message || "product_list_failed",
+      });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/connect-sample/checkout") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const origin = requestOrigin();
+      const result = await createDestinationCheckout({
+        productId: parsed.productId,
+        quantity: parsed.quantity,
+        successUrl: `${origin}/connect-success.html?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${origin}/connect-store.html?canceled=1`,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      console.error("[connect-sample] checkout:", e?.message || e);
+      return sendJson(res, status, {
+        error: e?.code || "checkout_failed",
+        message: e?.message || "checkout_failed",
+      });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/connect-sample/checkout-session") {
+    try {
+      const sessionId = url.searchParams.get("session_id") || "";
+      const result = await getCheckoutSession(sessionId);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, {
+        error: e?.code || "session_failed",
+        message: e?.message || "session_failed",
+      });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/connect-sample/webhook") {
+    try {
+      // Raw body required for thin-event signature verification.
+      const raw = await readBody(req, 256_000);
+      const result = await handleConnectThinWebhook(raw, req.headers["stripe-signature"]);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 400;
+      console.error("[connect-sample] webhook:", e?.message || e);
+      return sendJson(res, status, {
+        error: e?.code || "webhook_failed",
+        message: e?.message || "webhook_failed",
+      });
     }
   }
 

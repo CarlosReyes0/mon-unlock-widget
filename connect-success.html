@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment success — Connect sample</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        font-family: "DM Sans", system-ui, sans-serif;
+        color: #1c1917;
+        background:
+          radial-gradient(900px 480px at 10% -10%, #dce8d8 0%, transparent 55%),
+          #fafaf9;
+        min-height: 100vh;
+      }
+      .wrap { max-width: 560px; margin: 0 auto; padding: 3rem 1.25rem; }
+      h1 { font-family: Literata, Georgia, serif; font-weight: 600; }
+      .card {
+        background: #fff;
+        border: 1px solid #e7e5e4;
+        border-radius: 14px;
+        padding: 1.25rem;
+        margin-top: 1rem;
+      }
+      pre { white-space: pre-wrap; font-size: 0.8rem; color: #57534e; }
+      a { color: #5b7c5a; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Payment received</h1>
+      <p>Destination charge completed (or is processing). Details from Checkout:</p>
+      <div class="card"><pre id="out">Loading…</pre></div>
+      <p style="margin-top:1.25rem;"><a href="/connect-store.html">← Back to storefront</a></p>
+    </div>
+    <script>
+      (async () => {
+        const out = document.getElementById("out");
+        const id = new URLSearchParams(location.search).get("session_id");
+        if (!id) {
+          out.textContent = "Missing session_id query param.";
+          return;
+        }
+        try {
+          const res = await fetch(
+            `/api/connect-sample/checkout-session?session_id=${encodeURIComponent(id)}`
+          );
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.message || body.error || res.status);
+          out.textContent = JSON.stringify(body, null, 2);
+        } catch (e) {
+          out.textContent = e.message;
+        }
+      })();
+    </script>
+  </body>
+</html>

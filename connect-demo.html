@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connect sample — sellers & products</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #1c1917;
+        --muted: #78716c;
+        --line: #e7e5e4;
+        --accent: #5b7c5a;
+        --soft: #f5f5f4;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "DM Sans", system-ui, sans-serif;
+        background:
+          radial-gradient(1100px 520px at 8% -10%, #dce8d8 0%, transparent 55%),
+          radial-gradient(800px 420px at 100% 0%, #f0ebe3 0%, transparent 50%),
+          #fafaf9;
+        min-height: 100vh;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+      nav { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.75rem; }
+      nav a { font-size: 0.875rem; color: #57534e; text-decoration: none; }
+      nav a.active { color: var(--accent); font-weight: 600; }
+      .brand { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5rem; }
+      h1 { font-family: Literata, Georgia, serif; font-size: clamp(1.7rem, 4vw, 2.2rem); margin: 0 0 0.5rem; font-weight: 600; }
+      .lead { color: var(--muted); margin: 0 0 1.75rem; line-height: 1.5; }
+      .card {
+        background: rgba(255,255,255,0.88);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 1.25rem 1.35rem;
+        margin-bottom: 1.25rem;
+      }
+      h2 { font-size: 1.05rem; margin: 0 0 0.85rem; }
+      label { display: block; font-size: 0.75rem; font-weight: 600; color: #57534e; margin: 0.65rem 0 0.3rem; }
+      input, textarea, select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.55rem 0.7rem;
+        font: inherit;
+        background: #fff;
+      }
+      .row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.9rem; }
+      button, .btn {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 0.55rem 0.9rem;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+      }
+      button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button:disabled { opacity: 0.55; cursor: wait; }
+      .status { margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted); white-space: pre-wrap; }
+      .status.ok { color: #15803d; }
+      .status.err { color: #b45309; }
+      .pill {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.2rem 0.5rem;
+        border-radius: 999px;
+        background: var(--soft);
+        color: #57534e;
+        margin-right: 0.35rem;
+      }
+      .pill.good { background: #dcfce7; color: #166534; }
+      .pill.warn { background: #ffedd5; color: #9a3412; }
+      code { font-size: 0.8em; background: var(--soft); padding: 0.1rem 0.3rem; border-radius: 4px; }
+      .hint { font-size: 0.75rem; color: var(--muted); margin: 0.5rem 0 0; line-height: 1.4; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav>
+        <a href="/">Home</a>
+        <a class="active" href="/connect-demo.html">Connect sellers</a>
+        <a href="/connect-store.html">Storefront</a>
+      </nav>
+
+      <p class="brand">MON Unlock · Stripe sample</p>
+      <h1>Connect sellers & products</h1>
+      <p class="lead">
+        Demo of Accounts v2: create a connected account, onboard with Account Links, then create
+        platform products mapped to that seller. Buyers check out on the
+        <a href="/connect-store.html">storefront</a>.
+      </p>
+
+      <!-- Step 1: create account -->
+      <section class="card">
+        <h2>1. Create connected account</h2>
+        <p class="hint">Platform collects fees (`fees_collector: application`). Uses Accounts v2 — no top-level <code>type</code>.</p>
+        <label for="userId">Your app user id</label>
+        <input id="userId" placeholder="seller-alice" value="seller-demo" />
+        <label for="displayName">Display name</label>
+        <input id="displayName" placeholder="Alice’s Shop" value="Demo Seller" />
+        <label for="contactEmail">Contact email</label>
+        <input id="contactEmail" type="email" placeholder="seller@example.com" value="seller@example.com" />
+        <div class="row">
+          <button class="primary" id="createAccountBtn" type="button">Create connected account</button>
+        </div>
+        <p class="status" id="createStatus"></p>
+      </section>
+
+      <!-- Step 2: onboard -->
+      <section class="card">
+        <h2>2. Onboard to collect payments</h2>
+        <label for="accountId">Connected account id</label>
+        <input id="accountId" placeholder="acct_…" />
+        <div class="row">
+          <button class="primary" id="onboardBtn" type="button">Onboard to collect payments</button>
+          <button id="refreshStatusBtn" type="button">Refresh status from API</button>
+        </div>
+        <p class="status" id="onboardStatus"></p>
+        <div id="statusPills" style="margin-top:0.75rem;"></div>
+      </section>
+
+      <!-- Step 3: create product -->
+      <section class="card">
+        <h2>3. Create product (platform)</h2>
+        <p class="hint">Product lives on the platform; <code>metadata.connected_account_id</code> maps it to the seller for destination charges.</p>
+        <label for="productName">Name</label>
+        <input id="productName" placeholder="Essay unlock" value="Sample essay" />
+        <label for="productDesc">Description</label>
+        <textarea id="productDesc" rows="2">A short paid essay from the connected seller.</textarea>
+        <label for="productPrice">Price (USD cents)</label>
+        <input id="productPrice" type="number" min="50" step="1" value="500" />
+        <div class="row">
+          <button class="primary" id="createProductBtn" type="button">Create product</button>
+        </div>
+        <p class="status" id="productStatus"></p>
+      </section>
+
+      <section class="card">
+        <h2>Known sellers (local map)</h2>
+        <p class="hint">Demo persistence: <code>server/data/connect-sellers.json</code> (user id → account id).</p>
+        <pre class="status" id="sellersList" style="background:var(--soft);padding:0.75rem;border-radius:8px;overflow:auto;"></pre>
+      </section>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function setStatus(el, text, kind) {
+        el.textContent = text || "";
+        el.className = "status" + (kind ? " " + kind : "");
+      }
+
+      function rememberAccount(id) {
+        if (!id) return;
+        $("accountId").value = id;
+        try { localStorage.setItem("connect_sample_account", id); } catch {}
+      }
+
+      async function api(path, opts = {}) {
+        const res = await fetch(path, {
+          headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+          ...opts,
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = body.message || body.error || `HTTP ${res.status}`;
+          throw new Error(msg);
+        }
+        return body;
+      }
+
+      async function loadSellers() {
+        try {
+          const data = await api("/api/connect-sample/sellers");
+          $("sellersList").textContent = JSON.stringify(data.sellers || [], null, 2);
+          if (!$("accountId").value && data.sellers?.[0]?.accountId) {
+            rememberAccount(data.sellers[0].accountId);
+          }
+        } catch (e) {
+          $("sellersList").textContent = e.message;
+        }
+      }
+
+      function renderStatus(status) {
+        const pills = $("statusPills");
+        const ready = status.readyToReceivePayments;
+        const complete = status.onboardingComplete;
+        pills.innerHTML =
+          `<span class="pill ${ready ? "good" : "warn"}">transfers: ${status.transferStatus}</span>` +
+          `<span class="pill ${complete ? "good" : "warn"}">requirements: ${status.requirementsStatus || "n/a"}</span>` +
+          `<span class="pill ${ready && complete ? "good" : "warn"}">${
+            ready && complete ? "Ready to receive payments" : "Onboarding incomplete"
+          }</span>`;
+        setStatus(
+          $("onboardStatus"),
+          `Account ${status.accountId}\n` +
+            `readyToReceivePayments=${status.readyToReceivePayments}\n` +
+            `onboardingComplete=${status.onboardingComplete}`,
+          ready && complete ? "ok" : ""
+        );
+      }
+
+      $("createAccountBtn").onclick = async () => {
+        const btn = $("createAccountBtn");
+        btn.disabled = true;
+        setStatus($("createStatus"), "Creating…");
+        try {
+          const data = await api("/api/connect-sample/accounts", {
+            method: "POST",
+            body: JSON.stringify({
+              userId: $("userId").value,
+              displayName: $("displayName").value,
+              contactEmail: $("contactEmail").value,
+            }),
+          });
+          rememberAccount(data.accountId);
+          setStatus(
+            $("createStatus"),
+            `${data.reused ? "Reused" : "Created"} account ${data.accountId}`,
+            "ok"
+          );
+          await loadSellers();
+        } catch (e) {
+          setStatus($("createStatus"), e.message, "err");
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      $("onboardBtn").onclick = async () => {
+        const accountId = $("accountId").value.trim();
+        if (!accountId) {
+          setStatus($("onboardStatus"), "Enter an account id first.", "err");
+          return;
+        }
+        const btn = $("onboardBtn");
+        btn.disabled = true;
+        setStatus($("onboardStatus"), "Creating Account Link…");
+        try {
+          const data = await api("/api/connect-sample/account-link", {
+            method: "POST",
+            body: JSON.stringify({ accountId }),
+          });
+          window.location.href = data.url;
+        } catch (e) {
+          setStatus($("onboardStatus"), e.message, "err");
+          btn.disabled = false;
+        }
+      };
+
+      $("refreshStatusBtn").onclick = async () => {
+        const accountId = $("accountId").value.trim();
+        if (!accountId) {
+          setStatus($("onboardStatus"), "Enter an account id first.", "err");
+          return;
+        }
+        setStatus($("onboardStatus"), "Fetching live status from Stripe…");
+        try {
+          const status = await api(
+            `/api/connect-sample/account-status?accountId=${encodeURIComponent(accountId)}`
+          );
+          renderStatus(status);
+        } catch (e) {
+          setStatus($("onboardStatus"), e.message, "err");
+        }
+      };
+
+      $("createProductBtn").onclick = async () => {
+        const accountId = $("accountId").value.trim();
+        if (!accountId) {
+          setStatus($("productStatus"), "Need a connected account id.", "err");
+          return;
+        }
+        const btn = $("createProductBtn");
+        btn.disabled = true;
+        setStatus($("productStatus"), "Creating product on platform…");
+        try {
+          const data = await api("/api/connect-sample/products", {
+            method: "POST",
+            body: JSON.stringify({
+              name: $("productName").value,
+              description: $("productDesc").value,
+              priceInCents: Number($("productPrice").value),
+              connectedAccountId: accountId,
+            }),
+          });
+          setStatus(
+            $("productStatus"),
+            `Created ${data.productId} → seller ${data.connectedAccountId}`,
+            "ok"
+          );
+        } catch (e) {
+          setStatus($("productStatus"), e.message, "err");
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      // Prefill from return_url ?accountId=…
+      const params = new URLSearchParams(location.search);
+      const fromReturn = params.get("accountId");
+      try {
+        rememberAccount(fromReturn || localStorage.getItem("connect_sample_account"));
+      } catch {}
+      if (fromReturn) {
+        setStatus($("onboardStatus"), "Returned from Stripe onboarding — refresh status.", "ok");
+      }
+      loadSellers();
+    </script>
+  </body>
+</html>

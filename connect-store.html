@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connect sample — storefront</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #1c1917;
+        --muted: #78716c;
+        --line: #e7e5e4;
+        --accent: #5b7c5a;
+        --soft: #f5f5f4;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "DM Sans", system-ui, sans-serif;
+        background:
+          radial-gradient(1100px 520px at 8% -10%, #dce8d8 0%, transparent 55%),
+          radial-gradient(800px 420px at 100% 0%, #f0ebe3 0%, transparent 50%),
+          #fafaf9;
+        min-height: 100vh;
+      }
+      .wrap { max-width: 840px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+      nav { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.75rem; }
+      nav a { font-size: 0.875rem; color: #57534e; text-decoration: none; }
+      nav a.active { color: var(--accent); font-weight: 600; }
+      .brand { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5rem; }
+      h1 { font-family: Literata, Georgia, serif; font-size: clamp(1.7rem, 4vw, 2.2rem); margin: 0 0 0.5rem; font-weight: 600; }
+      .lead { color: var(--muted); margin: 0 0 1.75rem; line-height: 1.5; }
+      .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+      .card {
+        background: rgba(255,255,255,0.9);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 1.15rem 1.2rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+      }
+      .card h2 { font-size: 1.05rem; margin: 0; }
+      .card p { margin: 0; color: var(--muted); font-size: 0.875rem; line-height: 1.4; flex: 1; }
+      .price { font-weight: 700; font-size: 1.1rem; }
+      .meta { font-size: 0.7rem; color: var(--muted); word-break: break-all; }
+      button {
+        appearance: none;
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #fff;
+        border-radius: 8px;
+        padding: 0.55rem 0.9rem;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+        margin-top: 0.5rem;
+      }
+      button:disabled { opacity: 0.55; cursor: wait; }
+      .empty, .err { color: var(--muted); font-size: 0.9rem; }
+      .err { color: #b45309; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav>
+        <a href="/">Home</a>
+        <a href="/connect-demo.html">Connect sellers</a>
+        <a class="active" href="/connect-store.html">Storefront</a>
+      </nav>
+
+      <p class="brand">MON Unlock · Stripe sample</p>
+      <h1>Storefront</h1>
+      <p class="lead">
+        All sample products on the platform. Checkout uses a <strong>destination charge</strong> plus
+        an application fee so the connected seller receives the rest.
+      </p>
+
+      <div id="grid" class="grid"></div>
+      <p id="msg" class="empty">Loading products…</p>
+    </div>
+
+    <script>
+      const grid = document.getElementById("grid");
+      const msg = document.getElementById("msg");
+
+      function money(cents, currency) {
+        if (cents == null) return "—";
+        try {
+          return new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: (currency || "usd").toUpperCase(),
+          }).format(cents / 100);
+        } catch {
+          return `${(cents / 100).toFixed(2)} ${currency || "usd"}`;
+        }
+      }
+
+      async function buy(productId, btn) {
+        btn.disabled = true;
+        btn.textContent = "Redirecting…";
+        try {
+          const res = await fetch("/api/connect-sample/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, quantity: 1 }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || !body.url) {
+            throw new Error(body.message || body.error || `HTTP ${res.status}`);
+          }
+          window.location.href = body.url;
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = "Buy with Stripe Checkout";
+          msg.className = "err";
+          msg.textContent = e.message;
+        }
+      }
+
+      async function load() {
+        try {
+          const res = await fetch("/api/connect-sample/products");
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.message || body.error || `HTTP ${res.status}`);
+          const products = body.products || [];
+          if (!products.length) {
+            msg.className = "empty";
+            msg.textContent = "No products yet. Create one on the Connect sellers page.";
+            return;
+          }
+          msg.textContent = "";
+          grid.innerHTML = "";
+          for (const p of products) {
+            const card = document.createElement("article");
+            card.className = "card";
+            card.innerHTML = `
+              <h2></h2>
+              <p class="desc"></p>
+              <div class="price"></div>
+              <div class="meta"></div>
+              <button type="button">Buy with Stripe Checkout</button>
+            `;
+            card.querySelector("h2").textContent = p.name;
+            card.querySelector(".desc").textContent = p.description || "No description";
+            card.querySelector(".price").textContent = money(p.unitAmount, p.currency);
+            card.querySelector(".meta").textContent =
+              `Seller ${p.connectedAccountId || "unknown"} · ${p.productId}`;
+            const btn = card.querySelector("button");
+            btn.onclick = () => buy(p.productId, btn);
+            grid.appendChild(card);
+          }
+        } catch (e) {
+          msg.className = "err";
+          msg.textContent = e.message;
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>
