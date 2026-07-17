@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MON Unlock Agent API",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <mon-unlock> HTML. On-chain Monad registration may still require one publisher wallet approval.",
     "contact": {
       "name": "Open Paywall / MON Unlock",
@@ -89,14 +89,16 @@
               "currency": "0x20c0000000000000000000000000000000000000",
               "description": "Tempo pathUSD charge (0.05 with 6 decimals)",
               "intent": "charge",
-              "method": "tempo"
+              "method": "tempo",
+              "protocols": ["mpp"]
             },
             {
               "amount": "5",
               "currency": "usd",
               "description": "Stripe SPT card charge ($0.05, decimals=2) when STRIPE_SECRET_KEY is configured",
               "intent": "charge",
-              "method": "stripe"
+              "method": "stripe",
+              "protocols": ["mpp"]
             }
           ]
         },

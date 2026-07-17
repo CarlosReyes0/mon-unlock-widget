@@ -196,3 +196,15 @@ test("POST /api/agents/publish returns 503 when MPP is not configured", async ()
   const body = await res.json();
   assert.equal(body.error, "mpp_not_configured");
 });
+
+test("POST /api/agents/publish empty probe still hits MPP gate (not 400)", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  // Without MPP secrets the gate reports not configured (503), not invalid input (400).
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "mpp_not_configured");
+});

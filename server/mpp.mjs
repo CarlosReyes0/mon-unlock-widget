@@ -92,8 +92,12 @@ function sendJson(res, status, body, extraHeaders = {}) {
  */
 export async function withMppCharge(req, res, { amount, scope, onPaid }) {
   if (mppDevBypass()) {
-    const body = await onPaid();
-    sendJson(res, 200, body);
+    try {
+      const body = await onPaid();
+      sendJson(res, 200, body);
+    } catch (e) {
+      sendJson(res, e?.status || 500, e?.payload || { error: e?.message || "publish_failed" });
+    }
     return true;
   }
 
@@ -125,14 +129,23 @@ export async function withMppCharge(req, res, { amount, scope, onPaid }) {
   if (result.status === 402) return true;
 
   // Receipt headers were attached to `res` by toNodeListener; write the body.
-  const body = await onPaid({ receipt: result.receipt });
-  if (!res.headersSent) {
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+  try {
+    const body = await onPaid({ receipt: result.receipt });
+    if (!res.headersSent) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    res.statusCode = 200;
+    res.end(JSON.stringify(body));
+  } catch (e) {
+    if (!res.headersSent) {
+      sendJson(res, e?.status || 500, e?.payload || { error: e?.message || "publish_failed" });
+    } else {
+      res.statusCode = e?.status || 500;
+      res.end(JSON.stringify(e?.payload || { error: e?.message || "publish_failed" }));
+    }
   }
-  res.statusCode = 200;
-  res.end(JSON.stringify(body));
   return true;
 }
 

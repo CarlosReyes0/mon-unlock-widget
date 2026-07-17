@@ -507,7 +507,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (method === "POST" && url.pathname === "/api/agents/publish") {
-    let parsed;
+    // Important: unpaid probes (empty/invalid body) must still return HTTP 402 +
+    // WWW-Authenticate so mpp.dev / registries detect MPP. Do not 400 before the gate.
+    let parsed = {};
+    let parseError = null;
     try {
       const raw = await readBody(req, 512_000);
       parsed = raw ? JSON.parse(raw) : {};
@@ -515,19 +518,35 @@ const server = http.createServer(async (req, res) => {
       if (e?.message === "body_too_large") {
         return sendJson(res, 413, { error: "body_too_large" });
       }
-      return sendJson(res, 400, { error: "invalid_json" });
+      parseError = "invalid_json";
     }
 
-    const validated = validatePublishInput(parsed);
-    if (!validated.ok) {
+    const validated = parseError
+      ? { ok: false, errors: [parseError] }
+      : validatePublishInput(parsed);
+    const hasPaymentCredential = String(req.headers.authorization || "")
+      .trim()
+      .toLowerCase()
+      .startsWith("payment ");
+
+    // After paying, invalid payloads should not be accepted as success.
+    if (!validated.ok && hasPaymentCredential) {
       return sendJson(res, 400, { ok: false, errors: validated.errors });
     }
 
     cors(res);
     return withMppCharge(req, res, {
       amount: publishAmount(),
-      scope: `publish:${validated.input.articleId}`,
-      onPaid: async () => publishArticleForAgent(validated.input),
+      scope: `publish:${validated.ok ? validated.input.articleId : "probe"}`,
+      onPaid: async () => {
+        if (!validated.ok) {
+          const err = new Error("invalid_input");
+          err.status = 400;
+          err.payload = { ok: false, errors: validated.errors };
+          throw err;
+        }
+        return publishArticleForAgent(validated.input);
+      },
     });
   }
 
