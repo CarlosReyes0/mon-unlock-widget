@@ -1,8 +1,10 @@
+/* Publisher auth + Account page — matched to home theme (white + purple accent). */
+
 .mon-pub-auth {
-  --mon-pub-ink: #1c1917;
-  --mon-pub-muted: #78716c;
+  --mon-pub-ink: #111827;
+  --mon-pub-muted: #57534e;
   --mon-pub-line: #e7e5e4;
-  --mon-pub-accent: #5b7c5a;
+  --mon-pub-accent: #7c3aed;
   --mon-pub-accent-ink: #fff;
   --mon-pub-soft: #f5f5f4;
   font-family: "DM Sans", system-ui, sans-serif;
@@ -21,12 +23,12 @@
   border: 1px solid var(--mon-pub-line);
   background: #fff;
   color: var(--mon-pub-ink);
-  border-radius: 8px;
-  padding: 0.55rem 0.9rem;
+  border-radius: 9999px;
+  padding: 0.625rem 1.15rem;
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: filter 0.12s ease, transform 0.12s ease, background 0.12s ease;
 }
 
 .mon-pub-auth__btn:hover:not(:disabled) {
@@ -40,14 +42,16 @@
 }
 
 .mon-pub-auth__btn--primary {
-  background: var(--mon-pub-accent);
-  border-color: var(--mon-pub-accent);
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  border-color: transparent;
   color: var(--mon-pub-accent-ink);
 }
 
 .mon-pub-auth__btn--primary:hover:not(:disabled) {
-  background: #4f6d4e;
-  border-color: #4f6d4e;
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  border-color: transparent;
 }
 
 .mon-pub-auth__status {
@@ -65,7 +69,7 @@
 .mon-pub-auth__hint {
   margin: 0.45rem 0 0;
   font-size: 0.75rem;
-  color: var(--mon-pub-muted);
+  color: #6b7280;
   line-height: 1.4;
   max-width: 36rem;
 }
@@ -79,50 +83,49 @@
 .mon-pub-shell {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #dce8d8 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #f0ebe3 0%, transparent 50%),
-    #fafaf9;
-  color: #1c1917;
+  background: #fff;
+  color: #111827;
   font-family: "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .mon-pub-shell__inner {
-  max-width: 40rem;
+  max-width: 42rem;
   margin: 0 auto;
-  padding: 2.5rem 1.25rem 4rem;
+  padding: 3rem 1.5rem 4rem;
 }
 
 .mon-pub-shell__brand {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #5b7c5a;
-  margin: 0 0 0.75rem;
+  color: #7c3aed;
+  margin: 0 0 0.5rem;
 }
 
 .mon-pub-shell h1 {
   font-family: Literata, Georgia, serif;
-  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-size: 1.875rem;
   font-weight: 600;
-  line-height: 1.15;
-  margin: 0 0 0.75rem;
+  line-height: 1.2;
+  margin: 0.5rem 0 0;
+  color: #111827;
 }
 
 .mon-pub-shell__lead {
-  margin: 0 0 1.75rem;
+  margin: 0.5rem 0 1.75rem;
   color: #57534e;
-  font-size: 1.05rem;
+  font-size: 1rem;
   line-height: 1.5;
 }
 
 .mon-pub-shell__card {
-  background: rgba(255, 255, 255, 0.85);
+  background: #fff;
   border: 1px solid #e7e5e4;
-  border-radius: 16px;
-  padding: 1.25rem 1.35rem 1.4rem;
-  backdrop-filter: blur(6px);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .mon-pub-shell__links {
@@ -136,18 +139,18 @@
   display: inline-flex;
   align-items: center;
   text-decoration: none;
-  border-radius: 8px;
-  padding: 0.6rem 0.95rem;
+  border-radius: 9999px;
+  padding: 0.625rem 1.15rem;
   font-size: 0.875rem;
   font-weight: 600;
   border: 1px solid #e7e5e4;
-  color: #1c1917;
+  color: #111827;
   background: #fff;
 }
 
 .mon-pub-shell__links a.primary {
-  background: #5b7c5a;
-  border-color: #5b7c5a;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  border-color: transparent;
   color: #fff;
 }
 
@@ -167,7 +170,7 @@
 }
 
 .mon-site-nav a.active {
-  color: #5b7c5a;
+  color: #7c3aed;
   font-weight: 600;
 }
 

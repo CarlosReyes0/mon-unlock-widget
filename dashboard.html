@@ -44,16 +44,18 @@
 
     <div class="header">
       <div>
-        <h1>Writer Dashboard</h1>
-        <p style="margin: 0.5rem 0 0; color: #6b7280;">Sign in to track revenue and set up Stripe payouts. MetaMask is optional.</p>
+        <p class="label" style="margin:0;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#7c3aed;">Dashboard</p>
+        <h1 style="font-family:Literata,Georgia,serif;font-weight:600;">Writer Dashboard</h1>
+        <p style="margin: 0.5rem 0 0; color: #57534e;">Sign in to track revenue and set up Stripe payouts. MetaMask is optional.</p>
       </div>
     </div>
 
     <div class="grid">
       <!-- Connect + Register -->
       <div>
-        <div class="card">
-          <h2 class="section-title">Publisher identity</h2>
+        <div class="card" id="publisherIdentityCard">
+          <p class="label" style="margin:0 0 0.35rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#7c3aed;">Publisher</p>
+          <h2 class="section-title" style="font-family:Literata,Georgia,serif;font-weight:600;">Publisher identity</h2>
           <div id="walletSection">
             <div id="mon-publisher-auth"></div>
             <button class="btn btn-primary" id="connectBtn" style="display:none;" aria-hidden="true">Connect wallet</button>
@@ -62,9 +64,6 @@
               <button class="btn btn-secondary" id="switchBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch</button>
               <button class="btn btn-secondary" id="disconnectBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Disconnect</button>
             </div>
-            <p style="margin:0.55rem 0 0; font-size:0.75rem; color:#6b7280;">
-              <a href="/account.html" style="color:inherit;">Create publisher account</a> with email or Google.
-            </p>
           </div>
         </div>
 

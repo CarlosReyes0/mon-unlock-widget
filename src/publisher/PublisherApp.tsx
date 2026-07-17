@@ -51,8 +51,8 @@ export function PublisherApp() {
     <div className="mon-pub-shell">
       <div className="mon-pub-shell__inner">
         <SiteNav />
-        <p className="mon-pub-shell__brand">MON Unlock</p>
-        <h1>Account</h1>
+        <p className="mon-pub-shell__brand">Account</p>
+        <h1>Publisher account</h1>
         <p className="mon-pub-shell__lead">
           Create an account with email or Google — or connect a wallet. Readers can still pay with card; you get paid
           on-chain in MON, or via Stripe Connect for fiat unlocks.

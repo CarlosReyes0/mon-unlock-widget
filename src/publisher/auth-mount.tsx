@@ -42,7 +42,7 @@ function mount() {
           loginMethods: ["email", "google", "wallet"],
           appearance: {
             theme: "light",
-            accentColor: "#5b7c5a",
+            accentColor: "#7c3aed",
             logo: undefined,
           },
           embeddedWallets: {

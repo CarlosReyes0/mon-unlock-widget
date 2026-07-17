@@ -37,7 +37,7 @@
       a.textContent = link.label;
       const active = isActive(link.nav, path);
       a.style.cssText = active
-        ? "font-size:0.875rem;color:#5b7c5a;font-weight:600;text-decoration:none;"
+        ? "font-size:0.875rem;color:#7c3aed;font-weight:600;text-decoration:none;"
         : "font-size:0.875rem;color:#57534e;font-weight:400;text-decoration:none;";
       el.appendChild(a);
     }
