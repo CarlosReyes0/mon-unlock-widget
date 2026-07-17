@@ -2,8 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MON Unlock Agent API",
-    "version": "1.0.0",
-    "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <mon-unlock> HTML. On-chain Monad registration may still require one publisher wallet approval."
+    "version": "1.0.1",
+    "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <mon-unlock> HTML. On-chain Monad registration may still require one publisher wallet approval.",
+    "contact": {
+      "name": "Open Paywall / MON Unlock",
+      "email": "carlos.a.reyes00@gmail.com",
+      "url": "https://mon-unlock-widget-production.up.railway.app"
+    }
   },
   "servers": [
     {
@@ -39,6 +44,7 @@
       "get": {
         "operationId": "agentHealth",
         "summary": "Agent API + MPP configuration status",
+        "security": [],
         "responses": {
           "200": {
             "description": "Health payload"
@@ -50,6 +56,7 @@
       "post": {
         "operationId": "validatePublish",
         "summary": "Validate publish payload and return quote (free)",
+        "security": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -76,23 +83,18 @@
         "summary": "Create embed + sync article body (MPP paid)",
         "description": "Unpaid requests receive HTTP 402 with WWW-Authenticate Payment challenge. After payment, returns paste-ready embed HTML and finishRegistrationUrl for on-chain Monad registration.",
         "x-payment-info": {
-          "amount": "0.05",
-          "currency": "pathUSD",
-          "description": "Create one embeddable paywall (embed HTML + body sync)",
-          "intent": "charge",
-          "method": "tempo",
           "offers": [
             {
-              "amount": "0.05",
-              "currency": "pathUSD",
-              "description": "Tempo pathUSD charge",
+              "amount": "50000",
+              "currency": "0x20c0000000000000000000000000000000000000",
+              "description": "Tempo pathUSD charge (0.05 with 6 decimals)",
               "intent": "charge",
               "method": "tempo"
             },
             {
               "amount": "5",
               "currency": "usd",
-              "description": "Optional Stripe SPT card charge (cents, decimals=2) when STRIPE_SECRET_KEY is configured",
+              "description": "Stripe SPT card charge ($0.05, decimals=2) when STRIPE_SECRET_KEY is configured",
               "intent": "charge",
               "method": "stripe"
             }
@@ -113,7 +115,7 @@
             "description": "Published embed payload"
           },
           "402": {
-            "description": "Payment required (MPP challenge)"
+            "description": "Payment Required"
           },
           "400": {
             "description": "Invalid payload"
