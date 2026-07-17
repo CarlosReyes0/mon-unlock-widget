@@ -46,7 +46,58 @@ export default defineConfig(({ mode }) => {
     };
   }
 
+  if (mode === "publisher") {
+    return {
+      plugins: [react()],
+      define: {
+        "import.meta.env.VITE_PRIVY_APP_ID": JSON.stringify(env.VITE_PRIVY_APP_ID || ""),
+      },
+      build: {
+        outDir: "dist-publisher",
+        emptyOutDir: true,
+        rollupOptions: {
+          input: {
+            account: resolve(__dirname, "account.html"),
+            "publisher-auth": resolve(__dirname, "publisher-auth.html"),
+          },
+          output: {
+            entryFileNames: "[name].js",
+            chunkFileNames: "chunks/[name]-[hash].js",
+            assetFileNames: (assetInfo) => {
+              if (assetInfo.name && assetInfo.name.endsWith(".css")) {
+                return "publisher-auth.css";
+              }
+              return "assets/[name]-[hash][extname]";
+            },
+          },
+        },
+      },
+    };
+  }
+
   return {
-    plugins: [tailwindcss(), react()],
+    plugins: [
+      tailwindcss(),
+      react(),
+      {
+        name: "publisher-auth-dev-alias",
+        configureServer(server) {
+          server.middlewares.use((req, _res, next) => {
+            if (req.url === "/publisher-auth.js" || req.url?.startsWith("/publisher-auth.js?")) {
+              req.url = "/src/publisher/auth-mount.tsx";
+            } else if (
+              req.url === "/publisher-auth.css" ||
+              req.url?.startsWith("/publisher-auth.css?")
+            ) {
+              req.url = "/src/publisher/publisher-auth.css";
+            }
+            next();
+          });
+        },
+      },
+    ],
+    define: {
+      "import.meta.env.VITE_PRIVY_APP_ID": JSON.stringify(env.VITE_PRIVY_APP_ID || ""),
+    },
   };
 });

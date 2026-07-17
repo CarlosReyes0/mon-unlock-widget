@@ -417,6 +417,23 @@ export async function createConnectOnboardingLink(input) {
     });
   }
 
+  // Refresh onboarded_at when Express account can receive transfers.
+  try {
+    const acct = await stripe.accounts.retrieve(accountId);
+    if (acct?.charges_enabled || acct?.payouts_enabled) {
+      await supabase(`publisher_accounts?publisher=eq.${encodeURIComponent(publisher)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: {
+          onboarded_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
+    }
+  } catch {
+    /* non-fatal */
+  }
+
   const link = await stripe.accountLinks.create({
     account: accountId,
     refresh_url: input.refreshUrl,
@@ -466,6 +483,31 @@ export async function processPendingPayouts({ limit = 20 } = {}) {
         });
         results.push({ id: job.id, status: "pending", error: "publisher_not_onboarded" });
         continue;
+      }
+
+      const stripeAccount = await stripe.accounts.retrieve(account.stripe_account_id);
+      if (!stripeAccount?.payouts_enabled && !stripeAccount?.charges_enabled) {
+        await supabase(`payout_jobs?id=eq.${job.id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: {
+            status: "pending",
+            error: "publisher_not_onboarded",
+            updated_at: new Date().toISOString(),
+          },
+        });
+        results.push({ id: job.id, status: "pending", error: "publisher_not_onboarded" });
+        continue;
+      }
+      if (!account.onboarded_at && (stripeAccount.payouts_enabled || stripeAccount.charges_enabled)) {
+        await supabase(`publisher_accounts?publisher=eq.${encodeURIComponent(job.publisher)}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: {
+            onboarded_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        });
       }
 
       // USD transfer to Connect account. With Stripe stablecoin payouts (private preview),
