@@ -1,1 +1,0 @@
-import{Jr as e,qr as t}from"./publisher-auth-DJHoYw-R.js";function n(e){return e?`${e.slice(0,5)}…${e.slice(-4)}`:``}function r({wei:e,precision:n=3}){return parseFloat(t(e)).toFixed(n).replace(/0+$/,``).replace(/\.$/,``)}function i({amount:t,decimals:n}){return e(BigInt(t),n)}export{n,r,i as t};

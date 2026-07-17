@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-DUE3NRXP.js";import{_ as t,o as n,v as r}from"./useActiveWallet-17d8Q7cc-Bjgcw05s.js";import{t as i}from"./wallet-B0nksWnQ.js";var a=e(),o=({onClick:e,text:o})=>(0,a.jsxs)(t,{onClick:e,children:[(0,a.jsx)(n,{children:(0,a.jsx)(i,{})}),(0,a.jsx)(r,{children:o})]});export{o as t};

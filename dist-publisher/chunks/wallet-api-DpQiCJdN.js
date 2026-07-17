@@ -1,1 +1,0 @@
-var e={path:`/api/v1/wallets`,method:`POST`},t={path:`/api/v1/wallets/:wallet_id/rpc`,method:`POST`},n={path:`/api/v1/wallets/revoke`,method:`POST`};export{t as n,e as r,n as t};
