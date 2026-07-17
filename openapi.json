@@ -1,0 +1,155 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MON Unlock Agent API",
+    "version": "1.0.0",
+    "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <mon-unlock> HTML. On-chain Monad registration may still require one publisher wallet approval."
+  },
+  "servers": [
+    {
+      "url": "https://mon-unlock-widget-production.up.railway.app"
+    }
+  ],
+  "x-service-info": {
+    "categories": [
+      "content-monetization",
+      "paywall",
+      "publishing",
+      "embeddable-paywall",
+      "pay-per-article"
+    ],
+    "docs": {
+      "homepage": "https://mon-unlock-widget-production.up.railway.app",
+      "llms": "https://mon-unlock-widget-production.up.railway.app/llms.txt",
+      "apiReference": "https://mon-unlock-widget-production.up.railway.app/agents.md"
+    }
+  },
+  "x-agent-guidance": {
+    "preferredFlow": [
+      "POST /api/agents/publish/validate",
+      "POST /api/agents/publish (pay 402 challenge)",
+      "Return embed HTML",
+      "Send finishRegistrationUrl if needsManualOnChainRegistration"
+    ],
+    "skill": "https://mon-unlock-widget-production.up.railway.app/skill.md",
+    "cursorSkill": "https://mon-unlock-widget-production.up.railway.app/.well-known/skills/mon-unlock/SKILL.md"
+  },
+  "paths": {
+    "/api/agents/health": {
+      "get": {
+        "operationId": "agentHealth",
+        "summary": "Agent API + MPP configuration status",
+        "responses": {
+          "200": {
+            "description": "Health payload"
+          }
+        }
+      }
+    },
+    "/api/agents/publish/validate": {
+      "post": {
+        "operationId": "validatePublish",
+        "summary": "Validate publish payload and return quote (free)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid payload + quote"
+          },
+          "400": {
+            "description": "Invalid payload"
+          }
+        }
+      }
+    },
+    "/api/agents/publish": {
+      "post": {
+        "operationId": "publishPaywall",
+        "summary": "Create embed + sync article body (MPP paid)",
+        "description": "Unpaid requests receive HTTP 402 with WWW-Authenticate Payment challenge. After payment, returns paste-ready embed HTML and finishRegistrationUrl for on-chain Monad registration.",
+        "x-payment-info": {
+          "amount": "0.05",
+          "currency": "pathUSD",
+          "description": "Create one embeddable paywall (embed HTML + body sync)",
+          "intent": "charge",
+          "method": "tempo",
+          "offers": [
+            {
+              "amount": "0.05",
+              "currency": "pathUSD",
+              "description": "Tempo pathUSD charge",
+              "intent": "charge",
+              "method": "tempo"
+            },
+            {
+              "amount": "5",
+              "currency": "usd",
+              "description": "Optional Stripe SPT card charge (cents, decimals=2) when STRIPE_SECRET_KEY is configured",
+              "intent": "charge",
+              "method": "stripe"
+            }
+          ]
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Published embed payload"
+          },
+          "402": {
+            "description": "Payment required (MPP challenge)"
+          },
+          "400": {
+            "description": "Invalid payload"
+          },
+          "503": {
+            "description": "MPP not configured on server"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PublishRequest": {
+        "type": "object",
+        "required": ["title", "articleId", "teaser", "body", "publisher"],
+        "properties": {
+          "title": { "type": "string" },
+          "articleId": {
+            "type": "string",
+            "description": "URL-safe slug"
+          },
+          "teaser": { "type": "string" },
+          "body": { "type": "string" },
+          "publisher": {
+            "type": "string",
+            "description": "0x publisher wallet"
+          },
+          "price": {
+            "type": "string",
+            "description": "Article price in MON",
+            "default": "1"
+          },
+          "author": { "type": "string" }
+        }
+      }
+    }
+  }
+}

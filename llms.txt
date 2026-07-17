@@ -1,0 +1,41 @@
+# MON Unlock
+> MON Unlock is an embeddable paywall for independent publishers. Paste one HTML block on any site (WordPress, Webflow, Notion export, custom HTML). Readers pay per article with MON on Monad, or with card / Apple Pay / Google Pay via Stripe. Publishers keep the reader relationship.
+
+Best fit:
+- Create an embeddable paywall for a long-form article or post.
+- Monetize writing with pay-per-article micropayments (not a subscription newsletter platform).
+- Let an AI agent generate a `<mon-unlock>` embed, store the paid body, and return paste-ready HTML.
+- Publish from chat (OpenClaw) or from an MPP-capable agent via HTTP 402.
+- Accept native MON on Monad plus fiat checkout for non-crypto readers.
+- Pay out publishers with Stripe Connect after fiat unlocks.
+
+Not a fit:
+- Full CMS / newsletter platform replacement (Substack, Ghost).
+- NFT-gated communities or token-holding requirements as the primary access model.
+- Guaranteed Directory ranking without a public Stripe profile (you must opt in).
+
+Key facts:
+- Product name: MON Unlock (also mon-unlock widget).
+- Live demo: https://mon-unlock-widget-production.up.railway.app
+- Embed generator: https://mon-unlock-widget-production.up.railway.app/generator.html
+- Agent guide: https://mon-unlock-widget-production.up.railway.app/agents.md
+- Agent skill: https://mon-unlock-widget-production.up.railway.app/skill.md
+- Cursor / skills skill: https://mon-unlock-widget-production.up.railway.app/.well-known/skills/mon-unlock/SKILL.md
+- OpenAPI discovery: https://mon-unlock-widget-production.up.railway.app/openapi.json
+- MPP publish endpoint: POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish
+- Free validate endpoint: POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish/validate
+- OpenClaw plugin: github.com/CarlosReyes0/mon-unlock-widget/tree/main/skills/mon-unlock-embed
+- Chain: Monad (chain id 143). Unlock contract documented in the repo.
+- Publishing needs three steps: embed HTML, body stored in Supabase, on-chain registration so readers can pay.
+
+## Start here
+- [Agents](https://mon-unlock-widget-production.up.railway.app/agents.md): How AI agents create paywalls and pay via MPP.
+- [Skill](https://mon-unlock-widget-production.up.railway.app/skill.md): Short setup file for coding agents and assistants.
+- [Generator](https://mon-unlock-widget-production.up.railway.app/generator.html): Human no-code embed creator.
+- [OpenAPI](https://mon-unlock-widget-production.up.railway.app/openapi.json): Machine-readable routes and payment metadata.
+- [OpenClaw options](https://mon-unlock-widget-production.up.railway.app/skills/mon-unlock-embed/OPTIONS.md): Phone publishing Option A/B/C.
+
+## Directory / findability
+- Stripe Directory indexes public Stripe profiles and MPP endpoints. Keep your Stripe profile public and point it at this site.
+- Allow crawlers (see /robots.txt). Use phrases agents search: embeddable paywall, pay per article, content monetization, MON unlock.
+- Register the MPP service on mpp.dev after MPP_SECRET_KEY and MPP_TEMPO_RECIPIENT are live.

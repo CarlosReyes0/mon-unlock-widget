@@ -26,6 +26,9 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     STRIPE_WEBHOOK_SECRET: "",
     SUPABASE_URL: "",
     SUPABASE_SERVICE_ROLE_KEY: "",
+    MPP_SECRET_KEY: "",
+    MPP_TEMPO_RECIPIENT: "",
+    MPP_DEV_BYPASS: "",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -109,4 +112,87 @@ test("GET / serves index.html", async () => {
   assert.equal(res.status, 200);
   const text = await res.text();
   assert.match(text, /<!DOCTYPE html>/i);
+});
+
+test("GET /llms.txt is crawlable", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/llms.txt`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /MON Unlock/i);
+  assert.match(text, /embeddable paywall/i);
+});
+
+test("GET /agents.md and /skill.md are served", async () => {
+  for (const path of ["/agents.md", "/skill.md", "/openapi.json", "/robots.txt"]) {
+    const res = await fetch(`http://127.0.0.1:${PORT}${path}`);
+    assert.equal(res.status, 200, path);
+  }
+});
+
+test("GET /.well-known/skills/mon-unlock/SKILL.md is served", async () => {
+  const res = await fetch(
+    `http://127.0.0.1:${PORT}/.well-known/skills/mon-unlock/SKILL.md`
+  );
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /name: mon-unlock/);
+});
+
+test("GET /api/agents/health reports mpp status", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/health`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.mpp.configured, false);
+  assert.equal(body.docs.llms, "/llms.txt");
+});
+
+test("POST /api/agents/publish/validate rejects bad payload", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Only title" }),
+  });
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.ok(Array.isArray(body.errors));
+});
+
+test("POST /api/agents/publish/validate accepts valid payload", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Agent demo",
+      articleId: "agent-demo-1",
+      teaser: "Preview",
+      body: "Full body",
+      publisher: "0x1111111111111111111111111111111111111111",
+      price: "1",
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.valid, true);
+  assert.ok(body.quote.amount);
+});
+
+test("POST /api/agents/publish returns 503 when MPP is not configured", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Agent demo",
+      articleId: "agent-demo-2",
+      teaser: "Preview",
+      body: "Full body",
+      publisher: "0x1111111111111111111111111111111111111111",
+      price: "1",
+    }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "mpp_not_configured");
 });
