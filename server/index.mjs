@@ -44,6 +44,7 @@ import {
   quoteFingerprint,
 } from "./publish.mjs";
 import { withMppCharge, mppStatus, publishAmount } from "./mpp.mjs";
+import { buildOpenApiDocument } from "./openapi.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -462,6 +463,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- Agent discovery + MPP publish ---
+  // Dynamic OpenAPI so MPPscan sees protocols: [{ mpp: {...} }] with live recipient.
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/openapi.json") {
+    const doc = buildOpenApiDocument();
+    const payload = JSON.stringify(doc, null, 2);
+    cors(res);
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-cache",
+    });
+    if (method === "HEAD") return res.end();
+    return res.end(payload);
+  }
+
   if (method === "GET" && url.pathname === "/api/agents/health") {
     return sendJson(res, 200, {
       ok: true,
