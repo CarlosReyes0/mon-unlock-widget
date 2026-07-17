@@ -35,6 +35,7 @@ RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 # Copy built assets, static pages, and the API server.
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-checkout/ ./
+COPY --from=builder /app/dist-publisher/ ./
 COPY --from=builder /app/index.html ./index.html
 COPY --from=builder /app/generator.html ./generator.html
 COPY --from=builder /app/dashboard.html ./dashboard.html

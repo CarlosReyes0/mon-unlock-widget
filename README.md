@@ -151,10 +151,19 @@ The body supports safe HTML for rich content. Common examples:
 
 ## Behavior
 
-- **Continue** (default) — opens hosted Privy checkout on this CDN (`/unlock.html`): email/Google login, buy USDC or MON if needed, swap USDC→MON on PancakeSwap when needed, pay on-chain. No MetaMask required for readers.
+- **Continue** (default) — opens hosted checkout on this CDN (`/unlock.html`): Apple Pay / Google Pay / card (Stripe) when configured, or Privy email/Google crypto checkout. No MetaMask required for readers.
 - **Use MetaMask** — existing injected-wallet path (desktop extension or MetaMask in-app browser).
 - Without `unlock-contract` the widget falls back to demo mode (localStorage only).
-- Writers still use MetaMask in the generator/dashboard to register articles and sign embeds.
+- **Publishers** can create an account with email or Google on `/account.html` (or the generator/dashboard sign-in row). That creates an embedded wallet for on-chain registration — MetaMask is optional. Fiat unlocks pay out via **Stripe Connect** (publisher onboards themselves; you do not manually send them money).
+
+### Stripe fiat payouts (publishers)
+
+1. Reader pays with card / Apple Pay / Google Pay → funds hit **your platform** Stripe account.
+2. Server records `fiat_unlocks` and queues `payout_jobs`.
+3. Publisher clicks **Set up Stripe payouts** on `/dashboard.html` or `/account.html` → Stripe Connect Express onboarding.
+4. A cron (or ops) call to `POST /api/stripe/payouts/process` with `Authorization: Bearer $STRIPE_PAYOUT_CRON_SECRET` transfers pending jobs to the publisher’s Connect account.
+
+Set `STRIPE_PAYOUT_CRON_SECRET` on Railway. Without Connect onboarding, jobs stay `pending` with `publisher_not_onboarded`.
 
 ### Privy checkout setup
 

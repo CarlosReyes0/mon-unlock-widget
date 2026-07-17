@@ -1,0 +1,52 @@
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { PrivyProvider } from "@privy-io/react-auth";
+import { monad } from "viem/chains";
+import { PublisherApp } from "./PublisherApp.js";
+import "./publisher-auth.css";
+
+const appId = (import.meta.env.VITE_PRIVY_APP_ID as string | undefined)?.trim() ?? "";
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("Missing #root");
+
+const root = createRoot(rootEl);
+
+if (!appId) {
+  root.render(
+    <div className="mon-pub-shell">
+      <div className="mon-pub-shell__inner">
+        <p className="mon-pub-shell__brand">MON Unlock</p>
+        <h1>Publisher account</h1>
+        <p className="mon-pub-shell__lead">
+          Set <code>VITE_PRIVY_APP_ID</code> to enable email / Google accounts. Until then, use MetaMask on the{" "}
+          <a href="/generator.html">generator</a> or <a href="/dashboard.html">dashboard</a>.
+        </p>
+      </div>
+    </div>
+  );
+} else {
+  root.render(
+    <React.StrictMode>
+      <PrivyProvider
+        appId={appId}
+        config={{
+          loginMethods: ["email", "google", "wallet"],
+          appearance: {
+            theme: "light",
+            accentColor: "#5b7c5a",
+            logo: undefined,
+          },
+          embeddedWallets: {
+            ethereum: {
+              createOnLogin: "users-without-wallets",
+            },
+          },
+          defaultChain: monad,
+          supportedChains: [monad],
+        }}
+      >
+        <PublisherApp />
+      </PrivyProvider>
+    </React.StrictMode>
+  );
+}
