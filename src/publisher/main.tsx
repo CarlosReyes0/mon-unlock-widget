@@ -23,8 +23,8 @@ if (!appId) {
           </a>
           <a href="/dashboard.html">Dashboard</a>
         </nav>
-        <p className="mon-pub-shell__brand">MON Unlock</p>
-        <h1>Account</h1>
+        <p className="mon-pub-shell__brand">Account</p>
+        <h1>Publisher account</h1>
         <p className="mon-pub-shell__lead">
           Set <code>VITE_PRIVY_APP_ID</code> to enable email / Google accounts. Until then, use MetaMask on the{" "}
           <a href="/generator.html">generator</a> or <a href="/dashboard.html">dashboard</a>.
@@ -41,7 +41,7 @@ if (!appId) {
           loginMethods: ["email", "google", "wallet"],
           appearance: {
             theme: "light",
-            accentColor: "#5b7c5a",
+            accentColor: "#7c3aed",
             logo: undefined,
           },
           embeddedWallets: {
