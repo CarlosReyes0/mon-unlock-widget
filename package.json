@@ -26,7 +26,7 @@
     "build:publisher": "vite build --mode publisher",
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js dist/core/wallet.test.js && node --test server/index.test.mjs server/stripe-idempotency.test.mjs server/connect-sample.test.mjs"
+    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js dist/core/wallet.test.js && node --test server/index.test.mjs server/publish.test.mjs server/mpp-bypass.test.mjs server/stripe-idempotency.test.mjs server/connect-sample.test.mjs"
   },
   "license": "MIT",
   "engines": {
@@ -40,6 +40,7 @@
     "@walletconnect/ethereum-provider": "2.18.0",
     "lean-qr": "^2.5.3",
     "lit": "^3.3.3",
+    "mppx": "^0.8.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "stripe": "^22.3.2",

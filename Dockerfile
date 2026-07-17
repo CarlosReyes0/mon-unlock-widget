@@ -39,13 +39,25 @@ COPY --from=builder /app/dist-publisher/ ./
 COPY --from=builder /app/index.html ./index.html
 COPY --from=builder /app/generator.html ./generator.html
 COPY --from=builder /app/dashboard.html ./dashboard.html
+COPY --from=builder /app/account.html ./account.html
 COPY --from=builder /app/embed-example.html ./embed-example.html
 COPY --from=builder /app/register.html ./register.html
+COPY --from=builder /app/agents.html ./agents.html
 COPY --from=builder /app/connect-demo.html ./connect-demo.html
 COPY --from=builder /app/connect-store.html ./connect-store.html
 COPY --from=builder /app/connect-success.html ./connect-success.html
 COPY --from=builder /app/site-nav.js ./site-nav.js
+COPY --from=builder /app/llms.txt ./llms.txt
+COPY --from=builder /app/agents.md ./agents.md
+COPY --from=builder /app/skill.md ./skill.md
+COPY --from=builder /app/openapi.json ./openapi.json
+COPY --from=builder /app/robots.txt ./robots.txt
+COPY --from=builder /app/.well-known ./.well-known
+COPY --from=builder /app/skills/README.md ./skills/README.md
+COPY --from=builder /app/skills/mon-unlock-embed/README.md ./skills/mon-unlock-embed/README.md
+COPY --from=builder /app/skills/mon-unlock-embed/OPTIONS.md ./skills/mon-unlock-embed/OPTIONS.md
+COPY --from=builder /app/skills/mon-unlock-embed/AGENT.md ./skills/mon-unlock-embed/AGENT.md
 COPY server ./server
 
-# Serves static CDN + POST /api/coinbase/session-token (CDP keys from Railway env).
+# Serves static CDN + APIs (Coinbase, Stripe, agent MPP publish).
 CMD ["node", "server/index.mjs"]

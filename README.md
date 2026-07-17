@@ -1,8 +1,10 @@
-# MON unlock widget
+# MON Unlock
 
-Embeddable paywall for **non-technical publishers**. Paste HTML on WordPress, Webflow, Notion export, or any site — **no JavaScript required**.
+**Embeddable paywall** for independent publishers — **pay-per-article content monetization**. Paste one HTML block on WordPress, Webflow, Notion export, or any site.
 
-Readers connect a wallet and unlock the full article with **MON** on Monad testnet.
+Readers unlock the full article with **MON** on Monad, or with **card / Apple Pay / Google Pay** (Stripe). AI agents can create paywalls over **MPP (HTTP 402)** or OpenClaw.
+
+**Agent discovery:** [/llms.txt](./llms.txt) · [/agents.md](./agents.md) · [/skill.md](./skill.md) · [/openapi.json](./openapi.json)
 
 **What to build next:** see **[FOCUS.md](./FOCUS.md)** (Phase 1: onchain MON → Phase 2: embed generator).
 
@@ -26,11 +28,33 @@ Pages:
 - `/generator.html` – Create embed
 - `/account.html` – Publisher account (email / Google / wallet)
 - `/dashboard.html` – Writer dashboard + Stripe payouts
+- `/agents` · `/agents.md` · `/llms.txt` · `/skill.md` – Agent discovery
+- `/openapi.json` – Machine-readable agent API
 - `/embed-example.html` – Clean copy-paste embed reference
 - `/connect-demo.html` – Dev: Stripe Connect sample (not in main nav)
 - `/connect-store.html` – Dev: sample storefront
 
-Product nav is shared via `site-nav.js`: **Home · Create embed · Account · Dashboard**. Connect sample links live in the page footer under Dev tools.
+Product nav is shared via `site-nav.js`: **Home · Create embed · Account · Dashboard · Agents**.
+
+## Agents & Stripe Directory
+
+Agents can create paywalls without cloning this repo:
+
+1. `POST /api/agents/publish/validate` — free quote
+2. `POST /api/agents/publish` — MPP-paid publish (HTTP **402** until paid)
+3. Paste returned `embed`; open `finishRegistrationUrl` for on-chain registration
+
+See **[agents.md](./agents.md)** for the full flow. OpenClaw plugin: [`skills/mon-unlock-embed`](./skills/mon-unlock-embed).
+
+### Make yourself findable (manual Stripe step)
+
+Code alone cannot list you in Stripe Directory. After deploy:
+
+1. Stripe Dashboard → public business profile → **keep profile public**
+2. Website URL = this production host; description uses *embeddable paywall*, *pay per article*, *content monetization*
+3. Set Railway env `MPP_SECRET_KEY` + `MPP_TEMPO_RECIPIENT` (see `.env.example`)
+4. Register the MPP endpoint on [mpp.dev](https://mpp.dev)
+5. `stripe directory me` / `stripe directory search "embeddable paywall"`
 
 ## Stripe Connect sample (Accounts v2)
 

@@ -1,0 +1,13 @@
+# Allow Stripe Directory and other agent/crawler discovery.
+User-agent: *
+Allow: /
+
+# Agent / LLM discovery surfaces
+Allow: /llms.txt
+Allow: /agents.md
+Allow: /skill.md
+Allow: /openapi.json
+Allow: /.well-known/
+Allow: /api/agents/
+
+Sitemap: https://mon-unlock-widget-production.up.railway.app/llms.txt

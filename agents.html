@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agents — MON Unlock</title>
+    <meta
+      name="description"
+      content="AI agents can create embeddable paywalls with MON Unlock via OpenClaw or MPP HTTP 402. Pay-per-article content monetization for publishers."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        font-family: "DM Sans", system-ui, sans-serif;
+        color: #111827;
+        background:
+          radial-gradient(1200px 500px at 10% -10%, #ede9fe 0%, transparent 55%),
+          linear-gradient(180deg, #fafaf9 0%, #fff 40%);
+        -webkit-font-smoothing: antialiased;
+      }
+      .container {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+      }
+      h1 {
+        font-family: "Literata", Georgia, serif;
+        font-size: 1.875rem;
+        margin: 0.5rem 0 0;
+      }
+      .label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #7c3aed;
+      }
+      .subtitle {
+        color: #57534e;
+        margin: 0.75rem 0 1.5rem;
+        line-height: 1.55;
+      }
+      ul {
+        padding-left: 1.2rem;
+        line-height: 1.7;
+        color: #374151;
+      }
+      a {
+        color: #6d28d9;
+      }
+      code {
+        background: #e7e5e4;
+        border-radius: 0.25rem;
+        padding: 0 0.25rem;
+        font-size: 0.9em;
+      }
+      .cta {
+        display: inline-block;
+        margin-top: 0.5rem;
+        margin-right: 0.75rem;
+        padding: 0.65rem 1rem;
+        border-radius: 0.5rem;
+        background: #111827;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .cta.secondary {
+        background: transparent;
+        color: #111827;
+        border: 1px solid #d6d3d1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="site-nav"></div>
+      <p class="label">For AI agents</p>
+      <h1>Create embeddable paywalls from an agent</h1>
+      <p class="subtitle">
+        MON Unlock is pay-per-article content monetization: generate a
+        <code>&lt;mon-unlock&gt;</code> embed, store the paid body, and let
+        readers unlock with MON or card. Agents can do this over HTTP 402 (MPP)
+        or OpenClaw chat.
+      </p>
+
+      <p>
+        <a class="cta" href="/agents.md">Read agents.md</a>
+        <a class="cta secondary" href="/llms.txt">llms.txt</a>
+        <a class="cta secondary" href="/openapi.json">OpenAPI</a>
+      </p>
+
+      <h2 style="font-size: 1.15rem; margin-top: 2rem">Start here</h2>
+      <ul>
+        <li>
+          <a href="/skill.md">skill.md</a> — short instructions for any coding
+          agent
+        </li>
+        <li>
+          <a href="/.well-known/skills/mon-unlock/SKILL.md">Cursor skill</a> —
+          installable skill file
+        </li>
+        <li>
+          <code>POST /api/agents/publish/validate</code> — free quote
+        </li>
+        <li>
+          <code>POST /api/agents/publish</code> — MPP-paid publish (HTTP 402)
+        </li>
+        <li>
+          <a href="/generator.html">Web generator</a> — no agent required
+        </li>
+      </ul>
+
+      <div id="site-footer"></div>
+    </div>
+    <script src="/site-nav.js"></script>
+  </body>
+</html>

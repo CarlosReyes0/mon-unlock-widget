@@ -38,6 +38,12 @@ import {
   getCheckoutSession,
   listLocalSellers,
 } from "./connect-sample.mjs";
+import {
+  publishArticleForAgent,
+  validatePublishInput,
+  quoteFingerprint,
+} from "./publish.mjs";
+import { withMppCharge, mppStatus, publishAmount } from "./mpp.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -73,6 +79,7 @@ const MIME = {
   ".woff2": "font/woff2",
   ".map": "application/json",
   ".txt": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
 };
 
 function cors(res) {
@@ -80,8 +87,9 @@ function cors(res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Stripe-Signature, Authorization"
+    "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept"
   );
+  res.setHeader("Access-Control-Expose-Headers", "WWW-Authenticate, Payment-Receipt");
 }
 
 function sendJson(res, status, body) {
@@ -453,6 +461,86 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // --- Agent discovery + MPP publish ---
+  if (method === "GET" && url.pathname === "/api/agents/health") {
+    return sendJson(res, 200, {
+      ok: true,
+      service: "mon-unlock",
+      mpp: mppStatus(),
+      docs: {
+        llms: "/llms.txt",
+        agents: "/agents.md",
+        skill: "/skill.md",
+        cursorSkill: "/.well-known/skills/mon-unlock/SKILL.md",
+        openapi: "/openapi.json",
+      },
+    });
+  }
+
+  if (method === "POST" && url.pathname === "/api/agents/publish/validate") {
+    try {
+      const raw = await readBody(req, 512_000);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const validated = validatePublishInput(parsed);
+      if (!validated.ok) {
+        return sendJson(res, 400, { ok: false, errors: validated.errors });
+      }
+      const status = mppStatus();
+      return sendJson(res, 200, {
+        ok: true,
+        valid: true,
+        fingerprint: quoteFingerprint(validated.input),
+        quote: {
+          amount: publishAmount(),
+          currency: status.currency,
+          description: "Create one embeddable paywall (embed HTML + body sync)",
+        },
+        mpp: status,
+        next: "POST /api/agents/publish with the same JSON body, then pay the 402 challenge.",
+      });
+    } catch (e) {
+      if (e?.message === "body_too_large") {
+        return sendJson(res, 413, { error: "body_too_large" });
+      }
+      return sendJson(res, 400, { error: "invalid_json" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/agents/publish") {
+    let parsed;
+    try {
+      const raw = await readBody(req, 512_000);
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      if (e?.message === "body_too_large") {
+        return sendJson(res, 413, { error: "body_too_large" });
+      }
+      return sendJson(res, 400, { error: "invalid_json" });
+    }
+
+    const validated = validatePublishInput(parsed);
+    if (!validated.ok) {
+      return sendJson(res, 400, { ok: false, errors: validated.errors });
+    }
+
+    cors(res);
+    return withMppCharge(req, res, {
+      amount: publishAmount(),
+      scope: `publish:${validated.input.articleId}`,
+      onPaid: async () => publishArticleForAgent(validated.input),
+    });
+  }
+
+  // Friendly aliases for agent discovery URLs without extensions.
+  if (method === "GET" || method === "HEAD") {
+    if (url.pathname === "/agents") {
+      return serveStatic(req, res, "/agents.html");
+    }
+    if (url.pathname === "/skill") {
+      return serveStatic(req, res, "/skill.md");
+    }
+  }
+
   // --- Stripe Connect sample (Accounts v2 + destination charges) ---
   const requestOrigin = () => {
     const proto = String(req.headers["x-forwarded-proto"] || "http").split(",")[0].trim();
@@ -621,6 +709,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()})`
+    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured})`
   );
 });

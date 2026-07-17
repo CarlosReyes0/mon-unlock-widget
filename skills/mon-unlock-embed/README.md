@@ -97,9 +97,13 @@ Paste this embed into your site:
 
 ## Can anyone use this when you push to GitHub?
 
-No — each person installs OpenClaw, this plugin, and their own config. Pushing makes it available, not automatic.
+OpenClaw still needs a local install. For agents that should discover MON Unlock without cloning this repo, use the hosted HTTP/MPP API instead:
 
-Paste `AGENT.md` so their agent knows to call the tool and explain the options.
+- https://mon-unlock-widget-production.up.railway.app/llms.txt
+- https://mon-unlock-widget-production.up.railway.app/agents.md
+- `POST /api/agents/publish` (HTTP 402 / MPP)
+
+Paste `AGENT.md` so OpenClaw knows to call the tool and explain the options.
 
 ---
 

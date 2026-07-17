@@ -12,6 +12,7 @@
     { href: "/generator.html", nav: "embed", label: "Create embed" },
     { href: "/account.html", nav: "account", label: "Account" },
     { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
+    { href: "/agents", nav: "agents", label: "Agents" },
   ];
 
   function isActive(nav, path) {
@@ -19,6 +20,7 @@
     if (nav === "embed") return path.includes("generator");
     if (nav === "account") return path.includes("account");
     if (nav === "dashboard") return path.includes("dashboard");
+    if (nav === "agents") return path.includes("agents") || path.includes("skill");
     return false;
   }
 
@@ -49,6 +51,9 @@
     el.style.cssText =
       "margin-top:3rem;padding-top:1.25rem;border-top:1px solid #e7e5e4;font-size:0.75rem;color:#78716c;";
     el.innerHTML =
+      'Agents: <a href="/llms.txt" style="color:#57534e;">llms.txt</a> · ' +
+      '<a href="/agents.md" style="color:#57534e;">agents.md</a> · ' +
+      '<a href="/openapi.json" style="color:#57534e;">OpenAPI</a><br/>' +
       'Dev tools: <a href="/connect-demo.html" style="color:#57534e;">Connect sample</a> · ' +
       '<a href="/connect-store.html" style="color:#57534e;">Sample storefront</a>';
   }
