@@ -34,11 +34,17 @@
   </head>
   <body>
     <div class="wrap">
+      <div id="site-nav"></div>
+      <nav style="display:flex;gap:1rem;margin:-0.5rem 0 1.5rem;flex-wrap:wrap;" aria-label="Connect sample">
+        <a href="/connect-demo.html" style="font-size:0.8rem;color:#57534e;text-decoration:none;">Connect sellers</a>
+        <a href="/connect-store.html" style="font-size:0.8rem;color:#5b7c5a;font-weight:600;text-decoration:none;">Storefront</a>
+      </nav>
       <h1>Payment received</h1>
       <p>Destination charge completed (or is processing). Details from Checkout:</p>
       <div class="card"><pre id="out">Loading…</pre></div>
       <p style="margin-top:1.25rem;"><a href="/connect-store.html">← Back to storefront</a></p>
     </div>
+    <script src="/site-nav.js"></script>
     <script>
       (async () => {
         const out = document.getElementById("out");

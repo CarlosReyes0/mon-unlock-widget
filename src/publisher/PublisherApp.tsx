@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { PublisherAuth } from "./PublisherAuth.js";
+import { SiteFooter, SiteNav } from "./SiteNav.js";
 
 export function PublisherApp() {
   const [signedIn, setSignedIn] = useState(false);
@@ -49,8 +50,9 @@ export function PublisherApp() {
   return (
     <div className="mon-pub-shell">
       <div className="mon-pub-shell__inner">
+        <SiteNav />
         <p className="mon-pub-shell__brand">MON Unlock</p>
-        <h1>Publisher account</h1>
+        <h1>Account</h1>
         <p className="mon-pub-shell__lead">
           Create an account with email or Google — or connect a wallet. Readers can still pay with card; you get paid
           on-chain in MON, or via Stripe Connect for fiat unlocks.
@@ -62,13 +64,9 @@ export function PublisherApp() {
           {signedIn ? (
             <>
               <div className="mon-pub-shell__links">
-                <a className="primary" href="/generator.html">
-                  Create embed
-                </a>
-                <a href="/dashboard.html">Writer dashboard</a>
                 <button
                   type="button"
-                  className="mon-pub-auth__btn"
+                  className="mon-pub-auth__btn mon-pub-auth__btn--primary"
                   disabled={payoutBusy}
                   onClick={() => void setupStripePayouts()}
                 >
@@ -84,6 +82,7 @@ export function PublisherApp() {
             </>
           ) : null}
         </div>
+        <SiteFooter />
       </div>
     </div>
   );

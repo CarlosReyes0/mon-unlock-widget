@@ -57,16 +57,7 @@
   </head>
   <body>
     <div class="container">
-      <nav id="topnav" style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
-        <a href="/" data-nav="home" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
-        <a href="/generator.html" data-nav="embed" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Create embed</a>
-        <a href="/account.html" data-nav="account" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Publisher account</a>
-        <a href="/dashboard.html" data-nav="dashboard" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Writer dashboard</a>
-        <a href="/connect-demo.html" data-nav="connect" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Connect sample</a>
-      </nav>
-      <script>
-        (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='account'&&p.includes('account'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
-      </script>
+      <div id="site-nav"></div>
       <header>
         <p class="label">Embed demo</p>
         <h1>MON unlock widget</h1>
@@ -97,6 +88,8 @@
           wallet; this demo simulates that step.
         </div>
       </mon-unlock>
+      <div id="site-footer"></div>
     </div>
+    <script src="/site-nav.js"></script>
   </body>
 </html>

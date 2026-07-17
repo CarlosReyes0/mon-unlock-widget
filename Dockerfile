@@ -44,6 +44,7 @@ COPY --from=builder /app/register.html ./register.html
 COPY --from=builder /app/connect-demo.html ./connect-demo.html
 COPY --from=builder /app/connect-store.html ./connect-store.html
 COPY --from=builder /app/connect-success.html ./connect-success.html
+COPY --from=builder /app/site-nav.js ./site-nav.js
 COPY server ./server
 
 # Serves static CDN + POST /api/coinbase/session-token (CDP keys from Railway env).

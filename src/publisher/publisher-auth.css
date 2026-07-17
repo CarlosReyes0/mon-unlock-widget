@@ -150,3 +150,35 @@
   border-color: #5b7c5a;
   color: #fff;
 }
+
+.mon-site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin: 0 0 1.5rem;
+}
+
+.mon-site-nav a {
+  font-size: 0.875rem;
+  color: #57534e;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.mon-site-nav a.active {
+  color: #5b7c5a;
+  font-weight: 600;
+}
+
+.mon-site-footer {
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e7e5e4;
+  font-size: 0.75rem;
+  color: #78716c;
+}
+
+.mon-site-footer a {
+  color: #57534e;
+}

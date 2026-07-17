@@ -44,15 +44,7 @@
     </style>
   </head>
   <body>
-    <nav id="topnav" style="display:flex; gap:1rem; margin-bottom:2rem; flex-wrap:wrap;">
-      <a href="/" data-nav="home" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Homepage</a>
-      <a href="/generator.html" data-nav="embed" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Create embed</a>
-      <a href="/account.html" data-nav="account" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Publisher account</a>
-      <a href="/dashboard.html" data-nav="dashboard" style="font-size:0.875rem; color:#57534e; text-decoration:none;">Writer dashboard</a>
-    </nav>
-    <script>
-      (function(){const n=document.getElementById('topnav');if(!n)return;const p=location.pathname;const a=n.querySelectorAll('a');a.forEach(l=>{const k=l.dataset.nav;const act=(k==='home'&&(p==='/'||p==='/index.html'))||(k==='embed'&&p.includes('generator'))||(k==='account'&&p.includes('account'))||(k==='dashboard'&&p.includes('dashboard'));if(act){l.style.color='#7c3aed';l.style.fontWeight='600';}else{l.style.color='#57534e';l.style.fontWeight='400';}});})();
-    </script>
+    <div id="site-nav"></div>
 
     <div class="header">
       <div>
@@ -166,9 +158,11 @@
     <footer style="margin-top: 4rem; font-size: 0.875rem; color: #6b7280; text-align: center;">
       Powered by the live widget at <a href="https://mon-unlock-widget-production.up.railway.app" target="_blank" style="color:inherit;">mon-unlock-widget-production.up.railway.app</a>
     </footer>
+    <div id="site-footer"></div>
 
     <link rel="stylesheet" href="/publisher-auth.css" />
     <script type="module" src="/publisher-auth.js"></script>
+    <script src="/site-nav.js"></script>
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
