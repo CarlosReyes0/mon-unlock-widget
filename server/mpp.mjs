@@ -9,13 +9,15 @@
  *   MPP_TEMPO_RECIPIENT     — 0x address that receives Tempo pathUSD charges
  *   MPP_PUBLISH_AMOUNT      — charge amount in pathUSD (default 0.05)
  *   MPP_TEMPO_CURRENCY      — TIP-20 token (default pathUSD)
- *   MPP_REALM               — challenge realm (default mon-unlock)
+ *   MPP_REALM               — challenge realm; must match the public host
+ *                             (default: RAILWAY_PUBLIC_DOMAIN, else PUBLIC_URL host)
  *   MPP_DEV_BYPASS=1        — skip payment (local tests only)
  *   STRIPE_SECRET_KEY       — optional: also offer Stripe SPT card charges
  */
 import { Mppx, tempo, stripe } from "mppx/server";
 
 const PATH_USD = "0x20c0000000000000000000000000000000000000";
+const DEFAULT_PUBLIC_HOST = "mon-unlock-widget-production.up.railway.app";
 
 export function mppConfigured() {
   const secret = (process.env.MPP_SECRET_KEY || "").trim();
@@ -36,16 +38,44 @@ export function publishCurrency() {
   return (process.env.MPP_TEMPO_CURRENCY || PATH_USD).trim() || PATH_USD;
 }
 
+/**
+ * mppscan / mpp.dev require Payment realm === origin host so on-chain stats
+ * attribute to this service. Prefer an explicit override, then Railway's
+ * public domain, then PUBLIC_URL / checkout origin host.
+ */
+export function resolveRealm() {
+  const explicit = (process.env.MPP_REALM || "").trim();
+  if (explicit) return explicit;
+
+  const railway = (process.env.RAILWAY_PUBLIC_DOMAIN || "").trim();
+  if (railway) return railway.replace(/^https?:\/\//, "").split("/")[0];
+
+  for (const key of ["PUBLIC_URL", "VITE_CHECKOUT_ORIGIN"]) {
+    const raw = (process.env[key] || "").trim();
+    if (!raw) continue;
+    try {
+      return new URL(raw).host;
+    } catch {
+      const host = raw.replace(/^https?:\/\//, "").split("/")[0].trim();
+      if (host) return host;
+    }
+  }
+
+  return DEFAULT_PUBLIC_HOST;
+}
+
 let cached = null;
+let cachedRealm = null;
 
 function getMppx() {
-  if (cached) return cached;
   if (!mppConfigured()) return null;
+
+  const realm = resolveRealm();
+  if (cached && cachedRealm === realm) return cached;
 
   const secretKey = process.env.MPP_SECRET_KEY.trim();
   const recipient = process.env.MPP_TEMPO_RECIPIENT.trim();
   const currency = publishCurrency();
-  const realm = (process.env.MPP_REALM || "mon-unlock").trim() || "mon-unlock";
 
   const methods = [
     tempo.charge({
@@ -72,6 +102,7 @@ function getMppx() {
     secretKey,
     realm,
   });
+  cachedRealm = realm;
   return cached;
 }
 
@@ -112,13 +143,19 @@ export async function withMppCharge(req, res, { amount, scope, onPaid }) {
   }
 
   const chargeAmount = amount || publishAmount();
+  const recipient = (process.env.MPP_TEMPO_RECIPIENT || "").trim();
   const entries = [["tempo/charge", { amount: chargeAmount, scope }]];
   if (mppx.methods.some((m) => m.name === "stripe" && m.intent === "charge")) {
     // Stripe charge uses decimals:2 → amount "5" means $0.05
     const cents = Math.round(Number(chargeAmount) * 100);
+    // mppscan expects recipient on every challenge request object.
     entries.push([
       "stripe/charge",
-      { amount: String(Number.isFinite(cents) ? cents : 5), scope },
+      {
+        amount: String(Number.isFinite(cents) ? cents : 5),
+        scope,
+        ...(recipient ? { recipient } : {}),
+      },
     ]);
   }
 
@@ -155,6 +192,7 @@ export function mppStatus() {
     devBypass: mppDevBypass(),
     amount: publishAmount(),
     currency: publishCurrency(),
+    realm: resolveRealm(),
     stripeOffered: Boolean(
       (process.env.STRIPE_SECRET_KEY || "").trim().startsWith("sk_")
     ),
