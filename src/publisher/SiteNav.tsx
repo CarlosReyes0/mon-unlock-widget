@@ -3,6 +3,7 @@ const LINKS = [
   { href: "/generator.html", nav: "embed", label: "Create embed" },
   { href: "/account.html", nav: "account", label: "Account" },
   { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
+  { href: "/agents", nav: "agents", label: "Agents" },
 ] as const;
 
 function isActive(nav: string) {
@@ -11,6 +12,7 @@ function isActive(nav: string) {
   if (nav === "embed") return path.includes("generator");
   if (nav === "account") return path.includes("account");
   if (nav === "dashboard") return path.includes("dashboard");
+  if (nav === "agents") return path.includes("agents") || path.includes("skill");
   return false;
 }
 

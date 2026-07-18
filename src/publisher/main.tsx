@@ -22,6 +22,7 @@ if (!appId) {
             Account
           </a>
           <a href="/dashboard.html">Dashboard</a>
+          <a href="/agents">Agents</a>
         </nav>
         <p className="mon-pub-shell__brand">Account</p>
         <h1>Publisher account</h1>
