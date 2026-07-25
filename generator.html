@@ -14,7 +14,7 @@
       .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
       .badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 9999px; }
       h1 { font-size: 2rem; font-weight: 800; margin: 0; }
-      .grid { display: grid; grid-template-columns: minmax(520px, 1.05fr) minmax(420px, 0.95fr); gap: 2.25rem; align-items: start; }
+      .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 2.25rem; align-items: start; }
       @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
       .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.75rem 1.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
       label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #374151; }
@@ -26,21 +26,128 @@
       .field { margin-bottom: 1.25rem; }
       .field:last-child { margin-bottom: 0; }
       .row { display: grid; grid-template-columns: 2fr 1fr; gap: 1.15rem; }
-      .hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.35rem; line-height: 1.45; }
+      .hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.35rem; line-height: 1.45; overflow-wrap: anywhere; }
+      .hint code { word-break: break-all; }
       .section-title { font-size: 1.125rem; font-weight: 700; margin: 0 0 1.25rem; }
-      .preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-      .preview-pane { min-height: 420px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 8px; padding: 2rem; border: 1px solid #e5e7eb; }
+      .preview-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
+      .preview-pane { min-height: 420px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 8px; padding: 2rem; border: 1px solid #e5e7eb; overflow-x: auto; }
       .preview-pane > * { width: 100%; max-width: 42rem; }
-      .output { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; overflow-x: auto; white-space: pre; }
-      .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.12s; }
+      .output { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; overflow-x: auto; white-space: pre; -webkit-overflow-scrolling: touch; }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.12s; min-height: 2.75rem; }
       .btn-primary { background: linear-gradient(135deg, #7c3aed, #5b21b6); color: white; }
       .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
       .btn-secondary { background: #e5e7eb; color: #111827; }
       .btn-secondary:hover { background: #d1d5db; }
       .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .btn-group .btn { min-height: 2.5rem; }
       .copy-success { color: #16a34a; font-size: 0.75rem; margin-left: 0.5rem; }
       .nav-back { display: inline-flex; align-items: center; gap: 0.5rem; color: #6b7280; text-decoration: none; font-size: 0.875rem; }
       .nav-back:hover { color: #111827; }
+      .media-tips { margin-top: 0.5rem; border: 1px solid #e5e7eb; border-radius: 10px; padding: 0.65rem 0.85rem; background: #fafafa; }
+      .media-tips summary { cursor: pointer; font-size: 0.8rem; font-weight: 600; color: #374151; list-style-position: outside; }
+      .media-tips[open] summary { margin-bottom: 0.5rem; }
+      .media-tips .hint { margin-top: 0.5rem; }
+      .panel-tabs { display: none; }
+      .actions-inline { margin-top: 1rem; }
+      .actions-inline .btn { width: auto; }
+      .mobile-sticky-actions { display: none; }
+      .status-stack { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem; margin-top: 0.5rem; }
+      .status-stack > span { margin-left: 0 !important; }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 1rem 1rem calc(5.5rem + env(safe-area-inset-bottom, 0px));
+        }
+        #site-nav {
+          gap: 0.65rem 0.85rem !important;
+          margin-bottom: 1rem !important;
+        }
+        .header { margin-bottom: 1rem; }
+        h1 { font-size: 1.5rem; line-height: 1.2; }
+        .header p { font-size: 0.9rem; }
+        .grid { gap: 1.25rem; }
+        .card { padding: 1.15rem 1.1rem; border-radius: 10px; }
+        .row { grid-template-columns: 1fr; gap: 1rem; }
+        textarea#teaser { min-height: 120px; }
+        textarea#body { min-height: 200px; }
+        .preview-pane { min-height: 280px; padding: 1rem; align-items: flex-start; }
+        .output {
+          font-size: 0.75rem;
+          white-space: pre-wrap;
+          word-break: break-word;
+          min-height: 140px !important;
+        }
+        .btn-group .btn {
+          flex: 1 1 calc(50% - 0.25rem);
+          padding: 0.55rem 0.65rem;
+          font-size: 0.8rem;
+          border-radius: 10px;
+        }
+        .panel-tabs {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0.35rem;
+          margin: 0 0 1rem;
+          padding: 0.3rem;
+          background: #f3f4f6;
+          border-radius: 12px;
+          position: sticky;
+          top: 0;
+          z-index: 20;
+        }
+        .panel-tabs button {
+          appearance: none;
+          border: none;
+          background: transparent;
+          color: #4b5563;
+          font: inherit;
+          font-size: 0.875rem;
+          font-weight: 600;
+          padding: 0.65rem 0.5rem;
+          border-radius: 10px;
+          cursor: pointer;
+          min-height: 2.75rem;
+        }
+        .panel-tabs button[aria-selected="true"] {
+          background: #fff;
+          color: #111827;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+        .panel-edit,
+        .panel-side {
+          display: none;
+        }
+        body[data-mobile-panel="edit"] .panel-edit { display: block; }
+        body[data-mobile-panel="preview"] .panel-side,
+        body[data-mobile-panel="code"] .panel-side { display: block; }
+        body[data-mobile-panel="preview"] .panel-preview { display: block; }
+        body[data-mobile-panel="preview"] .panel-code { display: none; }
+        body[data-mobile-panel="code"] .panel-preview { display: none; }
+        body[data-mobile-panel="code"] .panel-code { display: block; margin-top: 0 !important; }
+        .actions-inline { display: none; }
+        .mobile-sticky-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 30;
+          padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+          background: rgba(255, 255, 255, 0.96);
+          border-top: 1px solid #e5e7eb;
+          backdrop-filter: blur(8px);
+        }
+        .mobile-sticky-actions .btn {
+          width: 100%;
+        }
+        .mobile-sticky-actions .status-stack {
+          margin-top: 0;
+          font-size: 0.75rem;
+        }
+        footer { margin-top: 2rem !important; font-size: 0.8rem !important; overflow-wrap: anywhere; }
+      }
     </style>
   </head>
   <body>
@@ -53,31 +160,37 @@
       </div>
     </div>
 
+    <div class="panel-tabs" role="tablist" aria-label="Generator sections">
+      <button type="button" role="tab" id="tab-edit" aria-controls="panel-edit" aria-selected="true" data-panel="edit">Edit</button>
+      <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="false" data-panel="preview">Preview</button>
+      <button type="button" role="tab" id="tab-code" aria-controls="panel-code" aria-selected="false" data-panel="code">Code</button>
+    </div>
+
     <div class="grid">
       <!-- Form -->
-      <div>
+      <div class="panel-edit" id="panel-edit" role="tabpanel" aria-labelledby="tab-edit">
         <div class="card">
           <h2 class="section-title">Article details</h2>
 
           <div class="field">
             <label for="title">Title</label>
-            <input id="title" type="text" placeholder="Why Every Founder Should Own Their Reader Relationship" />
+            <input id="title" type="text" placeholder="Why Every Founder Should Own Their Reader Relationship" autocomplete="off" enterkeyhint="next" />
           </div>
 
           <div class="row field">
             <div>
               <label for="author">Author</label>
-              <input id="author" type="text" placeholder="Your Name" />
+              <input id="author" type="text" placeholder="Your Name" autocomplete="name" enterkeyhint="next" />
             </div>
             <div>
               <label for="price">Price (MON)</label>
-              <input id="price" type="number" step="0.1" min="0.1" value="5" />
+              <input id="price" type="number" inputmode="decimal" step="0.1" min="0.1" value="5" />
             </div>
           </div>
 
           <div class="field">
             <label for="articleId">Article ID (slug)</label>
-            <input id="articleId" type="text" placeholder="founder-manifesto" />
+            <input id="articleId" type="text" placeholder="founder-manifesto" autocapitalize="off" autocomplete="off" spellcheck="false" enterkeyhint="next" />
             <div class="hint">Used to derive a unique on-chain ID. Keep it short and stable.</div>
           </div>
 
@@ -90,25 +203,30 @@
           <div class="field">
             <label for="body">Body (full article)</label>
             <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
-            <div class="hint" style="margin-top:0.5rem;">
-              <strong>Photos</strong> — use a <em>direct</em> image file URL in <code>&lt;img src&gt;</code>:<br>
-              ✅ <code>https://i.postimg.cc/….jpg</code> &nbsp; ✅ <code>https://picsum.photos/800/500</code><br>
-              ❌ gallery pages like <code>postimg.cc/…</code> or Google Images result links
-            </div>
-            <div class="hint" style="margin-top:0.5rem;">
-              <strong>YouTube</strong> — paste into <code>&lt;iframe src&gt;</code> (or use the button):<br>
-              ✅ <code>https://www.youtube.com/embed/VIDEO_ID</code> &nbsp; ✅ watch/share links (auto-converted)<br>
-              ❌ don’t put a YouTube link in <code>&lt;video src&gt;</code>
-            </div>
-            <div class="hint" style="margin-top:0.5rem;">
-              <strong>MP4 / WebM</strong> — direct file URL in <code>&lt;video src&gt;</code> (e.g. ends in <code>.mp4</code>).
-            </div>
             <div class="btn-group" style="margin-top:0.5rem;">
-              <button class="btn btn-secondary" id="insertImageTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert image template</button>
-              <button class="btn btn-secondary" id="insertYoutubeTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert YouTube template</button>
-              <button class="btn btn-secondary" id="insertVideoTemplate" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Insert MP4 template</button>
+              <button type="button" class="btn btn-secondary" id="insertImageTemplate">Image</button>
+              <button type="button" class="btn btn-secondary" id="insertYoutubeTemplate">YouTube</button>
+              <button type="button" class="btn btn-secondary" id="insertVideoTemplate">MP4</button>
             </div>
-            <div class="hint" style="margin-top:0.35rem;">Blank lines in plain text are kept as paragraph spacing. Iframes allowlisted: YouTube, Vimeo, Loom.</div>
+            <details class="media-tips">
+              <summary>Media URL tips</summary>
+              <div class="hint">
+                <strong>Photos</strong> — use a <em>direct</em> image file URL in <code>&lt;img src&gt;</code>:<br>
+                ✅ <code>https://i.postimg.cc/….jpg</code><br>
+                ✅ <code>https://picsum.photos/800/500</code><br>
+                ❌ gallery pages like <code>postimg.cc/…</code> or Google Images result links
+              </div>
+              <div class="hint">
+                <strong>YouTube</strong> — paste into <code>&lt;iframe src&gt;</code> (or use the button):<br>
+                ✅ <code>https://www.youtube.com/embed/VIDEO_ID</code><br>
+                ✅ watch/share links (auto-converted)<br>
+                ❌ don’t put a YouTube link in <code>&lt;video src&gt;</code>
+              </div>
+              <div class="hint">
+                <strong>MP4 / WebM</strong> — direct file URL in <code>&lt;video src&gt;</code> (e.g. ends in <code>.mp4</code>).
+              </div>
+              <div class="hint">Blank lines in plain text are kept as paragraph spacing. Iframes allowlisted: YouTube, Vimeo, Loom.</div>
+            </details>
           </div>
         </div>
 
@@ -118,41 +236,48 @@
           <div id="mon-publisher-auth"></div>
           <div id="walletConnected" style="display:none; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem;">
             <span id="walletStatus" style="font-size:0.875rem; color:#6b7280;"></span>
-            <button class="btn btn-secondary" id="switchWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch wallet</button>
-            <button class="btn btn-secondary" id="disconnectWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Disconnect</button>
+            <button type="button" class="btn btn-secondary" id="switchWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Switch wallet</button>
+            <button type="button" class="btn btn-secondary" id="disconnectWalletBtn" style="padding:0.35rem 0.75rem; font-size:0.75rem;">Disconnect</button>
           </div>
           <p style="margin:0.45rem 0 0; font-size:0.75rem; color:#6b7280;">
             Prefer a dedicated page? <a href="/account.html" style="color:inherit;">Create publisher account</a>
           </p>
         </div>
-        <button class="btn btn-secondary" id="connectWalletBtn" style="display:none;" aria-hidden="true">Connect wallet</button>
+        <button type="button" class="btn btn-secondary" id="connectWalletBtn" style="display:none;" aria-hidden="true">Connect wallet</button>
 
-        <div style="margin-top: 1rem;">
-          <button class="btn btn-primary" id="copyFull">Copy full embed block</button>
-          <span id="copyStatus" class="copy-success" style="display:none; margin-left:0.75rem;">Copied!</span>
-          <span id="registerStatus" style="display:none; margin-left:0.75rem; font-size:0.75rem; color:#6b7280;"></span>
-          <span id="metadataStatus" style="display:none; margin-left:0.5rem; font-size:0.75rem;"></span>
+        <div class="actions-inline">
+          <button type="button" class="btn btn-primary" id="copyFull">Copy full embed block</button>
+          <div class="status-stack">
+            <span id="copyStatus" class="copy-success" style="display:none;">Copied!</span>
+            <span id="registerStatus" style="display:none; font-size:0.75rem; color:#6b7280;"></span>
+            <span id="metadataStatus" style="display:none; font-size:0.75rem;"></span>
+          </div>
         </div>
       </div>
 
       <!-- Preview + Output -->
-      <div>
-        <div class="card">
+      <div class="panel-side">
+        <div class="card panel-preview" id="panel-preview" role="tabpanel" aria-labelledby="tab-preview">
           <div class="preview-header">
             <h2 class="section-title" style="margin:0;">Live preview</h2>
-            <button class="btn btn-secondary" id="resetDraft" style="padding:0.5rem 1rem; font-size:0.75rem;">Reset draft</button>
+            <button type="button" class="btn btn-secondary" id="resetDraft" style="padding:0.5rem 1rem; font-size:0.75rem;">Reset draft</button>
           </div>
           <div class="preview-pane" id="previewPane">
             <p style="color:#6b7280; font-size:0.875rem;">Fill out the form to see a live preview here.</p>
           </div>
         </div>
 
-        <div class="card" style="margin-top: 1.5rem;">
+        <div class="card panel-code" id="panel-code" role="tabpanel" aria-labelledby="tab-code" style="margin-top: 1.5rem;">
           <h2 class="section-title">Generated embed code</h2>
           <div class="output" id="outputCode" style="min-height: 180px;">&lt;!-- Fill the form to generate code --&gt;</div>
           <div class="hint" style="margin-top: 0.75rem;">Paste the script tags once per site. Paste the &lt;mon-unlock&gt; block on any article page.</div>
         </div>
       </div>
+    </div>
+
+    <div class="mobile-sticky-actions" aria-label="Copy actions">
+      <button type="button" class="btn btn-primary" id="copyFullMobile">Copy full embed block</button>
+      <div class="status-stack" id="mobileStatusStack" aria-live="polite"></div>
     </div>
 
     <footer style="margin-top: 4rem; font-size: 0.875rem; color: #6b7280; text-align: center;">
@@ -289,22 +414,71 @@
         return different || list[0];
       }
 
+      function copyButtonLabel() {
+        return connectedWallet ? "Copy and register embed block" : "Copy full embed block";
+      }
+
+      function syncCopyButtonLabels() {
+        const label = copyButtonLabel();
+        const copyBtn = document.getElementById("copyFull");
+        const copyBtnMobile = document.getElementById("copyFullMobile");
+        if (copyBtn) copyBtn.textContent = label;
+        if (copyBtnMobile) copyBtnMobile.textContent = label;
+      }
+
+      function syncMobileStatusMirror() {
+        const stack = document.getElementById("mobileStatusStack");
+        if (!stack) return;
+        stack.replaceChildren();
+        for (const id of ["copyStatus", "registerStatus", "metadataStatus"]) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          const visible = el.style.display !== "none" && el.textContent.trim();
+          if (!visible) continue;
+          const clone = el.cloneNode(true);
+          clone.removeAttribute("id");
+          clone.querySelectorAll("[id]").forEach((node) => {
+            const originalId = node.id;
+            node.removeAttribute("id");
+            if (originalId === "retryMetaBtn") {
+              node.addEventListener("click", () => {
+                document.getElementById("retryMetaBtn")?.click();
+              });
+            }
+          });
+          stack.appendChild(clone);
+        }
+      }
+
+      function setMobilePanel(panel) {
+        const next = panel === "preview" || panel === "code" ? panel : "edit";
+        document.body.dataset.mobilePanel = next;
+        document.querySelectorAll(".panel-tabs [role='tab']").forEach((tab) => {
+          const selected = tab.getAttribute("data-panel") === next;
+          tab.setAttribute("aria-selected", selected ? "true" : "false");
+        });
+        try {
+          sessionStorage.setItem("mon-unlock-generator-mobile-panel", next);
+        } catch {}
+        if (window.matchMedia("(max-width: 720px)").matches) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+
       function updateWalletUI() {
         const connectedEl = document.getElementById("walletConnected");
         const status = document.getElementById("walletStatus");
-        const copyBtn = document.getElementById("copyFull");
-        if (!connectedEl || !status || !copyBtn) return;
+        if (!connectedEl || !status) return;
 
         if (connectedWallet) {
           // Privy inline UI already shows identity; keep a compact status for register flow.
           connectedEl.style.display = window.__monPublisherAddress ? "none" : "flex";
           status.innerHTML = `Connected: <span class="mono">${connectedWallet.slice(0, 6)}…${connectedWallet.slice(-4)}</span>`;
-          copyBtn.textContent = "Copy and register embed block";
         } else {
           connectedEl.style.display = "none";
           status.textContent = "";
-          copyBtn.textContent = "Copy full embed block";
         }
+        syncCopyButtonLabels();
       }
 
       async function connectWallet() {
@@ -607,15 +781,21 @@ ${teaserEsc}
         const status = document.getElementById("copyStatus");
         navigator.clipboard.writeText(text).then(() => {
           status.style.display = "inline";
-          setTimeout(() => (status.style.display = "none"), 2000);
+          syncMobileStatusMirror();
+          setTimeout(() => {
+            status.style.display = "none";
+            syncMobileStatusMirror();
+          }, 2000);
         }).catch(() => {
           // Same "document not focused" issue can happen here after wallet popups.
           // The code is already visible in #outputCode, so just highlight it.
           status.textContent = "Select the code above and press ⌘/Ctrl+C";
           status.style.display = "inline";
+          syncMobileStatusMirror();
           setTimeout(() => {
             status.style.display = "none";
             status.textContent = "Copied!";
+            syncMobileStatusMirror();
           }, 2800);
           // Try to select it for the user
           const out = document.getElementById("outputCode");
@@ -627,6 +807,9 @@ ${teaserEsc}
               sel.removeAllRanges();
               sel.addRange(range);
             } catch {}
+          }
+          if (window.matchMedia("(max-width: 720px)").matches) {
+            setMobilePanel("code");
           }
         });
       }
@@ -650,6 +833,10 @@ ${teaserEsc}
         document.getElementById("switchWalletBtn")?.addEventListener("click", switchWallet);
         document.getElementById("disconnectWalletBtn")?.addEventListener("click", disconnectWallet);
 
+        document.querySelectorAll(".panel-tabs [data-panel]").forEach((tab) => {
+          tab.addEventListener("click", () => setMobilePanel(tab.getAttribute("data-panel")));
+        });
+
         fields.forEach((f) => {
           const el = document.getElementById(f);
           if (!el) return;
@@ -660,12 +847,19 @@ ${teaserEsc}
           });
         });
 
-        document.getElementById("copyFull").addEventListener("click", async () => {
+        const onCopyFull = async () => {
           const v = getValues();
           const status = document.getElementById("registerStatus");
+          const metaStatusEl = document.getElementById("metadataStatus");
           status.style.display = "none";
           status.textContent = "";
           status.style.color = "";
+          if (metaStatusEl) {
+            metaStatusEl.style.display = "none";
+            metaStatusEl.textContent = "";
+            metaStatusEl.style.color = "";
+          }
+          syncMobileStatusMirror();
 
           let finalCode;
 
@@ -673,6 +867,7 @@ ${teaserEsc}
             // Connected → register on-chain then copy embed WITH contract
             status.style.display = "inline";
             status.textContent = "Registering article on Monad…";
+            syncMobileStatusMirror();
 
             try {
               const eth = getInjectedProvider();
@@ -690,6 +885,7 @@ ${teaserEsc}
                   const currentChain = await eth.request({ method: "eth_chainId" });
                   if (parseInt(currentChain, 16) !== 143) {
                     status.textContent = "Switching to Monad mainnet…";
+                    syncMobileStatusMirror();
                     await eth.request({
                       method: "wallet_switchEthereumChain",
                       params: [{ chainId: "0x8f" }],
@@ -971,7 +1167,20 @@ ${teaserEsc}
           }
 
           document.getElementById("outputCode").textContent = finalCode;
+          if (window.matchMedia("(max-width: 720px)").matches) {
+            setMobilePanel("code");
+          }
           copy(finalCode, "copyFull");
+          syncMobileStatusMirror();
+        };
+
+        document.getElementById("copyFull")?.addEventListener("click", onCopyFull);
+        document.getElementById("copyFullMobile")?.addEventListener("click", onCopyFull);
+
+        const statusObserver = new MutationObserver(() => syncMobileStatusMirror());
+        ["copyStatus", "registerStatus", "metadataStatus"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) statusObserver.observe(el, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["style"] });
         });
 
         document.getElementById("resetDraft").addEventListener("click", () => {
@@ -1006,10 +1215,19 @@ ${teaserEsc}
       }
 
       async function init() {
+        let initialPanel = "edit";
+        try {
+          const savedPanel = sessionStorage.getItem("mon-unlock-generator-mobile-panel");
+          if (savedPanel === "preview" || savedPanel === "code" || savedPanel === "edit") {
+            initialPanel = savedPanel;
+          }
+        } catch {}
+        setMobilePanel(initialPanel);
         loadDraft();
         wireEvents();
         await restoreWallet();
         updateWalletUI();
+        syncMobileStatusMirror();
       }
 
       init();
