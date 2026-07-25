@@ -113,6 +113,7 @@
           </div>
           <p style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">Data refreshed from Supabase (populated by the Edge Function indexer).</p>
           <p id="indexerHealth" style="margin-top: 0.4rem; font-size: 0.75rem; color: #6b7280;">Indexer status: checking…</p>
+          <button type="button" id="runIndexerBtn" class="btn btn-secondary" style="margin-top:0.5rem; font-size:0.75rem; padding:0.25rem 0.6rem;">Run indexer now</button>
         </div>
 
         <!-- Fallback embed output (shown when clipboard can't be used right after a wallet signature) -->
@@ -190,10 +191,48 @@
           const ageMinutes = Math.floor((Date.now() - updatedAt.getTime()) / 60000);
           const stale = ageMinutes > 15;
           el.style.color = stale ? "#b45309" : "#6b7280";
-          el.textContent = `Indexer: block ${data.last_indexed_block} · updated ${ageMinutes}m ago${stale ? " (stale)" : ""}`;
+          el.textContent = `Indexer: block ${data.last_indexed_block} · updated ${ageMinutes}m ago${stale ? " (stale — click Run indexer now)" : ""}`;
         } catch {
           el.style.color = "#b45309";
           el.textContent = "Indexer status unavailable";
+        }
+      }
+
+      async function triggerIndexerNow() {
+        const btn = document.getElementById("runIndexerBtn");
+        const el = document.getElementById("indexerHealth");
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "Indexing…";
+        }
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/indexer`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: "{}",
+          });
+          const text = await res.text();
+          if (!res.ok) throw new Error(text || `Indexer HTTP ${res.status}`);
+          if (el) {
+            el.style.color = "#16a34a";
+            el.textContent = `Indexer ran: ${text.slice(0, 120)}`;
+          }
+          if (currentWallet) await loadFromSupabase(currentWallet);
+          else await refreshIndexerHealth();
+        } catch (e) {
+          if (el) {
+            el.style.color = "#b45309";
+            el.textContent = e?.message || "Indexer trigger failed";
+          }
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Run indexer now";
+          }
         }
       }
 
@@ -787,6 +826,8 @@ ${teaser}
         }
 
         document.getElementById("articlesEmpty").style.display = "block";
+        const runIndexerBtn = document.getElementById("runIndexerBtn");
+        if (runIndexerBtn) runIndexerBtn.addEventListener("click", () => triggerIndexerNow());
         refreshIndexerHealth();
       }
 

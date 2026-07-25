@@ -227,43 +227,29 @@ document.querySelector("mon-unlock").addEventListener("mon:unlocked", (e) => {
 - Real MON payments on Monad
 - Hosted dashboard to create articles without HTML
 
-## Current limitations & recommended next steps
+## Indexer (dashboard revenue)
 
-This section captures the main gaps that were identified during the latest round of testing (as of 2026-06-17). Each item is described first in technical detail, then restated simply, followed by the concrete recommended action.
+Production indexes `ArticleRegistered` / `ArticleUnlocked` via the Supabase Edge Function `indexer`:
+
+1. **Primary:** Supabase `pg_cron` every 2 minutes (`supabase/migrations/0005_schedule_indexer_cron.sql`)
+2. **Fallback:** Railway cron service in `cron/` — set that service’s config path to **`/cron/railway.toml`** (not the root `railway.toml`, which forces Dockerfile builds)
+3. **Manual:** Dashboard → **Run indexer now**
+
+The Writer Dashboard reads `articles` + `unlocks` from Supabase after wallet connect.
+
+## Embed signatures
+
+Generator (and `/register.html` after agent publish) produce an `embed-sig` attribute. The widget and Stripe `create-intent` both reject missing or tampered signatures before payment. Old embeds without `embed-sig` must be regenerated.
+
+## Current limitations & recommended next steps
 
 ### 1. Passive wallet detection only works after first explicit connect on that origin
 
-**Technical explanation**  
-The widget performs a silent `eth_accounts` call in `attemptSilentOnchainCheck()` (see `src/widget/mon-unlock.ts:158`) to discover an already-authorized account without triggering a MetaMask popup. This only returns a non-empty list once the user has previously called `eth_requestAccounts` and approved the site on that specific origin. Consequently, the very first visit to a new domain (localhost, a fresh production deployment, etc.) will still show the "Connect wallet to unlock" button even if the article was already paid for on-chain with the same wallet on another domain. Subsequent visits to the same origin will auto-detect the account and run `hasUnlocked` immediately.
+The widget’s silent `eth_accounts` check only works after the reader has approved the site once on that origin. First visit still needs an explicit connect (or Continue checkout); later visits auto-detect.
 
-**Simple version**  
-You still have to click "Connect wallet to unlock" the first time you visit the page from a new browser / new domain. After that one click, the unlock appears automatically everywhere else.
+### 2. Agent-published embeds need a signed `embed-sig`
 
-**Recommended next step**  
-No code change required for correctness. If a smoother UX is desired, we can surface a non-blocking "Check unlock status" button instead of the full payment CTA on first visit. Document the current behaviour so publishers understand the one-time connect requirement.
-
-### 2. Writer Dashboard shows only locally-registered articles; real payments are invisible
-
-**Technical explanation**  
-`dashboard.html` stores registered articles exclusively in `localStorage` under the key `mon-unlock-writer-articles:<lowercase-wallet>`. It never calls `getArticle`, never subscribes to `ArticleUnlocked` events, and never reads `hasUnlocked` for any articleId. Therefore an article registered via the generator (or via any other means) will not appear in the dashboard for wallet `0x5594d76928c4974AE77387882Cf9099c375e307b` even when readers have successfully paid MON on-chain. Revenue and unlock counts remain at zero until the dashboard is augmented with on-chain reads.
-
-**Simple version**  
-Right now the Writer Dashboard only shows articles you registered in that same browser tab. Payments that actually happened on-chain do not show up.
-
-**Recommended next step**  
-Add a "Load from chain" button (or automatic fetch on connect) that calls `getArticle` + optionally indexes past `ArticleUnlocked` events for the connected publisher. This will make the dashboard reflect real usage for wallets such as `0x5594…307b`.
-
-### 3. Embed tampering / payment redirection risk
-
-**Technical explanation**  
-The `<mon-unlock>` element accepts an arbitrary `unlock-contract` attribute. The on-chain `unlock(bytes32)` function in `ArticleUnlock.sol` forwards `msg.value` to whatever address is stored in `articles[articleId].publisher` at registration time. An attacker can copy a legitimate embed snippet, change only the `unlock-contract` value (or the `article-id`), register the same slug under their own address on the same or a different contract, and host the modified snippet. Readers using the tampered embed will send MON to the attacker instead of the original publisher. There is currently no cryptographic binding between the published embed HTML and the registered `(articleId, publisher)` tuple.
-
-**Simple version**  
-Anyone can take your embed code, swap the contract address, and steal the payments. The system trusts whatever HTML the publisher pastes.
-
-**Recommended next step**  
-Short-term: add a clear warning in the generator output and in this README.  
-Medium-term: have the generator produce a signed claim (articleId + contract + publisher signature) that the widget can verify before accepting a payment, or host a lightweight verification endpoint. This is the main remaining trust issue before a public launch.
+`POST /api/agents/publish` returns HTML without `embed-sig` (agents cannot sign as the publisher wallet). After on-chain registration on `/register.html`, copy the `embed-sig="…"` attribute into the embed before readers can pay.
 
 ## License
 

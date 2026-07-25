@@ -16,6 +16,7 @@
 import Stripe from "stripe";
 import { createHash, randomUUID } from "node:crypto";
 import { keccak256, toBytes } from "viem";
+import { assertFiatEmbedAuthorized } from "./embed-signature.mjs";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
@@ -111,7 +112,14 @@ export async function lookupArticle(articleId) {
 }
 
 /**
- * @param {{ articleId: string, amountUsdCents: number, buyerEmail?: string, title?: string }} input
+ * @param {{
+ *   articleId: string,
+ *   amountUsdCents: number,
+ *   buyerEmail?: string,
+ *   title?: string,
+ *   embedSig?: string,
+ *   contract?: string,
+ * }} input
  */
 export async function createPaymentIntent(input) {
   const stripe = getStripe();
@@ -121,6 +129,8 @@ export async function createPaymentIntent(input) {
     typeof input.buyerEmail === "string" && input.buyerEmail.includes("@")
       ? input.buyerEmail.trim()
       : undefined;
+  const embedSig = String(input.embedSig || "").trim();
+  const contract = String(input.contract || "").trim();
 
   if (!articleId) {
     const err = new Error("invalid_article_id");
@@ -142,6 +152,19 @@ export async function createPaymentIntent(input) {
   if (!article?.publisher) {
     const err = new Error("article_not_found");
     err.status = 404;
+    throw err;
+  }
+
+  const auth = await assertFiatEmbedAuthorized({
+    embedSig,
+    contract,
+    articleId,
+    priceWei: article.price_wei,
+    publisher: article.publisher,
+  });
+  if (!auth.ok) {
+    const err = new Error(auth.error);
+    err.status = auth.status;
     throw err;
   }
 

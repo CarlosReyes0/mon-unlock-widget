@@ -47,6 +47,8 @@ export function generateEmbed(input) {
   const author = (input.author || "Author").trim() || "Author";
   const price = (input.price || "1").trim() || "1";
   const teaserEsc = escapeTeaser((input.teaser || "").trim());
+  // embed-sig is added after the publisher finishes /register.html (wallet signature).
+  // Payments (MON + Stripe) require embed-sig; without it the widget blocks checkout.
   return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"></script>
 
@@ -174,8 +176,8 @@ export async function publishArticleForAgent(raw) {
     finishRegistrationUrl,
     embed,
     nextSteps: [
-      "Paste the embed HTML on your site.",
-      `Open ${finishRegistrationUrl} and register on Monad with the publisher wallet so readers can pay.`,
+      `Open ${finishRegistrationUrl}, register on Monad, and copy the embed-sig attribute into your <mon-unlock> tag.`,
+      "Paste the updated embed HTML on your site (payments require embed-sig).",
       "Readers unlock with MON (wallet) or card / Apple Pay / Google Pay when Stripe is configured.",
     ],
   };

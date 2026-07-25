@@ -352,6 +352,8 @@ const server = http.createServer(async (req, res) => {
         amountUsdCents: parsed.amountUsdCents,
         buyerEmail: parsed.buyerEmail,
         title: parsed.title,
+        embedSig: parsed.embedSig,
+        contract: parsed.contract,
       });
       return sendJson(res, 200, result);
     } catch (e) {

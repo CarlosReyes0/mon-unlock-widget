@@ -560,6 +560,17 @@ export class MonUnlock extends LitElement {
     }
   }
 
+  private missingEmbedSigMessage() {
+    return "This embed is missing a publisher signature. Get a new embed from the generator.";
+  }
+
+  private requireEmbedSigForPayment(): boolean {
+    if (!this.isOnchain) return true;
+    if (this.embedSig?.trim()) return true;
+    this.error = this.missingEmbedSigMessage();
+    return false;
+  }
+
   private openPrivyCheckout() {
     if (!this.article) return;
     if (!this.isOnchain || !this.unlockContract.trim()) {
@@ -567,6 +578,7 @@ export class MonUnlock extends LitElement {
       void this.connect();
       return;
     }
+    if (!this.requireEmbedSigForPayment()) return;
 
     this.error = null;
     const url = buildCheckoutUrl({
@@ -601,6 +613,7 @@ export class MonUnlock extends LitElement {
   }
 
   private startMetaMaskPath() {
+    if (!this.requireEmbedSigForPayment()) return;
     const inWalletBrowser = hasReliableInjectedProvider();
     if (this.isMobileViewport() && !inWalletBrowser) {
       this.showMetaMaskHelp = true;
@@ -613,6 +626,7 @@ export class MonUnlock extends LitElement {
   private renderUnlockActions() {
     const inWalletBrowser = hasReliableInjectedProvider();
     const onchain = this.isOnchain;
+    const missingSig = onchain && !this.embedSig?.trim();
 
     // Demo mode: single connect button (simulated unlock).
     if (!onchain) {
@@ -624,6 +638,12 @@ export class MonUnlock extends LitElement {
         >
           ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
         </button>
+      `;
+    }
+
+    if (missingSig) {
+      return html`
+        <p class="text-sm text-red-700">${this.missingEmbedSigMessage()}</p>
       `;
     }
 
