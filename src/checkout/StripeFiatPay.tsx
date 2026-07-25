@@ -29,10 +29,26 @@ type CreateIntentResult = {
   amountUsdCents: number;
 };
 
+function fiatIntentErrorMessage(code: string | undefined): string {
+  switch (code) {
+    case "missing_embed_sig":
+      return "This embed is missing a publisher signature. Get a new embed from the generator.";
+    case "invalid_embed_sig":
+    case "unsupported_contract":
+      return "This embed was modified. Payments are blocked for your safety.";
+    case "article_not_found":
+      return "This article is not registered for payments yet.";
+    default:
+      return code || "Could not start card checkout.";
+  }
+}
+
 async function createIntent(input: {
   articleId: string;
   title: string;
   amountUsdCents: number;
+  embedSig: string;
+  contract: string;
   buyerEmail?: string;
 }): Promise<CreateIntentResult> {
   const res = await fetch("/api/stripe/create-intent", {
@@ -42,7 +58,7 @@ async function createIntent(input: {
   });
   const data = (await res.json()) as CreateIntentResult & { error?: string };
   if (!res.ok) {
-    throw new Error(data.error || "Could not start card checkout.");
+    throw new Error(fiatIntentErrorMessage(data.error));
   }
   if (!data.clientSecret || !data.paymentIntentId) {
     throw new Error("Invalid payment response.");
@@ -162,6 +178,8 @@ type Props = {
   articleId: string;
   title: string;
   amountUsdCents: number;
+  embedSig: string;
+  contract: string;
   onUnlocked: (sessionToken: string) => void;
   onError: (message: string) => void;
   onBusy?: (busy: boolean) => void;
@@ -175,6 +193,8 @@ export function StripeFiatPay({
   articleId,
   title,
   amountUsdCents,
+  embedSig,
+  contract,
   onUnlocked,
   onError,
   onBusy = () => {},
@@ -221,7 +241,7 @@ export function StripeFiatPay({
     if (!promise || amountUsdCents < 50) return;
     let cancelled = false;
     onBusy(true);
-    void createIntent({ articleId, title, amountUsdCents })
+    void createIntent({ articleId, title, amountUsdCents, embedSig, contract })
       .then((created) => {
         if (cancelled) return;
         setIntent(created);
@@ -238,7 +258,17 @@ export function StripeFiatPay({
     return () => {
       cancelled = true;
     };
-  }, [promise, articleId, title, amountUsdCents, onBusy, onError, finishingRedirect]);
+  }, [
+    promise,
+    articleId,
+    title,
+    amountUsdCents,
+    embedSig,
+    contract,
+    onBusy,
+    onError,
+    finishingRedirect,
+  ]);
 
   if (!promise) return null;
 

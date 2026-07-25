@@ -67,7 +67,7 @@
       <ol class="steps">
         <li>Connect your publisher wallet</li>
         <li>Click Register on Monad</li>
-        <li>Approve the transaction in MetaMask</li>
+        <li>Approve the transaction, then sign the embed (required for payments)</li>
       </ol>
 
       <div>
@@ -76,6 +76,14 @@
       </div>
 
       <p class="status" id="status"></p>
+
+      <div id="sigBox" style="display:none; margin-top:1.25rem;">
+        <p class="muted" style="margin-bottom:0.5rem;">
+          Add this attribute to your <code>&lt;mon-unlock&gt;</code> tag (or regenerate from the generator):
+        </p>
+        <pre id="sigAttr" style="font-size:0.75rem; background:#f3f4f6; padding:0.75rem; border-radius:8px; overflow:auto; white-space:pre-wrap; word-break:break-all;"></pre>
+        <button class="btn btn-secondary" id="copySigBtn" type="button" style="margin-top:0.5rem;">Copy attribute</button>
+      </div>
     </div>
 
     <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #6b7280; text-align: center;">
@@ -110,6 +118,40 @@
       function setStatus(msg, ok) {
         statusEl.textContent = msg;
         statusEl.className = "status " + (ok ? "ok" : msg ? "err" : "");
+      }
+
+      function buildEmbedSignMessage(chainId, contract, articleId, priceWei) {
+        return `MON Unlock v1\nchain:${chainId}\ncontract:${contract.toLowerCase()}\narticle:${articleId.trim()}\npriceWei:${priceWei.toString()}`;
+      }
+
+      async function signAndShowEmbedSig(eth, account, articleId, priceWei) {
+        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const walletClient = createWalletClient({
+          account,
+          chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+          transport: custom(eth),
+        });
+        const message = buildEmbedSignMessage(143, MAINNET_CONTRACT, articleId, priceWei);
+        const embedSig = await walletClient.signMessage({ account, message });
+        const attr = `embed-sig="${embedSig}"`;
+        const sigBox = document.getElementById("sigBox");
+        const sigAttr = document.getElementById("sigAttr");
+        const copyBtn = document.getElementById("copySigBtn");
+        if (sigBox && sigAttr) {
+          sigAttr.textContent = attr;
+          sigBox.style.display = "block";
+        }
+        if (copyBtn) {
+          copyBtn.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(attr);
+              setStatus("Copied embed-sig attribute ✓", true);
+            } catch {
+              setStatus("Copy failed — select the attribute above.", false);
+            }
+          };
+        }
+        return embedSig;
       }
 
       async function ensureMonad(eth) {
@@ -195,7 +237,9 @@
             });
             if (existing[1] && existing[1] !== "0x0000000000000000000000000000000000000000") {
               if (existing[1].toLowerCase() === wallet.toLowerCase()) {
-                setStatus("Already registered ✓ Readers can pay now.", true);
+                setStatus("Already registered — sign the embed next…", true);
+                await signAndShowEmbedSig(eth, wallet, slug, existing[0] ?? priceWei);
+                setStatus("Already registered ✓ Add embed-sig below so readers can pay.", true);
                 registerBtn.textContent = "Done";
                 return;
               }
@@ -232,7 +276,9 @@
           setStatus("Waiting for confirmation…", true);
           await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-          setStatus("Registered ✓ Readers can pay now. Tx: " + txHash.slice(0, 10) + "…", true);
+          setStatus("Registered ✓ Sign the embed so payments work…", true);
+          await signAndShowEmbedSig(eth, wallet, slug, priceWei);
+          setStatus("Registered ✓ Add embed-sig below so readers can pay. Tx: " + txHash.slice(0, 10) + "…", true);
           registerBtn.textContent = "Done";
         } catch (e) {
           setStatus(e.message || "Registration failed.", false);

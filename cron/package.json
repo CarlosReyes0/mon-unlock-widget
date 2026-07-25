@@ -2,7 +2,7 @@
   "name": "mon-unlock-indexer-cron",
   "version": "0.1.0",
   "type": "module",
-  "description": "Legacy manual trigger. Production uses Supabase pg_cron (migrations/0005_schedule_indexer_cron.sql).",
+  "description": "Railway cron fallback that POSTs the Supabase indexer Edge Function. Primary schedule is Supabase pg_cron (migrations/0005_schedule_indexer_cron.sql). Set this service's config path to /cron/railway.toml.",
   "scripts": {
     "start": "deno run --allow-net indexer.ts"
   }

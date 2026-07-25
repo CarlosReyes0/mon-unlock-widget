@@ -1,0 +1,86 @@
+/**
+ * Server-side embed signature helpers (mirrors src/core/embed-signature.ts).
+ * Used by Stripe fiat create-intent so card unlocks can't bypass publisher auth.
+ */
+import { verifyMessage } from "viem";
+
+export const EMBED_SIG_PREFIX = "MON Unlock v1";
+export const MAINNET_UNLOCK_CONTRACT =
+  "0x038446b1F736e254cC0E256B20D74823c41EeADB";
+export const MONAD_CHAIN_ID = 143;
+
+export function buildEmbedSignMessage({ chainId, contract, articleId, priceWei }) {
+  const normalizedContract = String(contract || "").trim().toLowerCase();
+  const article = String(articleId || "").trim();
+  return `${EMBED_SIG_PREFIX}\nchain:${chainId}\ncontract:${normalizedContract}\narticle:${article}\npriceWei:${priceWei.toString()}`;
+}
+
+/**
+ * @param {{
+ *   embedSig: string,
+ *   contract: string,
+ *   articleId: string,
+ *   priceWei: string | bigint | number,
+ *   publisher: string,
+ *   chainId?: number,
+ * }} input
+ * @returns {Promise<{ ok: true } | { ok: false, error: string, status: number }>}
+ */
+export async function assertFiatEmbedAuthorized(input) {
+  const embedSig = String(input.embedSig || "").trim();
+  const contract = String(input.contract || "").trim();
+  const articleId = String(input.articleId || "").trim();
+  const publisher = String(input.publisher || "").trim();
+  const chainId = input.chainId ?? MONAD_CHAIN_ID;
+
+  if (!embedSig) {
+    return {
+      ok: false,
+      status: 400,
+      error: "missing_embed_sig",
+    };
+  }
+  if (!contract.startsWith("0x") || contract.length !== 42) {
+    return { ok: false, status: 400, error: "invalid_contract" };
+  }
+  if (contract.toLowerCase() !== MAINNET_UNLOCK_CONTRACT.toLowerCase()) {
+    return { ok: false, status: 400, error: "unsupported_contract" };
+  }
+  if (!publisher.startsWith("0x") || publisher.length !== 42) {
+    return { ok: false, status: 400, error: "invalid_publisher" };
+  }
+
+  let priceWei;
+  try {
+    priceWei = BigInt(input.priceWei);
+  } catch {
+    return { ok: false, status: 400, error: "invalid_price" };
+  }
+  if (priceWei <= 0n) {
+    return { ok: false, status: 400, error: "invalid_price" };
+  }
+
+  const message = buildEmbedSignMessage({
+    chainId,
+    contract,
+    articleId,
+    priceWei,
+  });
+
+  let valid = false;
+  try {
+    valid = await verifyMessage({
+      address: publisher,
+      message,
+      signature: embedSig,
+    });
+  } catch {
+    valid = false;
+  }
+
+  if (!valid) {
+    return { ok: false, status: 403, error: "invalid_embed_sig" };
+  }
+
+  return { ok: true };
+}
