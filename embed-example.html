@@ -13,12 +13,13 @@
       pre { background: #111827; color: #e5e7eb; padding: 1.25rem; border-radius: 12px; overflow-x: auto; }
       code { font-size: 0.9rem; }
       mon-unlock:not(:defined) [slot] { display: none; }
+      .note { margin-top: 1rem; padding: 0.85rem 1rem; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; font-size: 0.9rem; color: #4c1d95; }
     </style>
   </head>
   <body>
     <div id="site-nav"></div>
     <h1 style="font-size:2rem;">Embed this block on any site</h1>
-    <p>No JavaScript required from the publisher. Just paste the HTML.</p>
+    <p>No JavaScript required from the publisher. Just paste the HTML from the <a href="/generator.html">generator</a> (it includes a required <code>embed-sig</code>).</p>
 
     <pre><code>&lt;mon-unlock
   article-id="founder-manifesto"
@@ -27,13 +28,19 @@
   price="5"
   theme="light"
   unlock-contract="0x038446b1F736e254cC0E256B20D74823c41EeADB"
+  embed-sig="0x…publisher-signature-from-generator…"
   walletconnect-project-id="c2a289e11ad2998f8ea4633db536334c"
 &gt;
   &lt;div slot="teaser"&gt;Free preview...&lt;/div&gt;
   &lt;div slot="body"&gt;Full paid content...&lt;/div&gt;
 &lt;/mon-unlock&gt;</code></pre>
 
-    <p style="margin-top:2rem;"><strong>Live example:</strong></p>
+    <p class="note">
+      Live payments need a real <code>embed-sig</code> from the generator (or <a href="/register.html">/register.html</a> after agent publish).
+      Without it, readers see “missing a publisher signature” and cannot pay.
+    </p>
+
+    <p style="margin-top:2rem;"><strong>Live demo</strong> (simulated unlock — no contract / no signature required):</p>
 
     <mon-unlock
       article-id="founder-manifesto"
@@ -41,14 +48,12 @@
       author="Your Name"
       price="5"
       theme="light"
-      unlock-contract="0x038446b1F736e254cC0E256B20D74823c41EeADB"
-      walletconnect-project-id="c2a289e11ad2998f8ea4633db536334c"
     >
       <div slot="teaser">
         Write 1–3 paragraphs that everyone can read for free. End with a hook so people want to unlock the rest.
       </div>
       <div slot="body">
-        Paste your full article here. Readers only see this after they connect a wallet and pay 5 MON on Monad.
+        Paste your full article here. Readers only see this after they unlock.
       </div>
     </mon-unlock>
 
