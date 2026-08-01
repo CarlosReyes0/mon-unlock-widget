@@ -73,29 +73,48 @@ The agent path does **not** bypass security. It routes the one step only a publi
 
 ---
 
-### 4. Current State
+### 4. Agent Dogfood Report (external agent run)
+
+A separate agent ran the HTTP publish path and wrote up the experience (intended artifact: `mon-unlock-agent-workflow-report.md`).
+
+**Happy path (what we designed):**  
+`validate` → pay **$0.05** MPP on `publish` → return `finishRegistrationUrl` → human signs → **Copy signed embed**. Validate completed in seconds.
+
+**What actually burned time:**  
+`publish` correctly returned **HTTP 402** (unpaid). The VM had no ready mainnet PathUSD / Stripe payer. Instead of stopping there, the run spent most of an hour on keyring hangs, testnet faucets, Tempo / AgentCash login, and funding dead-ends.
+
+**Takeaway for the product + program:**  
+The core API path is short (~30s once payment works). The friction is **agent payment / funding setup**, not embed generation or the finish-registration page. Docs and skills should tell agents: treat the first unpaid 402 as success for discovery, then use a configured payer (`mppx`, Tempo, or `MPP_DEV_BYPASS` in non-prod) — do not chase faucets after 402.
+
+**Simple version:**  
+Making the paywall is fast. Paying the tiny publish fee from a fresh agent environment is the hard part.
+
+---
+
+### 5. Current State
 
 **Working:**
 - Generator → register → signed embed → reader pay (MON + fiat when configured).
-- Agent publish → finish link → **Copy signed embed** → personal site (validated).
+- Agent publish → finish link → **Copy signed embed** → personal site (validated with a human-driven agent).
 - Indexer-backed dashboard for connected publisher wallets.
-- MPP / OpenAPI discovery for agent findability.
+- MPP / OpenAPI discovery for agent findability (`validate` + unpaid `publish` → 402).
 
-**Known limitation (honest, scoped):**
+**Known limitations (honest, scoped):**
 - Agents still cannot silently sign without a publisher key (by design). Option A (OpenClaw `privateKey`) remains available for full automation; Option B (one wallet approval + copy) is the recommended default.
+- Fresh agent VMs often lack a funded MPP payer; without one, `publish` stops at 402 and operators waste time on unrelated funding rabbit holes.
 
 ---
 
-### 5. Next Priorities
+### 6. Next Priorities
 
-1. Hosted article editing — change title/body/price in the dashboard without re-pasting HTML on the publisher’s site.
-2. Optional: store `embed-sig` server-side so the public embed can stay a short tag (same security, less HTML).
-3. Keep dogfooding agent publish on real posts; fix friction as it appears.
+1. Document / skill guidance: **stop after first unpaid 402** unless a payer is already configured; link one clear payment path.
+2. Hosted article editing — change title/body/price in the dashboard without re-pasting HTML on the publisher’s site.
+3. Optional: store `embed-sig` server-side so the public embed can stay a short tag (same security, less HTML).
 
 ---
 
-### 6. Note on Program Feedback
+### 7. Note on Program Feedback
 
-Week 2 scored **4 stars** for clear milestones, strong execution, and visible momentum. This update keeps that format: what shipped, why the decision was made, a plain-language version, and an honest “validated on a real site” checkpoint.
+Week 2 scored **4 stars** for clear milestones, strong execution, and visible momentum. This update keeps that format: what shipped, why the decision was made, a plain-language version, live validation, and an honest agent-dogfood finding (402 is correct; funding setup is the real time sink).
 
 *Keep building at this pace.*
