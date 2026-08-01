@@ -170,8 +170,10 @@
         const teaserBlock = teaser
           ? `  <div slot="teaser">\n${teaserEsc}\n  </div>`
           : `  <div slot="teaser">\n  </div>`;
+        // Avoid a literal script-close tag in this file; the HTML parser would truncate early.
+        const scriptClose = "</" + "script>";
         return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"></script>
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}">${scriptClose}
 
 <mon-unlock
   article-id="${slug}"
