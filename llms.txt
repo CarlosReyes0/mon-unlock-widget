@@ -24,6 +24,7 @@ Key facts:
 - OpenAPI discovery: https://mon-unlock-widget-production.up.railway.app/openapi.json
 - MPP publish endpoint: POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish
 - Free validate endpoint: POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish/validate
+- Publish is paid (~$0.05 PathUSD via MPP). If unpaid 402 and no funded payer: stop and ask the human — do not chase testnet faucets or keyrings.
 - OpenClaw plugin: github.com/CarlosReyes0/mon-unlock-widget/tree/main/skills/mon-unlock-embed
 - Chain: Monad (chain id 143). Unlock contract documented in the repo.
 - Publishing needs three steps: embed HTML, body stored in Supabase, on-chain registration so readers can pay.

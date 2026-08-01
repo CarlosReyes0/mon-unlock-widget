@@ -21,16 +21,16 @@ MON Unlock turns an article into a paste-ready `<mon-unlock>` HTML block. Reader
 2. Collect fields: `title`, `articleId` (slug), `teaser`, `body`, `publisher` (0x), optional `price`, `author`.
 3. `POST /api/agents/publish/validate` (free) to confirm the payload and quote.
 4. `POST /api/agents/publish` with the same JSON.
-   - Expect HTTP 402 + Payment challenge if unpaid.
-   - Present payment methods and get user approval before paying.
-   - Retry with `Authorization: Payment …` (or use `npx mppx`).
-5. Give the user the returned `embed` HTML.
-6. If `needsManualOnChainRegistration`, send `finishRegistrationUrl` and explain: open the link → Register on Monad → approve the embed signature → **Copy signed embed** and paste that HTML. The chat `embed` is unsigned; readers cannot pay until the signed HTML is on the site.
+   - Expect HTTP 402 + Payment challenge if unpaid (about **$0.05**).
+   - If a funded payer is already available: show the price, get approval, pay, retry with `Authorization: Payment …` (or `npx mppx` with **mainnet** PathUSD).
+   - **If not funded: STOP after this first 402.** Tell the human publish requires $0.05 and ask them to pay or provide a funded `MPPX_PRIVATE_KEY`. Do **not** install keyrings, use testnet faucets, or bypass via Supabase.
+5. After **paid** publish: send `finishRegistrationUrl`. Explain: open the link → Register on Monad → approve the embed signature → **Copy signed embed** and paste that HTML. Do not tell them to paste the unsigned API `embed`.
 
 ## OpenClaw workflow
-If OpenClaw is available, install `skills/mon-unlock-embed`, paste `AGENT.md`, configure `publisher` or `privateKey`, and call `generate_mon_unlock_embed`.
+If OpenClaw is available, install `skills/mon-unlock-embed`, paste `AGENT.md`, configure `publisher` or `privateKey`, and call `generate_mon_unlock_embed`. (No MPP $0.05 fee on this path.)
 
 ## Never
 - Hand-write embed HTML when the API/tool is available.
 - Skip explaining the on-chain registration step when it was not completed.
 - Move money without showing the price and getting explicit approval.
+- After an unpaid 402, hunt for funding for more than one attempt — ask the human and stop.

@@ -17,15 +17,32 @@ MON Unlock creates an **embeddable paywall** for long-form articles. You get pas
 1. Collect: `title`, `articleId` (slug), `teaser`, `body`, `publisher` (0x wallet), optional `price` (MON) and `author`.
 2. Validate (free): `POST /api/agents/publish/validate` with that JSON.
 3. Publish (paid): `POST /api/agents/publish` with the same JSON.
-   - Unpaid → HTTP **402** + `WWW-Authenticate: Payment …`
-   - Pay with `mppx` / Link CLI / Tempo / Privy, then retry with `Authorization: Payment …`
-4. Return the `embed` HTML and `finishRegistrationUrl` to the user.
-5. If `needsManualOnChainRegistration` is true, tell them to open `finishRegistrationUrl`, register on Monad, approve the embed signature, then **Copy signed embed**. Readers cannot pay until that signed HTML is pasted (the chat embed is unsigned).
+   - Unpaid → HTTP **402** + `WWW-Authenticate: Payment …` (default **$0.05** PathUSD on Tempo mainnet; Stripe SPT may also be offered).
+   - **If you already have a funded payer** (`MPPX_PRIVATE_KEY` with mainnet PathUSD, or working Stripe/Link): pay once, retry with `Authorization: Payment …`, continue.
+   - **If you do not:** **STOP after this first unpaid 402.** Tell the human they must pay $0.05 (or provide a funded payer), then retry publish. Do **not** install keyrings, chase faucets, create Tempo/AgentCash accounts, or invent workarounds.
+4. After a **paid** publish succeeds: return `finishRegistrationUrl` (and mention the unsigned `embed` is not for the site).
+5. Tell them to open `finishRegistrationUrl` → register on Monad → approve the embed signature → **Copy signed embed** → paste that HTML. Readers cannot pay until the signed HTML is on the site.
+
+## Hard stop on unpaid 402 (required)
+
+After **one** unpaid `POST /api/agents/publish` → 402:
+
+1. Report: validate succeeded; publish needs **$0.05** MPP payment.
+2. Ask the human to either pay (funded `mppx` / Tempo mainnet PathUSD / Stripe Link) **or** provide a prefunded `MPPX_PRIVATE_KEY`, then ask you to retry.
+3. **Stop.** Do not spend time on:
+   - Linux keyring / `secret-tool` / gnome-keyring
+   - Tempo or other **testnet** faucets (production publish needs **mainnet**)
+   - AgentCash / OAuth / social bonuses
+   - Calling Supabase `register-article` or other bypasses to skip paid publish
+   - Building site pages as a substitute for a successful paid publish response
+
+Testnet funds will not satisfy the production 402. A correct unpaid run ends in under a minute with a clear ask to the human.
 
 ## OpenClaw path (phone / chat)
-Install `skills/mon-unlock-embed`, paste `AGENT.md` into the workspace, configure `publisher` (Option B) or `privateKey` (Option A). Call tool `generate_mon_unlock_embed` — never hand-write embed HTML.
+Install `skills/mon-unlock-embed`, paste `AGENT.md` into the workspace, configure `publisher` (Option B) or `privateKey` (Option A). Call tool `generate_mon_unlock_embed` — never hand-write embed HTML. (OpenClaw does not use the MPP 402 publish fee.)
 
 ## Do not
 - Invent contract addresses or skip on-chain registration.
 - Charge the user/publisher without showing price and getting approval when using MPP payers.
+- Hunt for funding after an unpaid 402 — ask the human instead.
 - Promise Directory listing without a public Stripe profile + crawlable site (see `/llms.txt`).

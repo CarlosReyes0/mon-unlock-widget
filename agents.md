@@ -39,12 +39,25 @@ Returns quote amount, fingerprint, and whether the payload is valid.
 `POST /api/agents/publish` — same JSON body.
 
 1. First request without payment → **402** + `WWW-Authenticate: Payment …`
-2. Pay the challenge (`npx mppx <url>` or Link/Tempo/Privy per Stripe Directory skill).
-3. Retry with `Authorization: Payment …`
-4. Response includes an unsigned `embed`, `finishRegistrationUrl`, and `needsManualOnChainRegistration`.
+2. **Only if a payer is already funded:** pay the challenge (`npx mppx <url>` with mainnet PathUSD, or Stripe/Link), then retry with `Authorization: Payment …`.
+3. **If not funded:** **stop after this 402.** Tell the human publish costs **$0.05** and they must fund a payer or pay, then ask you to retry. Do not chase faucets, keyrings, or OAuth. Testnet PathUSD does **not** pay production publish.
+4. After paid success: response includes an unsigned `embed`, `finishRegistrationUrl`, and `needsManualOnChainRegistration`.
 5. Open `finishRegistrationUrl` → register on Monad → sign → **Copy signed embed** (includes `embed-sig`). Paste that HTML on the site — not the unsigned `embed` from step 4.
 
 Default charge: **0.05** pathUSD (env `MPP_PUBLISH_AMOUNT`). Tempo pathUSD is always offered when MPP is configured; Stripe SPT card may also be offered if `STRIPE_SECRET_KEY` is set.
+
+### Prefund checklist (optional, for autonomous pay)
+
+```
+[ ] Tempo mainnet PathUSD ≥ 0.05 on an mppx account, OR Stripe/Link ready
+[ ] MPPX_PRIVATE_KEY set if using headless mppx (avoid Linux keyring)
+[ ] validate POST
+[ ] publish POST with payment
+[ ] return finishRegistrationUrl + Copy signed embed instructions
+[ ] STOP
+```
+
+Without that checklist, a correct agent run ends at the first unpaid 402 with a clear message to the human.
 
 ### Example
 ```bash

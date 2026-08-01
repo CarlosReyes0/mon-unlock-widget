@@ -53,7 +53,7 @@ export function buildOpenApiDocument() {
       title: "MON Unlock Agent API",
       version: "1.0.3",
       description:
-        "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <mon-unlock> HTML. On-chain Monad registration may still require one publisher wallet approval.",
+        "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, ~$0.05) to publish. If unpaid and no funded payer is configured, agents should stop and ask the human — not chase faucets. On-chain Monad registration may still require one publisher wallet approval.",
       contact: {
         name: "Open Paywall / MON Unlock",
         email: "carlos.a.reyes00@gmail.com",
@@ -119,7 +119,7 @@ export function buildOpenApiDocument() {
           operationId: "publishPaywall",
           summary: "Create embed + sync article body (MPP paid)",
           description:
-            "Unpaid requests receive HTTP 402 with WWW-Authenticate Payment challenge. After payment, returns unsigned embed HTML plus finishRegistrationUrl. Publishers open that URL to register on Monad, sign the embed, and copy the payment-ready HTML.",
+            "Unpaid requests receive HTTP 402 with WWW-Authenticate Payment challenge (~$0.05). Agents without a funded payer should stop after this response and ask the human to pay or supply MPPX_PRIVATE_KEY — do not use testnet faucets. After payment, returns unsigned embed HTML plus finishRegistrationUrl. Publishers open that URL to register on Monad, sign the embed, and Copy signed embed.",
           "x-payment-info": {
             price: {
               mode: "fixed",

@@ -41,7 +41,7 @@ Product nav is shared via `site-nav.js`: **Home · Create embed · Account · Da
 Agents can create paywalls without cloning this repo:
 
 1. `POST /api/agents/publish/validate` — free quote
-2. `POST /api/agents/publish` — MPP-paid publish (HTTP **402** until paid)
+2. `POST /api/agents/publish` — MPP-paid publish (HTTP **402** until paid; ~$0.05). If the agent has no funded payer, it should **stop and ask you** — not chase faucets.
 3. Open `finishRegistrationUrl` → register + sign → **Copy signed embed** (do not paste the unsigned API `embed`)
 
 See **[agents.md](./agents.md)** for the full flow. OpenClaw plugin: [`skills/mon-unlock-embed`](./skills/mon-unlock-embed).
