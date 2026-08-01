@@ -25,7 +25,7 @@ MON Unlock turns an article into a paste-ready `<mon-unlock>` HTML block. Reader
    - Present payment methods and get user approval before paying.
    - Retry with `Authorization: Payment …` (or use `npx mppx`).
 5. Give the user the returned `embed` HTML.
-6. If `needsManualOnChainRegistration`, send `finishRegistrationUrl` and explain readers cannot pay until they complete that MetaMask step.
+6. If `needsManualOnChainRegistration`, send `finishRegistrationUrl` and explain: open the link → Register on Monad → approve the embed signature → **Copy signed embed** and paste that HTML. The chat `embed` is unsigned; readers cannot pay until the signed HTML is on the site.
 
 ## OpenClaw workflow
 If OpenClaw is available, install `skills/mon-unlock-embed`, paste `AGENT.md`, configure `publisher` or `privateKey`, and call `generate_mon_unlock_embed`.

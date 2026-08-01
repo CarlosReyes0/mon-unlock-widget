@@ -10,7 +10,7 @@
     <style>
       body {
         font-family: "DM Sans", system-ui, sans-serif;
-        max-width: 520px;
+        max-width: 560px;
         margin: 0 auto;
         padding: 2rem 1.25rem;
         line-height: 1.6;
@@ -52,22 +52,41 @@
       .err { color: #ef4444; }
       .steps { margin: 1rem 0; padding-left: 1.2rem; color: #374151; font-size: 0.9rem; }
       a { color: #7c3aed; }
+      #embedBox {
+        display: none;
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #e5e7eb;
+      }
+      #embedCode {
+        font-size: 0.75rem;
+        background: #f3f4f6;
+        padding: 0.75rem;
+        border-radius: 8px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 240px;
+        margin: 0 0 0.75rem;
+      }
+      .btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
     </style>
   </head>
   <body>
     <div class="card">
       <h1>Finish on-chain registration</h1>
       <p class="muted" id="intro">
-        Your embed and body are already saved. This page registers the article on Monad so readers can pay.
+        Your article is already saved. Register on Monad, sign the embed, then copy the ready-to-paste HTML.
       </p>
 
       <p><strong>Slug:</strong> <span class="slug" id="slugDisplay">—</span></p>
       <p><strong>Price:</strong> <span id="priceDisplay">—</span> MON</p>
+      <p id="titleRow" style="display:none;"><strong>Title:</strong> <span id="titleDisplay">—</span></p>
 
       <ol class="steps">
         <li>Connect your publisher wallet</li>
-        <li>Click Register on Monad</li>
-        <li>Approve the transaction, then sign the embed (required for payments)</li>
+        <li>Click Register on Monad and approve the transaction</li>
+        <li>Approve the embed signature, then copy the signed embed</li>
       </ol>
 
       <div>
@@ -77,12 +96,15 @@
 
       <p class="status" id="status"></p>
 
-      <div id="sigBox" style="display:none; margin-top:1.25rem;">
+      <div id="embedBox">
         <p class="muted" style="margin-bottom:0.5rem;">
-          Add this attribute to your <code>&lt;mon-unlock&gt;</code> tag (or regenerate from the generator):
+          Paste this on your site. It already includes <code>embed-sig</code> so readers can pay.
         </p>
-        <pre id="sigAttr" style="font-size:0.75rem; background:#f3f4f6; padding:0.75rem; border-radius:8px; overflow:auto; white-space:pre-wrap; word-break:break-all;"></pre>
-        <button class="btn btn-secondary" id="copySigBtn" type="button" style="margin-top:0.5rem;">Copy attribute</button>
+        <pre id="embedCode"></pre>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="copyEmbedBtn" type="button">Copy signed embed</button>
+          <button class="btn btn-secondary" id="copySigBtn" type="button">Copy attribute only</button>
+        </div>
       </div>
     </div>
 
@@ -92,13 +114,21 @@
 
     <script type="module">
       const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
+      const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
+      const WIDGET_VERSION = "20240714";
+      const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
 
       const params = new URLSearchParams(location.search);
       const slug = (params.get("slug") || params.get("articleId") || "").trim();
       const price = (params.get("price") || "1").trim();
+      const title = (params.get("title") || "").trim() || slug;
+      const author = (params.get("author") || "").trim() || "Author";
+      const teaser = (params.get("teaser") || "").trim();
 
       const slugEl = document.getElementById("slugDisplay");
       const priceEl = document.getElementById("priceDisplay");
+      const titleRow = document.getElementById("titleRow");
+      const titleEl = document.getElementById("titleDisplay");
       const statusEl = document.getElementById("status");
       const connectBtn = document.getElementById("connectBtn");
       const registerBtn = document.getElementById("registerBtn");
@@ -111,6 +141,10 @@
       } else {
         slugEl.textContent = slug;
         priceEl.textContent = price;
+        if (params.get("title")) {
+          titleRow.style.display = "block";
+          titleEl.textContent = title;
+        }
       }
 
       let wallet = null;
@@ -120,11 +154,77 @@
         statusEl.className = "status " + (ok ? "ok" : msg ? "err" : "");
       }
 
+      function escapeTeaser(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
       function buildEmbedSignMessage(chainId, contract, articleId, priceWei) {
         return `MON Unlock v1\nchain:${chainId}\ncontract:${contract.toLowerCase()}\narticle:${articleId.trim()}\npriceWei:${priceWei.toString()}`;
       }
 
-      async function signAndShowEmbedSig(eth, account, articleId, priceWei) {
+      function buildSignedEmbed(embedSig) {
+        const teaserEsc = escapeTeaser(teaser);
+        const teaserBlock = teaser
+          ? `  <div slot="teaser">\n${teaserEsc}\n  </div>`
+          : `  <div slot="teaser">\n  </div>`;
+        return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
+<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"></script>
+
+<mon-unlock
+  article-id="${slug}"
+  title="${title.replace(/"/g, "&quot;")}"
+  author="${author.replace(/"/g, "&quot;")}"
+  price="${price}"
+  unlock-contract="${MAINNET_CONTRACT}"
+  embed-sig="${embedSig}"
+  walletconnect-project-id="${WC_PROJECT_ID}"
+>
+${teaserBlock}
+</mon-unlock>`;
+      }
+
+      function showSignedEmbed(embedSig) {
+        const embedHtml = buildSignedEmbed(embedSig);
+        const attr = `embed-sig="${embedSig}"`;
+        const embedBox = document.getElementById("embedBox");
+        const embedCode = document.getElementById("embedCode");
+        const copyEmbedBtn = document.getElementById("copyEmbedBtn");
+        const copySigBtn = document.getElementById("copySigBtn");
+
+        if (embedBox && embedCode) {
+          embedCode.textContent = embedHtml;
+          embedBox.style.display = "block";
+        }
+
+        if (copyEmbedBtn) {
+          copyEmbedBtn.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(embedHtml);
+              setStatus("Copied signed embed ✓ Paste it on your site.", true);
+            } catch {
+              setStatus("Copy failed — select the embed HTML above.", false);
+            }
+          };
+        }
+
+        if (copySigBtn) {
+          copySigBtn.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(attr);
+              setStatus("Copied embed-sig attribute ✓", true);
+            } catch {
+              setStatus("Copy failed — select the attribute from the embed above.", false);
+            }
+          };
+        }
+
+        return embedHtml;
+      }
+
+      async function signAndShowEmbed(eth, account, articleId, priceWei) {
         const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
         const walletClient = createWalletClient({
           account,
@@ -133,24 +233,7 @@
         });
         const message = buildEmbedSignMessage(143, MAINNET_CONTRACT, articleId, priceWei);
         const embedSig = await walletClient.signMessage({ account, message });
-        const attr = `embed-sig="${embedSig}"`;
-        const sigBox = document.getElementById("sigBox");
-        const sigAttr = document.getElementById("sigAttr");
-        const copyBtn = document.getElementById("copySigBtn");
-        if (sigBox && sigAttr) {
-          sigAttr.textContent = attr;
-          sigBox.style.display = "block";
-        }
-        if (copyBtn) {
-          copyBtn.onclick = async () => {
-            try {
-              await navigator.clipboard.writeText(attr);
-              setStatus("Copied embed-sig attribute ✓", true);
-            } catch {
-              setStatus("Copy failed — select the attribute above.", false);
-            }
-          };
-        }
+        showSignedEmbed(embedSig);
         return embedSig;
       }
 
@@ -238,8 +321,8 @@
             if (existing[1] && existing[1] !== "0x0000000000000000000000000000000000000000") {
               if (existing[1].toLowerCase() === wallet.toLowerCase()) {
                 setStatus("Already registered — sign the embed next…", true);
-                await signAndShowEmbedSig(eth, wallet, slug, existing[0] ?? priceWei);
-                setStatus("Already registered ✓ Add embed-sig below so readers can pay.", true);
+                await signAndShowEmbed(eth, wallet, slug, existing[0] ?? priceWei);
+                setStatus("Already registered ✓ Copy the signed embed below.", true);
                 registerBtn.textContent = "Done";
                 return;
               }
@@ -277,8 +360,8 @@
           await publicClient.waitForTransactionReceipt({ hash: txHash });
 
           setStatus("Registered ✓ Sign the embed so payments work…", true);
-          await signAndShowEmbedSig(eth, wallet, slug, priceWei);
-          setStatus("Registered ✓ Add embed-sig below so readers can pay. Tx: " + txHash.slice(0, 10) + "…", true);
+          await signAndShowEmbed(eth, wallet, slug, priceWei);
+          setStatus("Registered ✓ Copy the signed embed below. Tx: " + txHash.slice(0, 10) + "…", true);
           registerBtn.textContent = "Done";
         } catch (e) {
           setStatus(e.message || "Registration failed.", false);

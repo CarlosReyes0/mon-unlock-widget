@@ -80,7 +80,7 @@ export function buildOpenApiDocument() {
         "POST /api/agents/publish/validate",
         "POST /api/agents/publish (pay 402 challenge)",
         "Return embed HTML",
-        "Send finishRegistrationUrl if needsManualOnChainRegistration",
+        "Send finishRegistrationUrl if needsManualOnChainRegistration; tell user to Copy signed embed there",
       ],
       skill: `${origin}/skill.md`,
       cursorSkill: `${origin}/.well-known/skills/mon-unlock/SKILL.md`,
@@ -119,7 +119,7 @@ export function buildOpenApiDocument() {
           operationId: "publishPaywall",
           summary: "Create embed + sync article body (MPP paid)",
           description:
-            "Unpaid requests receive HTTP 402 with WWW-Authenticate Payment challenge. After payment, returns paste-ready embed HTML and finishRegistrationUrl for on-chain Monad registration.",
+            "Unpaid requests receive HTTP 402 with WWW-Authenticate Payment challenge. After payment, returns unsigned embed HTML plus finishRegistrationUrl. Publishers open that URL to register on Monad, sign the embed, and copy the payment-ready HTML.",
           "x-payment-info": {
             price: {
               mode: "fixed",

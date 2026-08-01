@@ -49,14 +49,13 @@ Steps 1 and 2 always happen when you use the agent. Step 3 is where you choose h
 ```
 
 **What happens:**
-1. You chat → agent generates embed + syncs Supabase
-2. Agent sends you a **finish link** (slug + price already filled in):
-   `https://mon-unlock-widget-production.up.railway.app/register.html?slug=july-3-11pm&price=1`
-3. Open link → Connect MetaMask → **Register on Monad** → done
+1. You chat → agent syncs Supabase and sends a **finish link** (slug, price, title/teaser filled in)
+2. Open link → Connect MetaMask → **Register on Monad** → approve the embed signature
+3. Click **Copy signed embed** → paste that HTML on your site
 
-**You do NOT re-enter title, teaser, or body.** Those are already saved. The finish page only registers on-chain.
+**You do NOT re-enter title, teaser, or body.** Those are already saved. The finish page registers on-chain and gives you the payment-ready embed (with `embed-sig`).
 
-**Tradeoff:** ~30 seconds to open the link and approve one MetaMask transaction. Safer — no private key in OpenClaw.
+**Tradeoff:** ~30 seconds to open the link and approve one MetaMask transaction + signature. Safer — no private key in OpenClaw.
 
 ---
 

@@ -42,7 +42,7 @@ Agents can create paywalls without cloning this repo:
 
 1. `POST /api/agents/publish/validate` — free quote
 2. `POST /api/agents/publish` — MPP-paid publish (HTTP **402** until paid)
-3. Paste returned `embed`; open `finishRegistrationUrl` for on-chain registration
+3. Open `finishRegistrationUrl` → register + sign → **Copy signed embed** (do not paste the unsigned API `embed`)
 
 See **[agents.md](./agents.md)** for the full flow. OpenClaw plugin: [`skills/mon-unlock-embed`](./skills/mon-unlock-embed).
 
@@ -249,7 +249,7 @@ The widget’s silent `eth_accounts` check only works after the reader has appro
 
 ### 2. Agent-published embeds need a signed `embed-sig`
 
-`POST /api/agents/publish` returns HTML without `embed-sig` (agents cannot sign as the publisher wallet). After on-chain registration on `/register.html`, copy the `embed-sig="…"` attribute into the embed before readers can pay.
+`POST /api/agents/publish` returns HTML without `embed-sig` (agents cannot sign as the publisher wallet). Open `finishRegistrationUrl` (`/register.html`), register on Monad, approve the signature prompt, then use **Copy signed embed** and paste that full HTML on your site.
 
 ## License
 

@@ -51,6 +51,10 @@ test("POST /api/agents/publish succeeds with MPP_DEV_BYPASS", async () => {
   const body = await res.json();
   assert.equal(body.ok, true);
   assert.match(body.embed, /<mon-unlock/);
+  assert.doesNotMatch(body.embed, /embed-sig=/);
   assert.equal(body.needsManualOnChainRegistration, true);
   assert.match(body.finishRegistrationUrl, /register\.html\?/);
+  assert.match(body.finishRegistrationUrl, /title=Bypass(\+|%20)demo/);
+  assert.match(body.finishRegistrationUrl, /teaser=Preview(\+|%20)text/);
+  assert.ok(body.nextSteps.some((s) => /Copy signed embed/i.test(s)));
 });

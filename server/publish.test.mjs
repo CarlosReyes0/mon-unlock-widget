@@ -37,6 +37,20 @@ test("generateEmbed includes contract and teaser", () => {
   assert.match(html, /article-id="hello-world"/);
   assert.match(html, /Free preview &lt;b&gt;x&lt;\/b&gt;/);
   assert.match(html, /unlock-contract=/);
+  assert.doesNotMatch(html, /embed-sig=/);
+});
+
+test("generateEmbed includes embed-sig when provided", () => {
+  const html = generateEmbed(
+    {
+      title: "Hello",
+      articleId: "hello-world",
+      teaser: "Preview",
+      price: "1",
+    },
+    "0xabc123",
+  );
+  assert.match(html, /embed-sig="0xabc123"/);
 });
 
 test("buildFinishRegistrationUrl encodes slug + price", () => {
@@ -44,6 +58,26 @@ test("buildFinishRegistrationUrl encodes slug + price", () => {
   assert.match(url, /register\.html\?/);
   assert.match(url, /slug=my-slug/);
   assert.match(url, /price=3/);
+});
+
+test("buildFinishRegistrationUrl includes title author teaser meta", () => {
+  const url = buildFinishRegistrationUrl("my-slug", "2", {
+    title: "Rain Walk",
+    author: "Carlos",
+    teaser: "A short preview",
+  });
+  assert.match(url, /title=Rain\+Walk|title=Rain%20Walk/);
+  assert.match(url, /author=Carlos/);
+  assert.match(url, /teaser=A\+short\+preview|teaser=A%20short%20preview/);
+});
+
+test("buildFinishRegistrationUrl omits very long teasers", () => {
+  const url = buildFinishRegistrationUrl("my-slug", "1", {
+    title: "T",
+    teaser: "x".repeat(1600),
+  });
+  assert.match(url, /title=T/);
+  assert.doesNotMatch(url, /teaser=/);
 });
 
 test("toArticleIdHash is stable hex", () => {

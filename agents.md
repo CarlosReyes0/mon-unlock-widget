@@ -12,9 +12,9 @@ MON Unlock lets agents create embeddable paywalls for long-form content. Give yo
 ## What publishing needs
 | Step | What it does | Agent can do it? |
 |------|----------------|------------------|
-| 1. Embed HTML | `<mon-unlock>` block for the site | Yes |
+| 1. Embed HTML | `<mon-unlock>` block for the site | Draft only (unsigned) |
 | 2. Supabase body | Stores teaser + paid body | Yes (`/api/agents/publish`) |
-| 3. On-chain register | Registers price on Monad so readers can pay | Manual wallet click (recommended) or OpenClaw Option A with `privateKey` |
+| 3. On-chain register + signed embed | Registers on Monad and produces payment-ready HTML with `embed-sig` | Manual wallet click on `finishRegistrationUrl` (recommended) or OpenClaw Option A with `privateKey` |
 
 ## HTTP API (recommended for any agent)
 
@@ -41,7 +41,8 @@ Returns quote amount, fingerprint, and whether the payload is valid.
 1. First request without payment → **402** + `WWW-Authenticate: Payment …`
 2. Pay the challenge (`npx mppx <url>` or Link/Tempo/Privy per Stripe Directory skill).
 3. Retry with `Authorization: Payment …`
-4. Response includes `embed`, `finishRegistrationUrl`, and `needsManualOnChainRegistration`.
+4. Response includes an unsigned `embed`, `finishRegistrationUrl`, and `needsManualOnChainRegistration`.
+5. Open `finishRegistrationUrl` → register on Monad → sign → **Copy signed embed** (includes `embed-sig`). Paste that HTML on the site — not the unsigned `embed` from step 4.
 
 Default charge: **0.05** pathUSD (env `MPP_PUBLISH_AMOUNT`). Tempo pathUSD is always offered when MPP is configured; Stripe SPT card may also be offered if `STRIPE_SECRET_KEY` is set.
 

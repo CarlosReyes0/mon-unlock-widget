@@ -19,8 +19,8 @@ MON Unlock creates an **embeddable paywall** for long-form articles. You get pas
 3. Publish (paid): `POST /api/agents/publish` with the same JSON.
    - Unpaid → HTTP **402** + `WWW-Authenticate: Payment …`
    - Pay with `mppx` / Link CLI / Tempo / Privy, then retry with `Authorization: Payment …`
-4. Return the `embed` HTML to the user.
-5. If `needsManualOnChainRegistration` is true, send them `finishRegistrationUrl` so they approve one MetaMask transaction. Readers cannot pay until that step is done.
+4. Return the `embed` HTML and `finishRegistrationUrl` to the user.
+5. If `needsManualOnChainRegistration` is true, tell them to open `finishRegistrationUrl`, register on Monad, approve the embed signature, then **Copy signed embed**. Readers cannot pay until that signed HTML is pasted (the chat embed is unsigned).
 
 ## OpenClaw path (phone / chat)
 Install `skills/mon-unlock-embed`, paste `AGENT.md` into the workspace, configure `publisher` (Option B) or `privateKey` (Option A). Call tool `generate_mon_unlock_embed` — never hand-write embed HTML.

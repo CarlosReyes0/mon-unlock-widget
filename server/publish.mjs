@@ -35,20 +35,32 @@ export function isAddress(value) {
   return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
-export function buildFinishRegistrationUrl(slug, price = "1") {
+/**
+ * Finish-registration page URL. Optional meta (title/author/teaser) lets the page
+ * rebuild a fully signed embed for one-click copy after the wallet signs.
+ */
+export function buildFinishRegistrationUrl(slug, price = "1", meta = {}) {
   const params = new URLSearchParams({
     slug: String(slug).trim(),
     price: String(price || "1").trim(),
   });
+  const title = typeof meta.title === "string" ? meta.title.trim() : "";
+  const author = typeof meta.author === "string" ? meta.author.trim() : "";
+  const teaser = typeof meta.teaser === "string" ? meta.teaser.trim() : "";
+  if (title) params.set("title", title);
+  if (author) params.set("author", author);
+  // Keep URL usable in browsers/chat; long teasers still work via unsigned agent embed + attribute copy.
+  if (teaser && teaser.length <= 1500) params.set("teaser", teaser);
   return `${CDN_BASE}/register.html?${params.toString()}`;
 }
 
-export function generateEmbed(input) {
+export function generateEmbed(input, embedSig) {
   const author = (input.author || "Author").trim() || "Author";
   const price = (input.price || "1").trim() || "1";
   const teaserEsc = escapeTeaser((input.teaser || "").trim());
-  // embed-sig is added after the publisher finishes /register.html (wallet signature).
-  // Payments (MON + Stripe) require embed-sig; without it the widget blocks checkout.
+  const sig = typeof embedSig === "string" ? embedSig.trim() : "";
+  const sigAttr = sig ? `\n  embed-sig="${sig}"` : "";
+  // Without embed-sig, payments are blocked until /register.html signs the embed.
   return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
 <script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"></script>
 
@@ -57,7 +69,7 @@ export function generateEmbed(input) {
   title="${String(input.title).trim()}"
   author="${author}"
   price="${price}"
-  unlock-contract="${MAINNET_CONTRACT}"
+  unlock-contract="${MAINNET_CONTRACT}"${sigAttr}
   walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
@@ -160,8 +172,13 @@ export async function publishArticleForAgent(raw) {
 
   const { input } = validated;
   const sync = await syncMetadataToSupabase(input);
+  // Unsigned until the publisher finishes /register.html (wallet signature).
   const embed = generateEmbed(input);
-  const finishRegistrationUrl = buildFinishRegistrationUrl(input.articleId, input.price);
+  const finishRegistrationUrl = buildFinishRegistrationUrl(input.articleId, input.price, {
+    title: input.title,
+    author: input.author,
+    teaser: input.teaser,
+  });
 
   return {
     ok: true,
@@ -176,8 +193,9 @@ export async function publishArticleForAgent(raw) {
     finishRegistrationUrl,
     embed,
     nextSteps: [
-      `Open ${finishRegistrationUrl}, register on Monad, and copy the embed-sig attribute into your <mon-unlock> tag.`,
-      "Paste the updated embed HTML on your site (payments require embed-sig).",
+      `Open ${finishRegistrationUrl}, connect your wallet, and click Register on Monad.`,
+      "Approve the transaction and the embed signature prompt, then click Copy signed embed.",
+      "Paste that signed HTML on your site (payments require embed-sig).",
       "Readers unlock with MON (wallet) or card / Apple Pay / Google Pay when Stripe is configured.",
     ],
   };

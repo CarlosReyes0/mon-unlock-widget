@@ -163,8 +163,21 @@ ${teaserEsc}
 </mon-unlock>`;
 }
 
-export function buildFinishRegistrationUrl(slug: string, price = "1"): string {
-  const params = new URLSearchParams({ slug: slug.trim(), price: (price || "1").trim() });
+export function buildFinishRegistrationUrl(
+  slug: string,
+  price = "1",
+  meta: { title?: string; author?: string; teaser?: string } = {},
+): string {
+  const params = new URLSearchParams({
+    slug: slug.trim(),
+    price: (price || "1").trim(),
+  });
+  const title = meta.title?.trim();
+  const author = meta.author?.trim();
+  const teaser = meta.teaser?.trim();
+  if (title) params.set("title", title);
+  if (author) params.set("author", author);
+  if (teaser && teaser.length <= 1500) params.set("teaser", teaser);
   return `${CDN_BASE}/register.html?${params.toString()}`;
 }
 
@@ -353,7 +366,11 @@ export async function publishArticle(
     onChainTxHash: onChain?.txHash,
     onChainError: onChain?.error,
     needsManualOnChainRegistration,
-    finishRegistrationUrl: buildFinishRegistrationUrl(result.slug, input.price || "1"),
+    finishRegistrationUrl: buildFinishRegistrationUrl(result.slug, input.price || "1", {
+      title: input.title,
+      author: input.author,
+      teaser: input.teaser,
+    }),
   };
 }
 
