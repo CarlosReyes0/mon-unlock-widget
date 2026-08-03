@@ -1,7 +1,7 @@
 {
   "name": "@mon/unlock-widget",
   "version": "0.1.0",
-  "description": "Embeddable MON paywall — paste HTML, no code required",
+  "description": "Open Paywall — embeddable pay-per-article monetization (MON + card)",
   "type": "module",
   "main": "./dist/mon-unlock.umd.cjs",
   "module": "./dist/mon-unlock.js",
@@ -12,7 +12,12 @@
       "require": "./dist/mon-unlock.umd.cjs",
       "types": "./dist/index.d.ts"
     },
-    "./style.css": "./dist/mon-unlock.css"
+    "./style.css": "./dist/mon-unlock.css",
+    "./openpaywall": {
+      "import": "./dist/openpaywall.js",
+      "require": "./dist/openpaywall.umd.cjs"
+    },
+    "./openpaywall.css": "./dist/openpaywall.css"
   },
   "files": [
     "dist",
@@ -20,10 +25,11 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build --mode lib && vite build --mode checkout && vite build --mode publisher",
-    "build:widget": "tsc && vite build --mode lib",
+    "build": "tsc && vite build --mode lib && node scripts/alias-widget-assets.mjs && vite build --mode checkout && vite build --mode publisher",
+    "build:widget": "tsc && vite build --mode lib && node scripts/alias-widget-assets.mjs",
     "build:checkout": "vite build --mode checkout",
     "build:publisher": "vite build --mode publisher",
+    "alias:widget": "node scripts/alias-widget-assets.mjs",
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
     "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js dist/core/wallet.test.js && node --test server/index.test.mjs server/publish.test.mjs server/mpp-bypass.test.mjs server/mpp-probe.test.mjs server/openapi.test.mjs server/stripe-idempotency.test.mjs server/embed-signature.test.mjs server/connect-sample.test.mjs server/register-page.test.mjs"

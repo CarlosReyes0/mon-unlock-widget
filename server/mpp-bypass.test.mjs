@@ -50,7 +50,7 @@ test("POST /api/agents/publish succeeds with MPP_DEV_BYPASS", async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.ok, true);
-  assert.match(body.embed, /<mon-unlock/);
+  assert.match(body.embed, /<open-paywall/);
   assert.doesNotMatch(body.embed, /embed-sig=/);
   assert.equal(body.needsManualOnChainRegistration, true);
   assert.match(body.finishRegistrationUrl, /register\.html\?/);

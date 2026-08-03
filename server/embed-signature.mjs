@@ -1,18 +1,26 @@
 /**
  * Server-side embed signature helpers (mirrors src/core/embed-signature.ts).
  * Used by Stripe fiat create-intent so card unlocks can't bypass publisher auth.
+ *
+ * Dual-support: verify accepts legacy "MON Unlock v1" and "Open Paywall v1".
+ * New signatures still sign with the legacy prefix so nothing in the wild breaks.
  */
 import { verifyMessage } from "viem";
 
 export const EMBED_SIG_PREFIX = "MON Unlock v1";
+export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
+export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL];
 export const MAINNET_UNLOCK_CONTRACT =
   "0x038446b1F736e254cC0E256B20D74823c41EeADB";
 export const MONAD_CHAIN_ID = 143;
 
-export function buildEmbedSignMessage({ chainId, contract, articleId, priceWei }) {
+export function buildEmbedSignMessage(
+  { chainId, contract, articleId, priceWei },
+  prefix = EMBED_SIG_PREFIX
+) {
   const normalizedContract = String(contract || "").trim().toLowerCase();
   const article = String(articleId || "").trim();
-  return `${EMBED_SIG_PREFIX}\nchain:${chainId}\ncontract:${normalizedContract}\narticle:${article}\npriceWei:${priceWei.toString()}`;
+  return `${prefix}\nchain:${chainId}\ncontract:${normalizedContract}\narticle:${article}\npriceWei:${priceWei.toString()}`;
 }
 
 /**
@@ -60,22 +68,27 @@ export async function assertFiatEmbedAuthorized(input) {
     return { ok: false, status: 400, error: "invalid_price" };
   }
 
-  const message = buildEmbedSignMessage({
-    chainId,
-    contract,
-    articleId,
-    priceWei,
-  });
-
   let valid = false;
-  try {
-    valid = await verifyMessage({
-      address: publisher,
-      message,
-      signature: embedSig,
-    });
-  } catch {
-    valid = false;
+  for (const prefix of EMBED_SIG_PREFIXES) {
+    const message = buildEmbedSignMessage(
+      {
+        chainId,
+        contract,
+        articleId,
+        priceWei,
+      },
+      prefix
+    );
+    try {
+      valid = await verifyMessage({
+        address: publisher,
+        message,
+        signature: embedSig,
+      });
+    } catch {
+      valid = false;
+    }
+    if (valid) break;
   }
 
   if (!valid) {

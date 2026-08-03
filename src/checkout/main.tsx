@@ -21,7 +21,7 @@ if (!appId && !stripeFiatEnabled()) {
   root.render(
     <div className="checkout-shell">
       <div className="checkout-card">
-        <p className="checkout-brand">MON Unlock</p>
+        <p className="checkout-brand">Open Paywall</p>
         <h1>Checkout not configured</h1>
         <p className="checkout-copy">
           Set <code>VITE_STRIPE_PUBLISHABLE_KEY</code> for Apple Pay / card unlock, and/or{" "}

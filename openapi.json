@@ -1,11 +1,11 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "MON Unlock Agent API",
+    "title": "Open Paywall Agent API",
     "version": "1.0.3",
-    "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <mon-unlock> HTML. On-chain Monad registration may still require one publisher wallet approval.",
+    "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <open-paywall> HTML (legacy <mon-unlock> still works). On-chain Monad registration may still require one publisher wallet approval.",
     "contact": {
-      "name": "Open Paywall / MON Unlock",
+      "name": "Open Paywall",
       "email": "carlos.a.reyes00@gmail.com",
       "url": "https://mon-unlock-widget-production.up.railway.app"
     }

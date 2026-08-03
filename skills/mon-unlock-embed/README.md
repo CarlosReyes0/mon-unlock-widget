@@ -1,4 +1,4 @@
-# MON Unlock — OpenClaw Embed Generator
+# Open Paywall — OpenClaw Embed Generator
 
 Publish paid articles from your phone via chat.
 

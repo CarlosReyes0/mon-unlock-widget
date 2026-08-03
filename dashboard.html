@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Writer Dashboard — MON Unlock</title>
+    <title>Writer Dashboard — Open Paywall</title>
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
     <script type="module" src="/dist/mon-unlock.js?v=20240714"></script>
     <!-- Supabase Client for reading dashboard data -->
@@ -484,10 +484,10 @@
 
         const embedSig = await signEmbed(eth, currentWallet, article.articleId, article.priceMon);
 
-        return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
+        return `<link rel="stylesheet" href="${CDN_BASE}/dist/openpaywall.css" />
+<script type="module" src="${CDN_BASE}/dist/openpaywall.js?v=${WIDGET_VERSION}"><\/script>
 
-<mon-unlock
+<open-paywall
   article-id="${article.articleId}"
   title="${displayTitle}"
   author="Your Name"
@@ -499,7 +499,7 @@
   <div slot="teaser">
 ${teaser}
   </div>
-<\/mon-unlock>`;
+<\/open-paywall>`;
       }
 
       function updateStats() {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import {
+  EMBED_SIG_PREFIX_OPENPAYWALL,
   MAINNET_UNLOCK_CONTRACT,
   assertFiatEmbedAuthorized,
   buildEmbedSignMessage,
@@ -69,4 +70,17 @@ test("assertFiatEmbedAuthorized rejects wrong contract", async () => {
   });
   assert.equal(result.ok, false);
   assert.equal(result.error, "unsupported_contract");
+});
+
+test("assertFiatEmbedAuthorized accepts Open Paywall v1 signatures", async () => {
+  const message = buildEmbedSignMessage(GOLDEN, EMBED_SIG_PREFIX_OPENPAYWALL);
+  const embedSig = await account.signMessage({ message });
+  const result = await assertFiatEmbedAuthorized({
+    embedSig,
+    contract: GOLDEN.contract,
+    articleId: GOLDEN.articleId,
+    priceWei: GOLDEN.priceWei,
+    publisher: account.address,
+  });
+  assert.equal(result.ok, true);
 });

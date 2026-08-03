@@ -50,12 +50,12 @@ export function buildOpenApiDocument() {
   return {
     openapi: "3.1.0",
     info: {
-      title: "MON Unlock Agent API",
+      title: "Open Paywall Agent API",
       version: "1.0.3",
       description:
         "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, ~$0.05) to publish. If unpaid and no funded payer is configured, agents should stop and ask the human — not chase faucets. On-chain Monad registration may still require one publisher wallet approval.",
       contact: {
-        name: "Open Paywall / MON Unlock",
+        name: "Open Paywall",
         email: "carlos.a.reyes00@gmail.com",
         url: origin,
       },
