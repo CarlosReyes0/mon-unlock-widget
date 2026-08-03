@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Embed Generator — MON Unlock Widget</title>
+    <title>Embed Generator — Open Paywall</title>
     <!-- Use local build for Live Preview so style changes are visible immediately -->
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
     <script type="module" src="/dist/mon-unlock.js?v=20240714"></script>
@@ -270,7 +270,7 @@
         <div class="card panel-code" id="panel-code" role="tabpanel" aria-labelledby="tab-code" style="margin-top: 1.5rem;">
           <h2 class="section-title">Generated embed code</h2>
           <div class="output" id="outputCode" style="min-height: 180px;">&lt;!-- Fill the form to generate code --&gt;</div>
-          <div class="hint" style="margin-top: 0.75rem;">Paste the script tags once per site. Paste the &lt;mon-unlock&gt; block on any article page.</div>
+          <div class="hint" style="margin-top: 0.75rem;">Paste the script tags once per site. Paste the &lt;open-paywall&gt; block on any article page (legacy &lt;mon-unlock&gt; still works).</div>
         </div>
       </div>
     </div>
@@ -758,10 +758,10 @@
 
         const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-        const code = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
+        const code = `<link rel="stylesheet" href="${CDN_BASE}/dist/openpaywall.css" />
+<script type="module" src="${CDN_BASE}/dist/openpaywall.js?v=${WIDGET_VERSION}"><\/script>
 
-<mon-unlock
+<open-paywall
   article-id="${v.articleId}"
   title="${v.title}"
   author="${v.author}"
@@ -772,7 +772,7 @@
   <div slot="teaser">
 ${teaserEsc}
   </div>
-<\/mon-unlock>`;
+<\/open-paywall>`;
 
         out.textContent = code;
       }
@@ -1131,10 +1131,10 @@ ${teaserEsc}
 
             // Produce the on-chain embed when wallet is connected
             const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
+            finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/openpaywall.css" />
+<script type="module" src="${CDN_BASE}/dist/openpaywall.js?v=${WIDGET_VERSION}"><\/script>
 
-<mon-unlock
+<open-paywall
   article-id="${v.articleId}"
   title="${v.title}"
   author="${v.author}"
@@ -1146,14 +1146,14 @@ ${teaserEsc}
   <div slot="teaser">
 ${teaserEsc}
   </div>
-<\/mon-unlock>`;
+<\/open-paywall>`;
           } else {
             // No wallet → demo embed (no on-chain contract)
             const teaserEsc = v.teaser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"><\/script>
+            finalCode = `<link rel="stylesheet" href="${CDN_BASE}/dist/openpaywall.css" />
+<script type="module" src="${CDN_BASE}/dist/openpaywall.js?v=${WIDGET_VERSION}"><\/script>
 
-<mon-unlock
+<open-paywall
   article-id="${v.articleId}"
   title="${v.title}"
   author="${v.author}"
@@ -1163,7 +1163,7 @@ ${teaserEsc}
   <div slot="teaser">
 ${teaserEsc}
   </div>
-<\/mon-unlock>`;
+<\/open-paywall>`;
           }
 
           document.getElementById("outputCode").textContent = finalCode;

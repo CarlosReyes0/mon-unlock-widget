@@ -33,10 +33,11 @@ test("generateEmbed includes contract and teaser", () => {
     teaser: "Free preview <b>x</b>",
     price: "1",
   });
-  assert.match(html, /<mon-unlock/);
+  assert.match(html, /<open-paywall/);
   assert.match(html, /article-id="hello-world"/);
   assert.match(html, /Free preview &lt;b&gt;x&lt;\/b&gt;/);
   assert.match(html, /unlock-contract=/);
+  assert.match(html, /openpaywall\.js/);
   assert.doesNotMatch(html, /embed-sig=/);
 });
 

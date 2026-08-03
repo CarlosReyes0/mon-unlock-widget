@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MON Unlock — Embeddable paywall for pay-per-article monetization</title>
+    <title>Open Paywall — Embeddable paywall for pay-per-article monetization</title>
     <meta
       name="description"
       content="Embeddable paywall for independent publishers. Paste one HTML block to monetize long-form articles with pay-per-article MON payments on Monad, plus card / Apple Pay / Google Pay. AI agents can create paywalls via MPP or OpenClaw."
@@ -55,7 +55,8 @@
         padding: 0 0.25rem;
       }
       /* Hide slotted fallback content until the widget upgrades */
-      mon-unlock:not(:defined) [slot] {
+      mon-unlock:not(:defined) [slot],
+      open-paywall:not(:defined) [slot] {
         display: none;
       }
     </style>
@@ -65,7 +66,7 @@
       <div id="site-nav"></div>
       <header>
         <p class="label">Embeddable paywall</p>
-        <h1>MON Unlock</h1>
+        <h1>Open Paywall</h1>
         <p class="subtitle">
           Pay-per-article content monetization for independent publishers. Create an
           embeddable paywall, paste it on any site, and let readers unlock with MON
@@ -73,7 +74,7 @@
         </p>
       </header>
 
-      <mon-unlock
+      <open-paywall
         article-id="founder-manifesto"
         title="Why Every Founder Should Own Their Reader Relationship"
         author="Your Name"
@@ -88,13 +89,13 @@
           When you publish on someone else's turf, you're renting attention. Algorithm changes or
           policy updates can cut you off overnight.
 
-          MON unlocks let readers pay per article while you keep the relationship. The widget
+          Open Paywall lets readers pay per article while you keep the relationship. The widget
           pastes into any website — no app store, no platform lock-in.
 
           This section only appears after unlock. In the live product, readers pay MON from their
           wallet; this demo simulates that step.
         </div>
-      </mon-unlock>
+      </open-paywall>
       <div id="site-footer"></div>
     </div>
     <script src="/site-nav.js"></script>

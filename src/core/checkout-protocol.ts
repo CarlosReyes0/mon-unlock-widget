@@ -1,6 +1,15 @@
-/** Shared protocol between <mon-unlock> and the hosted Privy checkout page. */
+/** Shared protocol between the embed widget and the hosted checkout page. */
 
+/** Canonical source sent by checkout — keep stable so older widgets keep working. */
 export const CHECKOUT_MESSAGE_SOURCE = "mon-unlock-checkout" as const;
+
+/** Accepted sources when receiving postMessage (legacy + Open Paywall). */
+export const CHECKOUT_MESSAGE_SOURCES = [
+  CHECKOUT_MESSAGE_SOURCE,
+  "openpaywall-checkout",
+] as const;
+
+export type CheckoutMessageSource = (typeof CHECKOUT_MESSAGE_SOURCES)[number];
 
 export const DEFAULT_CHECKOUT_ORIGIN = "https://mon-unlock-widget-production.up.railway.app";
 
@@ -8,8 +17,10 @@ export const DEFAULT_CHECKOUT_ORIGIN = "https://mon-unlock-widget-production.up.
 export const FIAT_SESSION_PARAM = "mon_fiat_session";
 export const FIAT_ARTICLE_PARAM = "mon_article_id";
 
+const WIDGET_SCRIPT_MARKERS = ["/dist/mon-unlock.js", "/dist/openpaywall.js"] as const;
+
 export type CheckoutUnlockedMessage = {
-  source: typeof CHECKOUT_MESSAGE_SOURCE;
+  source: CheckoutMessageSource;
   type: "mon:unlocked";
   articleId: string;
   /** On-chain / Privy path */
@@ -21,7 +32,7 @@ export type CheckoutUnlockedMessage = {
 };
 
 export type CheckoutClosedMessage = {
-  source: typeof CHECKOUT_MESSAGE_SOURCE;
+  source: CheckoutMessageSource;
   type: "mon:checkout-closed";
   articleId: string;
   reason?: string;
@@ -48,7 +59,9 @@ export function getCheckoutBaseUrl(): string {
     // When the widget is loaded from our CDN, prefer that origin for checkout.
     try {
       const scripts = Array.from(document.getElementsByTagName("script"));
-      const self = scripts.find((s) => s.src && s.src.includes("/dist/mon-unlock.js"));
+      const self = scripts.find(
+        (s) => s.src && WIDGET_SCRIPT_MARKERS.some((marker) => s.src.includes(marker))
+      );
       if (self?.src) {
         return new URL(self.src).origin;
       }
@@ -120,10 +133,17 @@ export function clearFiatReturnParams(): void {
   }
 }
 
+function isAcceptedCheckoutSource(source: unknown): source is CheckoutMessageSource {
+  return (
+    typeof source === "string" &&
+    (CHECKOUT_MESSAGE_SOURCES as readonly string[]).includes(source)
+  );
+}
+
 export function isCheckoutMessage(data: unknown): data is CheckoutMessage {
   if (!data || typeof data !== "object") return false;
   const msg = data as Partial<CheckoutMessage>;
-  if (msg.source !== CHECKOUT_MESSAGE_SOURCE) return false;
+  if (!isAcceptedCheckoutSource(msg.source)) return false;
   if (msg.type === "mon:unlocked") {
     if (typeof msg.articleId !== "string") return false;
     const hasAddress = typeof msg.address === "string" && msg.address.length > 0;

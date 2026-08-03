@@ -60,11 +60,13 @@ export function generateEmbed(input, embedSig) {
   const teaserEsc = escapeTeaser((input.teaser || "").trim());
   const sig = typeof embedSig === "string" ? embedSig.trim() : "";
   const sigAttr = sig ? `\n  embed-sig="${sig}"` : "";
+  // Prefer Open Paywall tag/assets. Legacy <mon-unlock> + mon-unlock.js still work
+  // (same bundle registers both tags; openpaywall.* is an alias of mon-unlock.*).
   // Without embed-sig, payments are blocked until /register.html signs the embed.
-  return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"></script>
+  return `<link rel="stylesheet" href="${CDN_BASE}/dist/openpaywall.css" />
+<script type="module" src="${CDN_BASE}/dist/openpaywall.js?v=${WIDGET_VERSION}"></script>
 
-<mon-unlock
+<open-paywall
   article-id="${String(input.articleId).trim()}"
   title="${String(input.title).trim()}"
   author="${author}"
@@ -75,7 +77,7 @@ export function generateEmbed(input, embedSig) {
   <div slot="teaser">
 ${teaserEsc}
   </div>
-</mon-unlock>`;
+</open-paywall>`;
 }
 
 export function validatePublishInput(raw) {

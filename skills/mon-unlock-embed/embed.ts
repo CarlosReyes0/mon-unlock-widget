@@ -146,10 +146,10 @@ export function generateEmbed(
   const teaserEsc = escapeTeaser(input.teaser.trim());
   const sigAttr = embedSig ? `\n  embed-sig="${embedSig}"` : "";
 
-  return `<link rel="stylesheet" href="${CDN_BASE}/dist/mon-unlock.css" />
-<script type="module" src="${CDN_BASE}/dist/mon-unlock.js?v=${WIDGET_VERSION}"></script>
+  return `<link rel="stylesheet" href="${CDN_BASE}/dist/openpaywall.css" />
+<script type="module" src="${CDN_BASE}/dist/openpaywall.js?v=${WIDGET_VERSION}"></script>
 
-<mon-unlock
+<open-paywall
   article-id="${input.articleId.trim()}"
   title="${input.title.trim()}"
   author="${author}"
@@ -160,7 +160,7 @@ export function generateEmbed(
   <div slot="teaser">
 ${teaserEsc}
   </div>
-</mon-unlock>`;
+</open-paywall>`;
 }
 
 export function buildFinishRegistrationUrl(

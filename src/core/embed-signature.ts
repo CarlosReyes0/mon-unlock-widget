@@ -10,7 +10,18 @@ import {
 import { monadMainnet } from "./chains.js";
 import type { Eip1193Provider } from "./wallet.js";
 
+/**
+ * Signing prefix for newly created embeds.
+ * Keep stable — changing this without dual-verify would invalidate all existing embeds.
+ */
 export const EMBED_SIG_PREFIX = "MON Unlock v1";
+
+/** Forward-compatible prefix; accepted on verify, not used for signing yet. */
+export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
+
+/** All prefixes accepted when verifying a publisher embed signature. */
+export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL] as const;
+
 export const MAINNET_UNLOCK_CONTRACT =
   "0x038446b1F736e254cC0E256B20D74823c41EeADB" as const;
 
@@ -21,15 +32,18 @@ export class EmbedSignatureError extends Error {
   }
 }
 
-export function buildEmbedSignMessage(params: {
-  chainId: number;
-  contract: string;
-  articleId: string;
-  priceWei: bigint;
-}): string {
+export function buildEmbedSignMessage(
+  params: {
+    chainId: number;
+    contract: string;
+    articleId: string;
+    priceWei: bigint;
+  },
+  prefix: string = EMBED_SIG_PREFIX
+): string {
   const contract = params.contract.trim().toLowerCase();
   const article = params.articleId.trim();
-  return `${EMBED_SIG_PREFIX}\nchain:${params.chainId}\ncontract:${contract}\narticle:${article}\npriceWei:${params.priceWei.toString()}`;
+  return `${prefix}\nchain:${params.chainId}\ncontract:${contract}\narticle:${article}\npriceWei:${params.priceWei.toString()}`;
 }
 
 export async function verifyEmbedSignature(params: {
@@ -40,11 +54,19 @@ export async function verifyEmbedSignature(params: {
   priceWei: bigint;
   publisher: Address;
 }): Promise<boolean> {
-  return verifyMessage({
-    address: params.publisher,
-    message: buildEmbedSignMessage(params),
-    signature: params.signature,
-  });
+  for (const prefix of EMBED_SIG_PREFIXES) {
+    try {
+      const valid = await verifyMessage({
+        address: params.publisher,
+        message: buildEmbedSignMessage(params, prefix),
+        signature: params.signature,
+      });
+      if (valid) return true;
+    } catch {
+      /* try next prefix */
+    }
+  }
+  return false;
 }
 
 const GET_ARTICLE_ABI = [

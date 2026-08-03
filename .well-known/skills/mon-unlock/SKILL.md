@@ -1,16 +1,18 @@
 ---
 name: mon-unlock
 description: >-
-  Create embeddable paywalls for long-form articles with MON Unlock. Use when the
-  user wants to monetize a post, generate a pay-per-article embed, publish paid
-  content on Monad, or have an agent create a `<mon-unlock>` paywall via HTTP/MPP
-  or OpenClaw.
+  Create embeddable paywalls for long-form articles with Open Paywall (legacy
+  name: MON Unlock). Use when the user wants to monetize a post, generate a
+  pay-per-article embed, publish paid content on Monad, or have an agent create
+  an `<open-paywall>` (or legacy `<mon-unlock>`) paywall via HTTP/MPP or OpenClaw.
 ---
 
-# MON Unlock — create an embeddable paywall
+# Open Paywall — create an embeddable paywall
 
 ## Product
-MON Unlock turns an article into a paste-ready `<mon-unlock>` HTML block. Readers unlock with MON on Monad or card / Apple Pay / Google Pay. Live site: https://mon-unlock-widget-production.up.railway.app
+Open Paywall turns an article into a paste-ready `<open-paywall>` HTML block
+(legacy `<mon-unlock>` remains supported). Readers unlock with MON on Monad or
+card / Apple Pay / Google Pay. Live site: https://mon-unlock-widget-production.up.railway.app
 
 ## When to use
 - User asks to create a paywall, paid article embed, or monetize writing.

@@ -32,7 +32,7 @@ function formatOnChainNextSteps(finishUrl: string): string[] {
 }
 
 function formatPublishResult(result: Awaited<ReturnType<typeof publishArticle>>): string {
-  const lines: string[] = ["## MON Unlock — article published", ""];
+  const lines: string[] = ["## Open Paywall — article published", ""];
 
   lines.push(`Slug: \`${result.slug}\``);
   lines.push(`Hash: \`${result.articleIdHash}\``);
@@ -107,9 +107,9 @@ function formatSetupRequired(): string {
 
 export default definePluginEntry({
   id: "mon-unlock-embed",
-  name: "MON Unlock Embed Generator",
+  name: "Open Paywall Embed Generator",
   description:
-    "Publish paid articles via mon-unlock from chat. Generates embed HTML, syncs body to Supabase, " +
+    "Publish paid articles via Open Paywall from chat. Generates embed HTML, syncs body to Supabase, " +
     "and registers on Monad when privateKey is configured. Use when user wants to create/publish a paid article.",
 
   register(api) {

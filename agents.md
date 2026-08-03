@@ -1,6 +1,6 @@
-# MON Unlock — Agents guide
+# Open Paywall — Agents guide
 
-MON Unlock lets agents create embeddable paywalls for long-form content. Give your agent this page (or `/llms.txt` / `/skill.md`) so it can publish paste-ready HTML and complete payments programmatically.
+Open Paywall (formerly MON Unlock) lets agents create embeddable paywalls for long-form content. Give your agent this page (or `/llms.txt` / `/skill.md`) so it can publish paste-ready HTML and complete payments programmatically.
 
 ## Discovery surfaces
 - LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`
@@ -12,7 +12,7 @@ MON Unlock lets agents create embeddable paywalls for long-form content. Give yo
 ## What publishing needs
 | Step | What it does | Agent can do it? |
 |------|----------------|------------------|
-| 1. Embed HTML | `<mon-unlock>` block for the site | Draft only (unsigned) |
+| 1. Embed HTML | `<open-paywall>` block (legacy `<mon-unlock>` still works) | Draft only (unsigned) |
 | 2. Supabase body | Stores teaser + paid body | Yes (`/api/agents/publish`) |
 | 3. On-chain register + signed embed | Registers on Monad and produces payment-ready HTML with `embed-sig` | Manual wallet click on `finishRegistrationUrl` (recommended) or OpenClaw Option A with `privateKey` |
 

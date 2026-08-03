@@ -482,6 +482,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, {
       ok: true,
       service: "mon-unlock",
+      product: "Open Paywall",
       mpp: mppStatus(),
       docs: {
         llms: "/llms.txt",

@@ -1,5 +1,5 @@
 /**
- * Shared product navigation for MON Unlock static pages.
+ * Shared product navigation for Open Paywall static pages.
  *
  * Placeholders (optional):
  *   <div id="site-nav"></div>

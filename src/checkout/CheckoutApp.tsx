@@ -179,7 +179,7 @@ export function CheckoutApp() {
     return (
       <div className="checkout-shell">
         <div className="checkout-card">
-          <p className="checkout-brand">MON Unlock</p>
+          <p className="checkout-brand">Open Paywall</p>
           <h1>Invalid checkout link</h1>
           <p className="checkout-copy">
             This page must be opened from an article unlock button with a valid article, price, and
@@ -212,7 +212,7 @@ export function CheckoutApp() {
   return (
     <div className="checkout-shell">
       <div className="checkout-card">
-        <p className="checkout-brand">MON Unlock</p>
+        <p className="checkout-brand">Open Paywall</p>
         <h1>Unlock article</h1>
         <p className="checkout-title">{query.title}</p>
         <p className="checkout-price">

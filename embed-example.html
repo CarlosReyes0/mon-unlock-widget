@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Embed Example — MON Unlock Widget</title>
+    <title>Embed Example — Open Paywall</title>
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
     <script type="module" src="/dist/mon-unlock.js?v=20240714"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -12,7 +12,8 @@
       body { font-family: "DM Sans", system-ui, -apple-system, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1.5rem; line-height: 1.6; color: #111827; background: #fff; }
       pre { background: #111827; color: #e5e7eb; padding: 1.25rem; border-radius: 12px; overflow-x: auto; }
       code { font-size: 0.9rem; }
-      mon-unlock:not(:defined) [slot] { display: none; }
+      mon-unlock:not(:defined) [slot],
+      open-paywall:not(:defined) [slot] { display: none; }
       .note { margin-top: 1rem; padding: 0.85rem 1rem; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; font-size: 0.9rem; color: #4c1d95; }
     </style>
   </head>
@@ -21,7 +22,7 @@
     <h1 style="font-size:2rem;">Embed this block on any site</h1>
     <p>No JavaScript required from the publisher. Just paste the HTML from the <a href="/generator.html">generator</a> (it includes a required <code>embed-sig</code>).</p>
 
-    <pre><code>&lt;mon-unlock
+    <pre><code>&lt;open-paywall
   article-id="founder-manifesto"
   title="Why Every Founder Should Own Their Reader Relationship"
   author="Your Name"
@@ -33,16 +34,17 @@
 &gt;
   &lt;div slot="teaser"&gt;Free preview...&lt;/div&gt;
   &lt;div slot="body"&gt;Full paid content...&lt;/div&gt;
-&lt;/mon-unlock&gt;</code></pre>
+&lt;/open-paywall&gt;</code></pre>
 
     <p class="note">
       Live payments need a real <code>embed-sig</code> from the generator (or <a href="/register.html">/register.html</a> → <strong>Copy signed embed</strong> after agent publish).
       Without it, readers see “missing a publisher signature” and cannot pay.
+      Legacy <code>&lt;mon-unlock&gt;</code> embeds remain fully supported.
     </p>
 
     <p style="margin-top:2rem;"><strong>Live demo</strong> (simulated unlock — no contract / no signature required):</p>
 
-    <mon-unlock
+    <open-paywall
       article-id="founder-manifesto"
       title="Why Every Founder Should Own Their Reader Relationship"
       author="Your Name"
@@ -55,7 +57,7 @@
       <div slot="body">
         Paste your full article here. Readers only see this after they unlock.
       </div>
-    </mon-unlock>
+    </open-paywall>
 
     <p style="margin-top:3rem; font-size:0.875rem; color:#6b7280;">
       Built files are in <code>dist/</code>. Host them on your domain or a CDN.

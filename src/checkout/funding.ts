@@ -100,7 +100,7 @@ export async function openCoinbaseBuy(
 /** Ramp Network — kept for non-Texas regions; Ramp blocks Texas. */
 export function buildRampBuyUrl(address: string, outAsset: "MONAD_MON" | "MONAD_USDC" = "MONAD_MON"): string {
   const params = new URLSearchParams({
-    hostAppName: "MON Unlock",
+    hostAppName: "Open Paywall",
     hostLogoUrl: "https://mon-unlock-widget-production.up.railway.app/favicon.ico",
     defaultFlow: "ONRAMP",
     outAsset,

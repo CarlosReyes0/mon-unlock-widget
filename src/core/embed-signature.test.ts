@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   EMBED_SIG_PREFIX,
+  EMBED_SIG_PREFIX_OPENPAYWALL,
   MAINNET_UNLOCK_CONTRACT,
   buildEmbedSignMessage,
   verifyEmbedSignature,
@@ -20,18 +21,40 @@ const GOLDEN = {
 const goldenAccount = privateKeyToAccount(GOLDEN.privateKey);
 
 describe("buildEmbedSignMessage", () => {
-  it("uses a stable multiline format", () => {
+  it("uses a stable multiline format with the legacy signing prefix", () => {
     const message = buildEmbedSignMessage(GOLDEN);
     assert.equal(
       message,
       `${EMBED_SIG_PREFIX}\nchain:143\ncontract:${MAINNET_UNLOCK_CONTRACT.toLowerCase()}\narticle:golden-test-article\npriceWei:1000000000000000000`
     );
   });
+
+  it("can build an Open Paywall prefix message without changing the default", () => {
+    const message = buildEmbedSignMessage(GOLDEN, EMBED_SIG_PREFIX_OPENPAYWALL);
+    assert.match(message, /^Open Paywall v1\n/);
+    assert.equal(buildEmbedSignMessage(GOLDEN).startsWith("MON Unlock v1\n"), true);
+  });
 });
 
 describe("verifyEmbedSignature", () => {
   it("accepts a valid publisher signature", async () => {
     const message = buildEmbedSignMessage(GOLDEN);
+    const signature = await goldenAccount.signMessage({ message });
+
+    const valid = await verifyEmbedSignature({
+      signature,
+      chainId: GOLDEN.chainId,
+      contract: GOLDEN.contract,
+      articleId: GOLDEN.articleId,
+      priceWei: GOLDEN.priceWei,
+      publisher: goldenAccount.address,
+    });
+
+    assert.equal(valid, true);
+  });
+
+  it("accepts a signature created with the Open Paywall prefix", async () => {
+    const message = buildEmbedSignMessage(GOLDEN, EMBED_SIG_PREFIX_OPENPAYWALL);
     const signature = await goldenAccount.signMessage({ message });
 
     const valid = await verifyEmbedSignature({

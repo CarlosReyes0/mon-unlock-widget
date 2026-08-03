@@ -863,8 +863,16 @@ export class MonUnlock extends LitElement {
   }
 }
 
+/**
+ * Open Paywall alias — same component, second tag name.
+ * Custom Elements require a distinct constructor per tag, so subclass.
+ */
+@customElement("open-paywall")
+export class OpenPaywall extends MonUnlock {}
+
 declare global {
   interface HTMLElementTagNameMap {
     "mon-unlock": MonUnlock;
+    "open-paywall": OpenPaywall;
   }
 }

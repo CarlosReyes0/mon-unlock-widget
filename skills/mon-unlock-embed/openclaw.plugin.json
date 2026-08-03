@@ -1,7 +1,7 @@
 {
   "id": "mon-unlock-embed",
-  "name": "MON Unlock Embed Generator",
-  "description": "Publish mon-unlock paid articles from chat: embed + Supabase + optional on-chain registration.",
+  "name": "Open Paywall Embed Generator",
+  "description": "Publish Open Paywall paid articles from chat: embed + Supabase + optional on-chain registration.",
   "contracts": {
     "tools": ["generate_mon_unlock_embed", "preview_mon_unlock_embed"]
   },

@@ -1,9 +1,9 @@
-# MON Unlock agent skill
+# Open Paywall agent skill
 
-Read this before creating a paywall with MON Unlock from an AI assistant, coding agent, or autonomous runtime.
+Read this before creating a paywall with Open Paywall from an AI assistant, coding agent, or autonomous runtime.
 
 ## What this service does
-MON Unlock creates an **embeddable paywall** for long-form articles. You get paste-ready HTML (`<mon-unlock>`). Readers pay per article with **MON on Monad** or **card / Apple Pay / Google Pay**.
+Open Paywall creates an **embeddable paywall** for long-form articles. You get paste-ready HTML (`<open-paywall>`; legacy `<mon-unlock>` still works). Readers pay per article with **MON on Monad** or **card / Apple Pay / Google Pay**.
 
 ## Quick setup
 - LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`

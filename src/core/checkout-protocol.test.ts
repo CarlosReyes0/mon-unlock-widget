@@ -61,6 +61,18 @@ describe("isCheckoutMessage", () => {
     );
   });
 
+  it("accepts openpaywall-checkout source (dual-support)", () => {
+    assert.equal(
+      isCheckoutMessage({
+        source: "openpaywall-checkout",
+        type: "mon:unlocked",
+        articleId: "a",
+        address: "0x1",
+      }),
+      true
+    );
+  });
+
   it("rejects foreign messages", () => {
     assert.equal(isCheckoutMessage({ type: "mon:unlocked" }), false);
   });

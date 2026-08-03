@@ -1,4 +1,4 @@
-# MON Unlock
+# Open Paywall
 
 **Embeddable paywall** for independent publishers — **pay-per-article content monetization**. Paste one HTML block on WordPress, Webflow, Notion export, or any site.
 
@@ -10,6 +10,9 @@ Readers unlock the full article with **MON** on Monad, or with **card / Apple Pa
 
 **Smart contract:** [`contracts/`](./contracts/) — `ArticleUnlock.sol` (Foundry). Run `forge test` in `contracts/`.
 
+## Branding note
+
+Product name is **Open Paywall**. Legacy identifiers (`mon-unlock`, `MON Unlock v1` signatures, Railway host) remain supported so existing embeds do not break.
 ## Try the demo locally
 
 ```bash

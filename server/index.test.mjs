@@ -118,7 +118,7 @@ test("GET /llms.txt is crawlable", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/llms.txt`);
   assert.equal(res.status, 200);
   const text = await res.text();
-  assert.match(text, /MON Unlock/i);
+  assert.match(text, /Open Paywall/i);
   assert.match(text, /embeddable paywall/i);
 });
 
