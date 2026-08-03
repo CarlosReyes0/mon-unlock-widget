@@ -1,0 +1,46 @@
+---
+description: How to write DeltaV / Monad weekly updates and summaries. Use when creating weekly updates, DeltaV progress reports, founder updates, or anything for Pareen / DeltaV / Keone reporting.
+globs:
+  - WEEKLY_UPDATE*.md
+  - DELTA_V*.md
+alwaysApply: false
+---
+
+# DeltaV Weekly Update Format
+
+When writing **DeltaV summaries**, **weekly updates**, or **founder progress reports** for this project (MON Unlock Widget), follow Pareen’s DeltaV weekly update guide and template.
+
+**Source (canonical):** https://x.com/pareen/status/1913648566976860173
+
+Also keep a copyable skeleton in `DELTA_V_WEEKLY_TEMPLATE.md`.
+
+## Why this format
+
+Weekly updates are a signal: control to investors, liveness to community, clarity to yourself. Prefer this structure over long technical dump-only docs when the audience is DeltaV / Monad program readers.
+
+## Required sections (in order)
+
+1. **TL;DR** — Heartbeat. High-signal summary skimable in ~10 seconds. Most readers only read the first few lines. Cover quick wins, challenges, what’s next.
+2. **Highlights** — Momentum. Shipped features, deals, growth, partnerships. Founders are judged by motion; belief compounds from consistent movement.
+3. **Lowlights** — Backbone. What slipped, broke, or was learned the hard way. Transparency builds trust and invites help. Operators own misses; hype machines hide them.
+4. **Key / Core Metrics** — Hard numbers. Pick ~3 metrics that define current health (e.g. unlock txs, registered articles, publishers, revenue in MON). Consistency week-to-week beats vanity spikes.
+5. **This Week’s Focus** — Clear plan for next. Soft accountability; next week’s highlight should prove execution against this focus.
+6. **Asks** — Specific, targeted asks so people can help without guessing (intros, feedback, hires, customers). Vague asks get ignored.
+7. **Shoutouts** — Credit teammates, users, advisors, community helpers.
+
+## Tone
+
+- Short, scannable bullets over essay paragraphs.
+- Specific over vague (“Looking for writers shipping long-form on Monad” beats “Looking for users”).
+- Authentic lowlights; do not sanitize into marketing fluff.
+- Tie highlights to Monad / DeltaV value when natural (on-chain MON volume, publishers, agent publish path) — without burying the TL;DR.
+
+## Relationship to existing deep-dive notes
+
+Longer engineering writeups (architecture rationale, RPC limits, embed-sig design) remain useful as **supporting detail** or separate docs (`DELTA_V_PROPOSAL.md`, detailed `WEEKLY_UPDATE_*.md` appendices). For the **DeltaV-facing weekly summary**, lead with Pareen’s 7-section template; put deep technical narrative after or in a linked doc, not instead of TL;DR / Highlights / Lowlights / Metrics / Focus / Asks / Shoutouts.
+
+## Filename convention
+
+Prefer `WEEKLY_UPDATE_YYYY-MM-DD.md` (end date of the reporting period). Title with project name and week number when posting publicly:
+
+`Weekly Update – MON Unlock Widget 🧠 Week #[XX]`
