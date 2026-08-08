@@ -9,6 +9,21 @@ Check off or delete items as you decide.
 
 - [x] **One-click Copy signed embed** after agent registration (`/register.html`)
 - [x] **Skill/docs: stop after first unpaid 402** — ask the human; don’t chase faucets
+- [x] **Open Paywall rename** with dual-support for legacy embeds
+- [x] **Article-id reserve + `ArticleTaken`** + new mainnet contract cutover (`0x27cA0c23…`)
+
+---
+
+## Contract migration (remind — do this)
+
+Old articles still live on `0x038446b1…`. New publishes use `0x27cA0c23835328e2Ab1424b66330be86fe177FA6`.
+
+- [ ] **Dual-read unlock** — treat reader as unlocked if old **or** new contract says so (keeps access after embed swap)
+- [ ] **Fiat allowlist both contracts** during a transition window, then drop the old address
+- [ ] **Dashboard “Migrate to new contract”** — re-register + regenerate signed embed for copy/replace
+- [ ] **Publisher comms / deadline** — tell writers to replace embeds; then deprecate old contract support
+
+**Why:** MON unlocks on old embeds still work; card/fiat and indexer already favor the new contract. Without migration, old pieces stay fragmented.
 
 ---
 
