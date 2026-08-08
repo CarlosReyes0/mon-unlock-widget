@@ -32,7 +32,7 @@
     "alias:widget": "node scripts/alias-widget-assets.mjs",
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js dist/core/wallet.test.js && node --test server/index.test.mjs server/publish.test.mjs server/mpp-bypass.test.mjs server/mpp-probe.test.mjs server/openapi.test.mjs server/stripe-idempotency.test.mjs server/embed-signature.test.mjs server/connect-sample.test.mjs server/register-page.test.mjs"
+    "test": "tsc && node --test dist/core/embed-signature.test.js dist/core/body-content.test.js dist/core/checkout-protocol.test.js dist/core/swap-usdc-to-mon.test.js dist/core/wallet.test.js && node --test server/index.test.mjs server/publish.test.mjs server/mpp-bypass.test.mjs server/mpp-probe.test.mjs server/openapi.test.mjs server/stripe-idempotency.test.mjs server/embed-signature.test.mjs server/connect-sample.test.mjs server/register-page.test.mjs server/article-reserve.test.mjs"
   },
   "license": "MIT",
   "engines": {

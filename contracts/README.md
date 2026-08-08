@@ -6,14 +6,18 @@ Native **MON** unlock on **Monad testnet**. Matches [FOCUS.md](../FOCUS.md) Phas
 
 | Function | Purpose |
 |----------|---------|
-| `registerArticle(articleId, priceWei)` | Publisher registers their article |
-| `registerArticleFor(...)` | Owner bootstrap (deploy script) |
+| `registerArticle(articleId, priceWei)` | Publisher registers their article (reverts `ArticleTaken` if another publisher owns the id) |
+| `registerArticleFor(...)` | Owner bootstrap (deploy script; same `ArticleTaken` guard) |
 | `unlock(articleId)` payable | Reader pays MON → publisher receives MON |
 | `hasUnlocked(reader, articleId)` | Cross-device unlock check (Phase 1.3) |
 | `articleIdFromString(slug)` | Must match widget `article-id` attribute |
 
 **Article ID encoding:** `bytes32 = keccak256(bytes("founder-manifesto"))`  
 Widget (viem): `keccak256(toBytes("founder-manifesto"))`
+
+**Uniqueness:** Article ids are **global**. `registerArticle` / `registerArticleFor` revert with `ArticleTaken(publisher)` if another address already owns the id. Same publisher may re-register to update price. Product DB also reserves the slug via Supabase `register-article` before the chain tx.
+
+> Deploy note: the live mainnet contract must be **redeployed** for `ArticleTaken` to enforce on-chain. Until then, generator/register clients + Supabase reservation still block takeovers in the product path.
 
 ## Setup
 

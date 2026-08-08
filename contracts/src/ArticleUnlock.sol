@@ -5,6 +5,7 @@ pragma solidity ^0.8.24;
  * @title ArticleUnlock
  * @notice Pay native MON to unlock an article. Phase 1 — Monad testnet.
  * @dev articleId = keccak256(bytes("your-article-slug")) — must match widget encoding.
+ *      Article IDs are globally unique. Re-registration by a different publisher reverts.
  */
 contract ArticleUnlock {
     struct Article {
@@ -39,6 +40,8 @@ contract ArticleUnlock {
     error AlreadyUnlocked();
     error InsufficientPayment();
     error TransferFailed();
+    /// @notice Article id is already owned by another publisher.
+    error ArticleTaken(address publisher);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -50,8 +53,13 @@ contract ArticleUnlock {
     }
 
     /// @notice Register an article you publish. Price in wei (1 MON = 1e18 wei).
+    /// @dev Same publisher may update price by re-registering; another publisher cannot take over.
     function registerArticle(bytes32 articleId, uint256 priceWei) external {
         if (priceWei == 0) revert InvalidPrice();
+        address existing = articles[articleId].publisher;
+        if (existing != address(0) && existing != msg.sender) {
+            revert ArticleTaken(existing);
+        }
         articles[articleId] = Article({
             priceWei: priceWei,
             publisher: msg.sender,
@@ -68,6 +76,10 @@ contract ArticleUnlock {
     ) external onlyOwner {
         if (priceWei == 0) revert InvalidPrice();
         if (publisher == address(0)) revert InvalidPublisher();
+        address existing = articles[articleId].publisher;
+        if (existing != address(0) && existing != publisher) {
+            revert ArticleTaken(existing);
+        }
         articles[articleId] = Article({
             priceWei: priceWei,
             publisher: publisher,

@@ -1,7 +1,7 @@
 // Edge Function: register-article
-// Called by the generator after a successful on-chain registration.
-// Stores the human-readable slug so the dashboard can later produce the
-// exact same embed code the generator originally created.
+// Reserves a globally unique article slug for a publisher (reserve-on-create),
+// and upserts teaser/body for dashboard + article-body fetch.
+// Same publisher may update their row; a different publisher gets 409 slug_taken.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -10,8 +10,17 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
+function evaluateReserve(existing: { publisher?: string | null } | null, publisher: string) {
+  const next = publisher.trim().toLowerCase();
+  if (!existing) return { ok: true as const, action: 'insert' as const };
+  const owner = String(existing.publisher || '').trim().toLowerCase();
+  if (owner && owner !== next) {
+    return { ok: false as const, error: 'slug_taken' as const, publisher: owner };
+  }
+  return { ok: true as const, action: 'update' as const };
+}
+
 Deno.serve(async (req) => {
-  // CORS headers so the static generator page can call this from any origin
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -29,33 +38,133 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { slug, articleIdHash, priceWei, publisher, teaser, body: articleBody } = body;
+    const {
+      slug,
+      articleIdHash,
+      priceWei,
+      publisher,
+      teaser,
+      body: articleBody,
+      confirmRegistered,
+    } = body;
 
     if (!slug || !articleIdHash || priceWei == null || !publisher) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers });
     }
 
+    const publisherNorm = String(publisher).trim().toLowerCase();
+    if (!/^0x[a-f0-9]{40}$/.test(publisherNorm)) {
+      return new Response(JSON.stringify({ error: 'invalid_publisher' }), { status: 400, headers });
+    }
+
+    const slugNorm = String(slug).trim();
+    const hashNorm = String(articleIdHash).trim();
     const priceWeiStr = typeof priceWei === 'string' ? priceWei : String(priceWei);
 
-    const { error } = await supabase
+    // Prefer hash lookup; also reject if another row already owns this slug string.
+    const { data: byHash, error: hashLookupError } = await supabase
       .from('articles')
-      .upsert({
-        article_id: slug,
-        article_id_hash: articleIdHash,
-        publisher: publisher.toLowerCase(),
-        price_wei: priceWeiStr,
-        teaser: teaser || null,
-        body: articleBody || null,
-        active: true,
-        registered_at: new Date().toISOString(),
-      }, { onConflict: 'article_id_hash' });
+      .select('article_id, article_id_hash, publisher, registration_status')
+      .eq('article_id_hash', hashNorm)
+      .maybeSingle();
+
+    if (hashLookupError) {
+      console.error('Hash lookup failed:', hashLookupError);
+      return new Response(JSON.stringify({ error: hashLookupError.message }), { status: 500, headers });
+    }
+
+    const { data: bySlug, error: slugLookupError } = await supabase
+      .from('articles')
+      .select('article_id, article_id_hash, publisher, registration_status')
+      .eq('article_id', slugNorm)
+      .maybeSingle();
+
+    if (slugLookupError) {
+      console.error('Slug lookup failed:', slugLookupError);
+      return new Response(JSON.stringify({ error: slugLookupError.message }), { status: 500, headers });
+    }
+
+    if (
+      bySlug &&
+      byHash &&
+      bySlug.article_id_hash &&
+      byHash.article_id_hash &&
+      bySlug.article_id_hash !== byHash.article_id_hash
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: 'slug_taken',
+          publisher: bySlug.publisher,
+          message: 'This article id is already reserved by another article hash.',
+        }),
+        { status: 409, headers }
+      );
+    }
+
+    const existing = byHash || bySlug;
+    const decision = evaluateReserve(existing, publisherNorm);
+    if (!decision.ok) {
+      return new Response(
+        JSON.stringify({
+          error: 'slug_taken',
+          publisher: decision.publisher,
+          message: `Article id already reserved by ${decision.publisher}`,
+        }),
+        { status: 409, headers }
+      );
+    }
+
+    const priorStatus = existing?.registration_status || 'reserved';
+    const registration_status = confirmRegistered
+      ? 'registered'
+      : priorStatus === 'registered'
+        ? 'registered'
+        : 'reserved';
+
+    const row = {
+      article_id: slugNorm,
+      article_id_hash: hashNorm,
+      publisher: publisherNorm,
+      price_wei: priceWeiStr,
+      teaser: teaser || null,
+      body: articleBody || null,
+      active: true,
+      registration_status,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Keep original registered_at on update; set on insert via default / explicit.
+    const { error } = existing
+      ? await supabase.from('articles').update(row).eq('article_id_hash', existing.article_id_hash || hashNorm)
+      : await supabase.from('articles').insert({
+          ...row,
+          registered_at: new Date().toISOString(),
+        });
 
     if (error) {
-      console.error('Upsert failed:', error);
+      // Unique index race — treat as taken.
+      if (error.code === '23505') {
+        return new Response(
+          JSON.stringify({
+            error: 'slug_taken',
+            message: 'Article id already reserved (concurrent create).',
+          }),
+          { status: 409, headers }
+        );
+      }
+      console.error('Reserve write failed:', error);
       return new Response(JSON.stringify({ error: error.message, details: error }), { status: 500, headers });
     }
 
-    return new Response(JSON.stringify({ success: true }), { status: 200, headers });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        reserved: registration_status === 'reserved',
+        registration_status,
+        action: decision.action,
+      }),
+      { status: 200, headers }
+    );
   } catch (e: any) {
     console.error('register-article error:', e);
     return new Response(JSON.stringify({ error: e?.message || 'Invalid request' }), { status: 400, headers });

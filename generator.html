@@ -191,6 +191,7 @@
           <div class="field">
             <label for="articleId">Article ID (slug)</label>
             <input id="articleId" type="text" placeholder="founder-manifesto" autocapitalize="off" autocomplete="off" spellcheck="false" enterkeyhint="next" />
+            <div class="hint">Must be unique across all writers. Reserved for your wallet when you create/register the embed.</div>
             <div class="hint">Used to derive a unique on-chain ID. Keep it short and stable.</div>
           </div>
 
@@ -290,7 +291,7 @@
     <script src="/site-nav.js"></script>
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
-      const MAINNET_CONTRACT = "0x038446b1F736e254cC0E256B20D74823c41EeADB";
+      const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
       const WIDGET_VERSION = "20240714"; // bump this when widget behavior changes
 
       function looksLikeHtml(text) {
@@ -724,12 +725,28 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
-          if (res.ok) return { ok: true };
+          if (res.ok) {
+            const body = await res.json().catch(() => ({}));
+            return { ok: true, registration_status: body.registration_status };
+          }
           const err = await res.json().catch(() => ({}));
-          return { ok: false, error: err.error || `HTTP ${res.status}` };
+          return {
+            ok: false,
+            error: err.error || `HTTP ${res.status}`,
+            message: err.message,
+            takenBy: err.publisher,
+            status: res.status,
+          };
         } catch (e) {
           return { ok: false, error: e?.message || 'Network error' };
         }
+      }
+
+      function slugTakenMessage(result, slug) {
+        if (result?.takenBy) {
+          return `Article id "${slug}" is already reserved by ${result.takenBy}. Pick a different id.`;
+        }
+        return result?.message || `Article id "${slug}" is already taken. Pick a different id.`;
       }
 
       function buildEmbedSignMessage(chainId, contract, articleId, priceWei) {
@@ -948,12 +965,18 @@ ${teaserEsc}
                   publisher: connectedWallet,
                   teaser: v.teaser,
                   body: v.body,
+                  confirmRegistered: true,
                 };
 
                 const metaResult = await syncMetadataToSupabase(metaPayload);
                 if (metaResult.ok) {
                   metaStatus.textContent = "Metadata saved ✓";
                   metaStatus.style.color = "#16a34a";
+                } else if (metaResult.error === "slug_taken") {
+                  status.textContent = slugTakenMessage(metaResult, v.articleId);
+                  status.style.color = "#ef4444";
+                  metaStatus.textContent = "Article id taken";
+                  metaStatus.style.color = "#ef4444";
                 } else {
                   metaStatus.innerHTML = `Metadata sync failed: ${metaResult.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
                   metaStatus.style.color = "#b45309";
@@ -974,6 +997,43 @@ ${teaserEsc}
                         if (newBtn) newBtn.onclick = retryBtn.onclick;
                       }
                     };
+                  }
+                }
+              }
+
+              // Reserve slug in Supabase before the on-chain tx (reserve-on-create).
+              {
+                const metaStatus = document.getElementById("metadataStatus");
+                if (metaStatus) {
+                  metaStatus.style.display = "inline";
+                  metaStatus.textContent = "Reserving article id…";
+                  metaStatus.style.color = "#6b7280";
+                }
+                const reservePayload = {
+                  slug: v.articleId,
+                  articleIdHash: articleIdBytes,
+                  priceWei: priceWei.toString(),
+                  publisher: connectedWallet,
+                  teaser: v.teaser,
+                  body: v.body,
+                };
+                const reserved = await syncMetadataToSupabase(reservePayload);
+                if (!reserved.ok && reserved.error === "slug_taken") {
+                  status.textContent = slugTakenMessage(reserved, v.articleId);
+                  status.style.color = "#ef4444";
+                  if (metaStatus) {
+                    metaStatus.textContent = "Article id taken";
+                    metaStatus.style.color = "#ef4444";
+                  }
+                  return;
+                }
+                if (metaStatus) {
+                  if (reserved.ok) {
+                    metaStatus.textContent = "Article id reserved ✓";
+                    metaStatus.style.color = "#16a34a";
+                  } else {
+                    metaStatus.textContent = `Reserve failed: ${reserved.error} (continuing…)`;
+                    metaStatus.style.color = "#b45309";
                   }
                 }
               }
@@ -1003,50 +1063,47 @@ ${teaserEsc}
                   functionName: "getArticle",
                   args: [articleIdBytes],
                 });
-                if (existing && existing[1] && existing[1].toLowerCase() === connectedWallet.toLowerCase()) {
-                  status.textContent = "Already registered ✓";
-                  status.style.color = "#16a34a";
+                const existingPublisher = existing && existing[1] ? String(existing[1]) : "";
+                const zero = "0x0000000000000000000000000000000000000000";
+                if (existingPublisher && existingPublisher.toLowerCase() !== zero) {
+                  if (existingPublisher.toLowerCase() === connectedWallet.toLowerCase()) {
+                    status.textContent = "Already registered ✓";
+                    status.style.color = "#16a34a";
 
-                  // Still record the slug + body so the dashboard can produce the exact embed later
-                  const metaStatus = document.getElementById("metadataStatus");
-                  metaStatus.style.display = "inline";
-                  metaStatus.textContent = "Syncing metadata…";
-                  metaStatus.style.color = "#6b7280";
+                    const metaStatus = document.getElementById("metadataStatus");
+                    metaStatus.style.display = "inline";
+                    metaStatus.textContent = "Syncing metadata…";
+                    metaStatus.style.color = "#6b7280";
 
-                  const metaPayload = {
-                    slug: v.articleId,
-                    articleIdHash: articleIdBytes,
-                    priceWei: priceWei.toString(),
-                    publisher: connectedWallet,
-                    teaser: v.teaser,
-                    body: v.body,
-                  };
+                    const metaPayload = {
+                      slug: v.articleId,
+                      articleIdHash: articleIdBytes,
+                      priceWei: priceWei.toString(),
+                      publisher: connectedWallet,
+                      teaser: v.teaser,
+                      body: v.body,
+                      confirmRegistered: true,
+                    };
 
-                  const metaResult = await syncMetadataToSupabase(metaPayload);
-                  if (metaResult.ok) {
-                    metaStatus.textContent = "Metadata saved ✓";
-                    metaStatus.style.color = "#16a34a";
-                  } else {
-                    metaStatus.innerHTML = `Metadata sync failed: ${metaResult.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
-                    metaStatus.style.color = "#b45309";
-                    const retryBtn = document.getElementById("retryMetaBtn");
-                    if (retryBtn) {
-                      retryBtn.onclick = async () => {
-                        retryBtn.disabled = true;
-                        retryBtn.textContent = "Retrying…";
-                        const r = await syncMetadataToSupabase(metaPayload);
-                        if (r.ok) {
-                          metaStatus.textContent = "Metadata saved ✓";
-                          metaStatus.style.color = "#16a34a";
-                        } else {
-                          retryBtn.disabled = false;
-                          retryBtn.textContent = "Retry";
-                          metaStatus.innerHTML = `Metadata sync failed: ${r.error} <button id="retryMetaBtn" style="margin-left:0.5rem; font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; border:1px solid #f59e0b; background:#fff7ed; color:#b45309; cursor:pointer;">Retry</button>`;
-                          const newBtn = document.getElementById("retryMetaBtn");
-                          if (newBtn) newBtn.onclick = retryBtn.onclick;
-                        }
-                      };
+                    const metaResult = await syncMetadataToSupabase(metaPayload);
+                    if (metaResult.ok) {
+                      metaStatus.textContent = "Metadata saved ✓";
+                      metaStatus.style.color = "#16a34a";
+                    } else if (metaResult.error === "slug_taken") {
+                      status.textContent = slugTakenMessage(metaResult, v.articleId);
+                      status.style.color = "#ef4444";
+                      metaStatus.textContent = "Article id taken";
+                      metaStatus.style.color = "#ef4444";
+                      return;
+                    } else {
+                      metaStatus.textContent = `Metadata sync failed: ${metaResult.error}`;
+                      metaStatus.style.color = "#b45309";
                     }
+                  } else {
+                    status.textContent =
+                      "This article id is already registered on-chain by " + existingPublisher;
+                    status.style.color = "#ef4444";
+                    return;
                   }
                 } else {
                   await doRegister();

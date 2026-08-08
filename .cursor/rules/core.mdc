@@ -56,7 +56,7 @@ This project builds a paste-anywhere paywall: `<mon-unlock>` custom element. Rea
   // Solidity: keccak256(bytes(slug))
   ```
 - Contract functions used by widget: `unlock(bytes32)`, `hasUnlocked(address,bytes32)`, `getArticle(bytes32)`, `registerArticle(bytes32,uint256)`.
-- Canonical contract (mainnet): `0x038446b1F736e254cC0E256B20D74823c41EeADB`.
+- Canonical contract (mainnet): `0x27cA0c23835328e2Ab1424b66330be86fe177FA6`.
 - Overpayment is forwarded (no refund in MVP).
 - One unlock per (reader, article). Re-unlock reverts with `AlreadyUnlocked`.
 
@@ -85,7 +85,7 @@ This project builds a paste-anywhere paywall: `<mon-unlock>` custom element. Rea
 ## Constants and Duplication (Keep in Sync)
 These values are intentionally duplicated across static pages and the skills plugin because those artifacts must be self-contained:
 - `CDN_BASE`: `https://mon-unlock-widget-production.up.railway.app`
-- `MAINNET_CONTRACT`: `0x038446b1F736e254cC0E256B20D74823c41EeADB`
+- `MAINNET_CONTRACT`: `0x27cA0c23835328e2Ab1424b66330be86fe177FA6`
 - `WIDGET_VERSION`: bump when widget behavior or embed shape changes (affects cache-busting `?v=` in script src).
 - `WC_PROJECT_ID`: `c2a289e11ad2998f8ea4633db536334c`
 - `MONAD_RPC`: `https://rpc.monad.xyz`
