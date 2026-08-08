@@ -1,0 +1,8 @@
+{
+  "network": "monad-mainnet",
+  "chainId": 143,
+  "rpcUrl": "https://rpc.monad.xyz",
+  "contract": "0x27cA0c23835328e2Ab1424b66330be86fe177FA6",
+  "deployedAt": "2026-08-08T04:28:00Z",
+  "notes": "ArticleTaken + slug reservation. Replaces 0x038446b1F736e254cC0E256B20D74823c41EeADB."
+}

@@ -15,7 +15,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-const DEFAULT_CONTRACT = '0x038446b1F736e254cC0E256B20D74823c41EeADB';
+const DEFAULT_CONTRACT = '0x27cA0c23835328e2Ab1424b66330be86fe177FA6';
 const DEFAULT_RPC = 'https://rpc.monad.xyz';
 
 const headers = {

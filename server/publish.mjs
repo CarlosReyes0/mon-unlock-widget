@@ -8,7 +8,7 @@ import { keccak256, toBytes, parseEther } from "viem";
 export const CDN_BASE =
   process.env.CDN_BASE || "https://mon-unlock-widget-production.up.railway.app";
 export const MAINNET_CONTRACT =
-  process.env.UNLOCK_CONTRACT || "0x038446b1F736e254cC0E256B20D74823c41EeADB";
+  process.env.UNLOCK_CONTRACT || "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
 export const WIDGET_VERSION = process.env.WIDGET_VERSION || "20240714";
 export const WC_PROJECT_ID =
   process.env.WALLETCONNECT_PROJECT_ID || "c2a289e11ad2998f8ea4633db536334c";

@@ -23,7 +23,7 @@ export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
 export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL] as const;
 
 export const MAINNET_UNLOCK_CONTRACT =
-  "0x038446b1F736e254cC0E256B20D74823c41EeADB" as const;
+  "0x27cA0c23835328e2Ab1424b66330be86fe177FA6" as const;
 
 export class EmbedSignatureError extends Error {
   constructor(message: string) {

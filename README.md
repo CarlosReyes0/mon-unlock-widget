@@ -109,7 +109,7 @@ Copy `examples/embed.html` or use this block. **Only edit the parts in ALL CAPS:
   author="Your name"
   price="5"
   theme="light"
-  unlock-contract="0x038446b1F736e254cC0E256B20D74823c41EeADB"
+  unlock-contract="0x27cA0c23835328e2Ab1424b66330be86fe177FA6"
   walletconnect-project-id="c2a289e11ad2998f8ea4633db536334c"
 >
   <div slot="teaser">
