@@ -116,7 +116,7 @@ export function validatePublishInput(raw) {
   };
 }
 
-export async function syncMetadataToSupabase(input) {
+export async function syncMetadataToSupabase(input, options = {}) {
   const slug = input.articleId.trim();
   const articleIdHash = toArticleIdHash(slug);
   const priceWei = toPriceWei(input.price || "1");
@@ -132,17 +132,29 @@ export async function syncMetadataToSupabase(input) {
         publisher: input.publisher.toLowerCase(),
         teaser: input.teaser.trim(),
         body: input.body.trim(),
+        confirmRegistered: Boolean(options.confirmRegistered),
       }),
     });
 
     if (res.ok) {
-      return { ok: true, articleIdHash, priceWei, slug };
+      const body = await res.json().catch(() => ({}));
+      return {
+        ok: true,
+        articleIdHash,
+        priceWei,
+        slug,
+        registration_status: body.registration_status,
+        reserved: body.reserved,
+      };
     }
 
     const err = await res.json().catch(() => ({}));
     return {
       ok: false,
       error: err.error || `HTTP ${res.status}`,
+      message: err.message,
+      status: res.status,
+      takenBy: err.publisher,
       articleIdHash,
       priceWei,
       slug,
@@ -173,7 +185,27 @@ export async function publishArticleForAgent(raw) {
   }
 
   const { input } = validated;
+  // Reserve-on-create: claim the global slug in Supabase before on-chain register.
   const sync = await syncMetadataToSupabase(input);
+  if (!sync.ok && sync.error === "slug_taken") {
+    const message =
+      sync.message ||
+      `Article id "${input.articleId}" is already reserved` +
+        (sync.takenBy ? ` by ${sync.takenBy}` : "");
+    const err = new Error(message);
+    err.status = 409;
+    err.code = "slug_taken";
+    err.takenBy = sync.takenBy;
+    err.payload = {
+      ok: false,
+      error: "slug_taken",
+      message,
+      takenBy: sync.takenBy,
+      articleId: input.articleId,
+    };
+    throw err;
+  }
+
   // Unsigned until the publisher finishes /register.html (wallet signature).
   const embed = generateEmbed(input);
   const finishRegistrationUrl = buildFinishRegistrationUrl(input.articleId, input.price, {
@@ -191,6 +223,7 @@ export async function publishArticleForAgent(raw) {
     publisher: input.publisher.toLowerCase(),
     metadataSynced: sync.ok,
     metadataError: sync.error,
+    registrationStatus: sync.registration_status || (sync.ok ? "reserved" : undefined),
     needsManualOnChainRegistration: true,
     finishRegistrationUrl,
     embed,

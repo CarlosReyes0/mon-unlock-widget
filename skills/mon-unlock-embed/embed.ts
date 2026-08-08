@@ -272,9 +272,16 @@ export async function registerOnChain(input: {
   }
 }
 
-export async function syncMetadataToSupabase(input: ArticleInput): Promise<{
+export async function syncMetadataToSupabase(
+  input: ArticleInput,
+  options: { confirmRegistered?: boolean } = {},
+): Promise<{
   ok: boolean;
   error?: string;
+  message?: string;
+  takenBy?: string;
+  status?: number;
+  registration_status?: string;
 }> {
   const { articleIdHash, priceWei, slug } = buildGenerateResult(input);
 
@@ -289,13 +296,29 @@ export async function syncMetadataToSupabase(input: ArticleInput): Promise<{
         publisher: input.publisher.toLowerCase(),
         teaser: input.teaser.trim(),
         body: input.body.trim(),
+        confirmRegistered: Boolean(options.confirmRegistered),
       }),
     });
 
-    if (res.ok) return { ok: true };
+    if (res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        registration_status?: string;
+      };
+      return { ok: true, registration_status: body.registration_status };
+    }
 
-    const err = (await res.json().catch(() => ({}))) as { error?: string };
-    return { ok: false, error: err.error || `HTTP ${res.status}` };
+    const err = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+      publisher?: string;
+    };
+    return {
+      ok: false,
+      error: err.error || `HTTP ${res.status}`,
+      message: err.message,
+      takenBy: err.publisher,
+      status: res.status,
+    };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Network error" };
   }
@@ -327,7 +350,15 @@ export async function publishArticle(
 
   const fullInput = { ...input, publisher };
   const result = buildGenerateResult(fullInput);
+  // Reserve slug in Supabase before on-chain registration.
   const sync = await syncMetadataToSupabase(fullInput);
+  if (!sync.ok && sync.error === "slug_taken") {
+    throw new Error(
+      sync.message ||
+        `Article id "${result.slug}" is already reserved` +
+          (sync.takenBy ? ` by ${sync.takenBy}` : ""),
+    );
+  }
 
   let onChain: OnChainResult | null = null;
   if (privateKey) {
@@ -336,11 +367,17 @@ export async function publishArticle(
       priceWei: result.priceWei,
       privateKey,
     });
+    if (onChain.ok) {
+      await syncMetadataToSupabase(fullInput, { confirmRegistered: true });
+    }
   } else {
     const status = await getOnChainStatus(result.articleIdHash);
     onChain = status.registered
       ? { ok: true, alreadyRegistered: true, publisher: status.publisher }
       : { ok: false, error: "Not registered on-chain" };
+    if (onChain.ok && onChain.alreadyRegistered) {
+      await syncMetadataToSupabase(fullInput, { confirmRegistered: true });
+    }
   }
 
   const onChainRegistered = Boolean(onChain?.ok);

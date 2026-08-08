@@ -7,6 +7,7 @@ import {ArticleUnlock} from "../src/ArticleUnlock.sol";
 contract ArticleUnlockTest is Test {
     ArticleUnlock unlock;
     address publisher = makeAddr("publisher");
+    address otherPublisher = makeAddr("otherPublisher");
     address reader = makeAddr("reader");
     bytes32 articleId = keccak256("founder-manifesto");
 
@@ -47,5 +48,36 @@ contract ArticleUnlockTest is Test {
             unlock.articleIdFromString("founder-manifesto"),
             keccak256("founder-manifesto")
         );
+    }
+
+    function test_same_publisher_can_reregister() public {
+        vm.prank(publisher);
+        unlock.registerArticle(articleId, 3 ether);
+        (uint256 priceWei, address owner, bool active) = unlock.getArticle(articleId);
+        assertEq(priceWei, 3 ether);
+        assertEq(owner, publisher);
+        assertTrue(active);
+    }
+
+    function test_revert_article_taken_by_other_publisher() public {
+        vm.prank(otherPublisher);
+        vm.expectRevert(
+            abi.encodeWithSelector(ArticleUnlock.ArticleTaken.selector, publisher)
+        );
+        unlock.registerArticle(articleId, 1 ether);
+    }
+
+    function test_registerArticleFor_reverts_when_taken() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(ArticleUnlock.ArticleTaken.selector, publisher)
+        );
+        unlock.registerArticleFor(articleId, 1 ether, otherPublisher);
+    }
+
+    function test_registerArticleFor_allows_same_publisher() public {
+        unlock.registerArticleFor(articleId, 2 ether, publisher);
+        (uint256 priceWei, address owner, ) = unlock.getArticle(articleId);
+        assertEq(priceWei, 2 ether);
+        assertEq(owner, publisher);
     }
 }

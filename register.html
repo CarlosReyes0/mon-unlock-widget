@@ -117,6 +117,35 @@
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const WIDGET_VERSION = "20240714";
       const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
+      const SUPABASE_REGISTER_URL =
+        "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
+
+      async function reserveArticleId({ slug, articleIdHash, priceWei, publisher, teaser, confirmRegistered }) {
+        try {
+          const res = await fetch(SUPABASE_REGISTER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              slug,
+              articleIdHash,
+              priceWei: priceWei.toString(),
+              publisher,
+              teaser: teaser || null,
+              confirmRegistered: Boolean(confirmRegistered),
+            }),
+          });
+          if (res.ok) return { ok: true };
+          const err = await res.json().catch(() => ({}));
+          return {
+            ok: false,
+            error: err.error || `HTTP ${res.status}`,
+            message: err.message,
+            takenBy: err.publisher,
+          };
+        } catch (e) {
+          return { ok: false, error: e?.message || "Network error" };
+        }
+      }
 
       const params = new URLSearchParams(location.search);
       const slug = (params.get("slug") || params.get("articleId") || "").trim();
@@ -302,6 +331,26 @@ ${teaserBlock}
             transport: http("https://rpc.monad.xyz"),
           });
 
+          // Reserve-on-create (or confirm ownership) before the chain tx.
+          setStatus("Reserving article id…", true);
+          const reserved = await reserveArticleId({
+            slug,
+            articleIdHash: articleIdBytes,
+            priceWei,
+            publisher: wallet,
+            teaser,
+          });
+          if (!reserved.ok && reserved.error === "slug_taken") {
+            setStatus(
+              reserved.message ||
+                `Article id already reserved` +
+                  (reserved.takenBy ? ` by ${reserved.takenBy}` : ""),
+              false
+            );
+            registerBtn.disabled = false;
+            return;
+          }
+
           // Already registered?
           try {
             const existing = await publicClient.readContract({
@@ -322,6 +371,14 @@ ${teaserBlock}
             });
             if (existing[1] && existing[1] !== "0x0000000000000000000000000000000000000000") {
               if (existing[1].toLowerCase() === wallet.toLowerCase()) {
+                await reserveArticleId({
+                  slug,
+                  articleIdHash: articleIdBytes,
+                  priceWei: existing[0] ?? priceWei,
+                  publisher: wallet,
+                  teaser,
+                  confirmRegistered: true,
+                });
                 setStatus("Already registered — sign the embed next…", true);
                 await signAndShowEmbed(eth, wallet, slug, existing[0] ?? priceWei);
                 setStatus("Already registered ✓ Copy the signed embed below.", true);
@@ -361,12 +418,26 @@ ${teaserBlock}
           setStatus("Waiting for confirmation…", true);
           await publicClient.waitForTransactionReceipt({ hash: txHash });
 
+          await reserveArticleId({
+            slug,
+            articleIdHash: articleIdBytes,
+            priceWei,
+            publisher: wallet,
+            teaser,
+            confirmRegistered: true,
+          });
+
           setStatus("Registered ✓ Sign the embed so payments work…", true);
           await signAndShowEmbed(eth, wallet, slug, priceWei);
           setStatus("Registered ✓ Copy the signed embed below. Tx: " + txHash.slice(0, 10) + "…", true);
           registerBtn.textContent = "Done";
         } catch (e) {
-          setStatus(e.message || "Registration failed.", false);
+          const msg = String(e?.shortMessage || e?.message || "Registration failed.");
+          if (/ArticleTaken|already reserved|already registered/i.test(msg)) {
+            setStatus("This article id is already taken by another publisher.", false);
+          } else {
+            setStatus(msg, false);
+          }
           registerBtn.disabled = false;
         }
       };

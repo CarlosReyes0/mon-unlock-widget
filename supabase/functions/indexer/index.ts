@@ -45,6 +45,7 @@ async function upsertArticle(log: any) {
         publisher,
         price_wei: priceWei,
         active: true,
+        registration_status: 'registered',
         updated_at: new Date().toISOString(),
       })
       .eq('article_id_hash', articleIdHash);
@@ -59,6 +60,7 @@ async function upsertArticle(log: any) {
     publisher,
     price_wei: priceWei,
     active: true,
+    registration_status: 'registered',
     registered_at: new Date().toISOString(),
   });
 
