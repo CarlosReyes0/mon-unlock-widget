@@ -4,7 +4,7 @@ Let’s go👇
 
 1. TL;DR
 Quick wins ✅ Renamed to **Open Paywall** without breaking live embeds. Shipped global article-id protection (Supabase reserve + on-chain `ArticleTaken`). Deployed new Monad mainnet `ArticleUnlock` and cut production over.
-Challenges 😤 Article IDs were a silent takeover risk (same slug → overwrite). Deploy key briefly exposed in terminal logs — funds moved; treat that key as burned for ownership.
+Challenges 😤 Article IDs were a silent takeover risk (same slug → overwrite on the old contract). Mainnet cutover took longer than expected (tooling / env setup).
 What’s next 🔮 Smoke-test new contract end-to-end, land more publishers on Open Paywall, decide homepage / Phase 3 domain when ready.
 
 2. Highlights
@@ -15,18 +15,16 @@ What’s next 🔮 Smoke-test new contract end-to-end, land more publishers on O
 
 3. Lowlights
 • 😓 Slugs were globally unique in practice but the old contract **silently overwrote** on re-register — fixed only after cutover to the new bytecode
-• 😓 Deploy tooling friction (wrong directory, `.env` format, key ≠ funded wallet) slowed the mainnet deploy
-• 😓 Private key appeared in shell output during `.env` debugging — mitigated by moving funds; prefer a fresh owner key long-term
+• 😓 Deploy tooling friction (wrong directory, `.env` format, funded wallet mismatch) slowed the mainnet deploy
 • 😓 Old articles remain on `0x038446b1…` — no automatic migrate; new publishes use the new contract
 
 Being transparent so we can fix fast.
 
 4. Core Metrics
-• Registered articles (Supabase): **~53**
-• Distinct publishers: _(see dashboard)_
-• Succeeded fiat unlocks: **7**
-• On-chain unlocks: _(indexer on new contract — re-baseline after cutover)_
-(Pick the same 3 next week for trend.)
+• Registered articles (Supabase): **55**
+• Distinct publishers: **5**
+• On-chain unlock rows: **25** · Succeeded fiat unlocks: **7**
+(Re-baseline unlocks next week after the new-contract indexer cutover.)
 
 5. This Week’s Focus
 → Production smoke test on the new contract (register → sign → unlock MON + card)
@@ -39,9 +37,7 @@ Being transparent so we can fix fast.
 • Eyes on the agent publish flow (`/agents.md`) — where do agents still get stuck after the unpaid-402 hard stop?
 
 7. Shoutouts
-🙏 DeltaV / Monad for the runway to ship real mainnet contract upgrades
-🙏 Anyone who dogfooded the agent → `/register.html` → signed embed path
-Credit where it’s due.
+_(Optional — thank specific people who helped this week. Skip if none. Example: an advisor who reviewed the pitch, a writer who tested an embed, someone at DeltaV who unblocked you.)_
 
 ---
 
