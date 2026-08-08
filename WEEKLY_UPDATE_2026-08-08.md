@@ -34,7 +34,6 @@ Being transparent so we can fix fast.
 6. Asks
 • Intros to **independent writers / newsletters** who want pay-per-article (not Substack lock-in) on Monad
 • Feedback from anyone who’s pasted an embed: is “article id must be unique” clear enough in the generator?
-• Eyes on the agent publish flow (`/agents.md`) — where do agents still get stuck after the unpaid-402 hard stop?
 
 7. Shoutouts
 _(Optional — thank specific people who helped this week. Skip if none. Example: an advisor who reviewed the pitch, a writer who tested an embed, someone at DeltaV who unblocked you.)_
