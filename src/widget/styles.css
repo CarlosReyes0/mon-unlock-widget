@@ -2,7 +2,9 @@
 
 /* Hide embed content until unlocked (lives in page HTML, not shown twice) */
 mon-unlock [slot="teaser"],
-mon-unlock [slot="body"] {
+mon-unlock [slot="body"],
+open-paywall [slot="teaser"],
+open-paywall [slot="body"] {
   display: none !important;
 }
 
@@ -36,6 +38,7 @@ mon-unlock {
   font-family: var(--font-serif);
   line-height: 1.7;
   color: #374151;
+  text-align: left;
 }
 
 .mon-card.dark .mon-teaser {
@@ -57,6 +60,7 @@ mon-unlock {
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.6;
+  text-align: left;
 }
 
 .mon-card.dark .mon-title-box {
