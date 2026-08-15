@@ -61,5 +61,5 @@ Check off or delete items as you decide.
 ## Related docs
 
 - `FOCUS.md` — phase roadmap and out-of-scope rules
-- `WEEKLY_UPDATE_2026-08-01.md` — latest DeltaV-style progress writeup
+- `WEEKLY_UPDATE_2026-08-15.md` — latest DeltaV weekly (Pareen format); prior deep dive `WEEKLY_UPDATE_2026-08-01.md`
 - `agents.md` / `skill.md` — agent publish + 402 hard-stop
