@@ -207,8 +207,9 @@ This section only appears after unlock. In the live product, readers pay with Mo
           if (!brand || !lede) return;
           lede.style.marginLeft = "0px";
           const dx = firstGlyphLeft(lede) - firstGlyphLeft(brand);
-          if (Math.abs(dx) < 0.25) return;
-          lede.style.marginLeft = -dx + "px";
+          // Round O optically overshoots a flat U — bias lede left past box match.
+          const optical = Math.max(1.5, brand.getBoundingClientRect().height * 0.02);
+          lede.style.marginLeft = -dx - optical + "px";
         }
 
         const run = () => {
