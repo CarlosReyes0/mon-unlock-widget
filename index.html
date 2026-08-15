@@ -88,8 +88,6 @@
 
       .lede {
         margin: 0.75rem 0 0;
-        /* Flat U sits right of round O at these font sizes; keep in sync with alignHeroCopy optical bias */
-        margin-left: -4px;
         padding: 0;
         max-width: 28rem;
         color: var(--muted);
@@ -210,14 +208,17 @@ This section only appears after unlock. In the live product, readers pay with Mo
           lede.style.marginLeft = "0px";
           const dx = firstGlyphLeft(lede) - firstGlyphLeft(brand);
           // Round O optically overshoots a flat U — bias lede left past box match.
-          const optical = Math.max(1.5, brand.getBoundingClientRect().height * 0.02);
+          const optical = Math.max(4, brand.getBoundingClientRect().height * 0.035);
           lede.style.marginLeft = -dx - optical + "px";
         }
 
         const run = () => {
           alignHeroCopy();
-          // Re-run after layout settles (webfonts / wrap)
-          requestAnimationFrame(alignHeroCopy);
+          requestAnimationFrame(() => {
+            alignHeroCopy();
+            setTimeout(alignHeroCopy, 50);
+            setTimeout(alignHeroCopy, 250);
+          });
         };
 
         if (document.fonts && document.fonts.ready) {
