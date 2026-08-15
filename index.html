@@ -183,48 +183,5 @@ This section only appears after unlock. In the live product, readers pay with Mo
     </section>
 
     <script src="/site-nav.js"></script>
-    <script>
-      (function () {
-        function firstGlyphLeft(el) {
-          const node = el.firstChild;
-          if (!node || node.nodeType !== Node.TEXT_NODE) {
-            return el.getBoundingClientRect().left;
-          }
-          const range = document.createRange();
-          range.setStart(node, 0);
-          range.setEnd(node, 1);
-          return range.getBoundingClientRect().left;
-        }
-
-        function alignHeroCopy() {
-          const brand = document.querySelector(".brand");
-          const lede = document.querySelector(".lede");
-          if (!brand || !lede) return;
-          lede.style.marginLeft = "0px";
-          const dx = firstGlyphLeft(lede) - firstGlyphLeft(brand);
-          // Slight optical bias: round O reads left of flat U when ink edges match.
-          const optical = 2;
-          lede.style.marginLeft = -dx - optical + "px";
-        }
-
-        const run = () => {
-          alignHeroCopy();
-          requestAnimationFrame(() => {
-            alignHeroCopy();
-            setTimeout(alignHeroCopy, 50);
-            setTimeout(alignHeroCopy, 250);
-          });
-        };
-
-        if (document.fonts && document.fonts.ready) {
-          document.fonts.ready.then(run).catch(run);
-        } else if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", run);
-        } else {
-          run();
-        }
-        window.addEventListener("resize", alignHeroCopy);
-      })();
-    </script>
   </body>
 </html>
