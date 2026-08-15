@@ -88,8 +88,6 @@
 
       .lede {
         margin: 0.75rem 0 0;
-        /* Optical: flat “U” reads right of round “O” when boxes are flush */
-        margin-left: -0.18em;
         padding: 0;
         max-width: 28rem;
         color: var(--muted);
@@ -190,5 +188,44 @@ This section only appears after unlock. In the live product, readers pay with Mo
     </section>
 
     <script src="/site-nav.js"></script>
+    <script>
+      (function () {
+        function firstGlyphLeft(el) {
+          const node = el.firstChild;
+          if (!node || node.nodeType !== Node.TEXT_NODE) {
+            return el.getBoundingClientRect().left;
+          }
+          const range = document.createRange();
+          range.setStart(node, 0);
+          range.setEnd(node, 1);
+          return range.getBoundingClientRect().left;
+        }
+
+        function alignHeroCopy() {
+          const brand = document.querySelector(".brand");
+          const lede = document.querySelector(".lede");
+          if (!brand || !lede) return;
+          lede.style.marginLeft = "0px";
+          const dx = firstGlyphLeft(lede) - firstGlyphLeft(brand);
+          if (Math.abs(dx) < 0.25) return;
+          lede.style.marginLeft = -dx + "px";
+        }
+
+        const run = () => {
+          alignHeroCopy();
+          // Re-run after layout settles (webfonts / wrap)
+          requestAnimationFrame(alignHeroCopy);
+        };
+
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(run).catch(run);
+        } else if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", run);
+        } else {
+          run();
+        }
+        window.addEventListener("resize", alignHeroCopy);
+      })();
+    </script>
   </body>
 </html>
