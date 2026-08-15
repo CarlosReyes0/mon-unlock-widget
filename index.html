@@ -69,21 +69,28 @@
       }
 
       .hero-copy {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
         text-align: left;
       }
 
       .brand {
         margin: 0;
+        padding: 0;
         font-family: var(--font-serif);
         font-size: clamp(2.5rem, 8vw, 3.25rem);
         font-weight: 600;
         letter-spacing: -0.03em;
         line-height: 0.95;
         text-align: left;
+        /* Literata display caps hang left of DM Sans — optical nudge */
+        margin-left: 0.06em;
       }
 
       .lede {
         margin: 0.75rem 0 0;
+        padding: 0;
         max-width: 28rem;
         color: var(--muted);
         font-size: 1.05rem;
