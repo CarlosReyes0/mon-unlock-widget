@@ -25,6 +25,7 @@
         --paper: #fafaf9;
         --surface: #ffffff;
         --accent: #7c3aed;
+        --page-pad: 2rem;
         --font-serif: "Literata", Georgia, serif;
         --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
       }
@@ -50,26 +51,20 @@
         color: var(--accent);
       }
 
+      .wrap {
+        width: min(42rem, 100%);
+        margin: 0 auto;
+        padding-left: var(--page-pad);
+        padding-right: var(--page-pad);
+      }
+
       .hero {
-        padding: 1.25rem 1.75rem 1.75rem;
+        padding: 1.25rem 0 1.75rem;
         background: var(--surface);
       }
 
-      .hero-inner {
-        width: min(42rem, 100%);
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        text-align: left;
-      }
-
       .hero #site-nav {
-        margin-bottom: 0 !important;
-      }
-
-      .hero-copy {
-        text-align: left;
+        margin-bottom: 1.25rem !important;
       }
 
       .brand {
@@ -92,14 +87,9 @@
       }
 
       .demo {
-        padding: 1.75rem 1.75rem 2rem;
+        padding: 1.75rem 0 2rem;
         background: var(--paper);
         border-top: 1px solid var(--line);
-      }
-
-      .demo-inner {
-        width: min(42rem, 100%);
-        margin: 0 auto;
       }
 
       .demo-intro {
@@ -147,17 +137,15 @@
   </head>
   <body>
     <section class="hero" aria-label="Open Paywall">
-      <div class="hero-inner">
+      <div class="wrap">
         <div id="site-nav"></div>
-        <div class="hero-copy">
-          <h1 class="brand">Open Paywall</h1>
-          <p class="lede">Unlock premium content with Monad or fiat</p>
-        </div>
+        <h1 class="brand">Open Paywall</h1>
+        <p class="lede">Unlock premium content with Monad or fiat</p>
       </div>
     </section>
 
     <section class="demo" id="demo" aria-labelledby="demo-heading">
-      <div class="demo-inner">
+      <div class="wrap">
         <div class="demo-intro">
           <h2 id="demo-heading">See it in action</h2>
           <p>A live preview of the Open Paywall unlock experience.</p>
@@ -183,5 +171,48 @@ This section only appears after unlock. In the live product, readers pay with Mo
     </section>
 
     <script src="/site-nav.js"></script>
+    <script>
+      (function () {
+        function glyphLeft(el) {
+          const node = el.firstChild;
+          if (!node || node.nodeType !== Node.TEXT_NODE) {
+            return el.getBoundingClientRect().left;
+          }
+          const range = document.createRange();
+          range.setStart(node, 0);
+          range.setEnd(node, 1);
+          return range.getBoundingClientRect().left;
+        }
+
+        function alignOpenAndUnlock() {
+          const brand = document.querySelector(".brand");
+          const lede = document.querySelector(".lede");
+          if (!brand || !lede) return;
+          brand.style.marginLeft = "0px";
+          lede.style.marginLeft = "0px";
+          const dx = glyphLeft(lede) - glyphLeft(brand);
+          // Slight optical bias so flat U meets round O
+          lede.style.marginLeft = -dx - 1 + "px";
+        }
+
+        const run = () => {
+          alignOpenAndUnlock();
+          requestAnimationFrame(() => {
+            alignOpenAndUnlock();
+            setTimeout(alignOpenAndUnlock, 150);
+            setTimeout(alignOpenAndUnlock, 500);
+          });
+        };
+
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(run).catch(run);
+        } else if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", run);
+        } else {
+          run();
+        }
+        window.addEventListener("resize", alignOpenAndUnlock);
+      })();
+    </script>
   </body>
 </html>
