@@ -36,6 +36,8 @@ function fiatIntentErrorMessage(code: string | undefined): string {
     case "invalid_embed_sig":
     case "unsupported_contract":
       return "This embed was modified. Payments are blocked for your safety.";
+    case "amount_mismatch":
+      return "This embed price does not match the registered article price.";
     case "article_not_found":
       return "This article is not registered for payments yet.";
     default:

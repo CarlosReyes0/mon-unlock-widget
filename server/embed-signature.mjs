@@ -12,7 +12,18 @@ export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
 export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL];
 export const MAINNET_UNLOCK_CONTRACT =
   "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+/** ArticleUnlockUsdc on Monad mainnet — accepted for fiat auth alongside MON. */
+export const MAINNET_USDC_UNLOCK_CONTRACT =
+  "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
 export const MONAD_CHAIN_ID = 143;
+
+export function isOfficialUnlockContract(contract) {
+  const c = String(contract || "").trim().toLowerCase();
+  return (
+    c === MAINNET_UNLOCK_CONTRACT.toLowerCase() ||
+    c === MAINNET_USDC_UNLOCK_CONTRACT.toLowerCase()
+  );
+}
 
 export function buildEmbedSignMessage(
   { chainId, contract, articleId, priceWei },
@@ -51,7 +62,7 @@ export async function assertFiatEmbedAuthorized(input) {
   if (!contract.startsWith("0x") || contract.length !== 42) {
     return { ok: false, status: 400, error: "invalid_contract" };
   }
-  if (contract.toLowerCase() !== MAINNET_UNLOCK_CONTRACT.toLowerCase()) {
+  if (!isOfficialUnlockContract(contract)) {
     return { ok: false, status: 400, error: "unsupported_contract" };
   }
   if (!publisher.startsWith("0x") || publisher.length !== 42) {

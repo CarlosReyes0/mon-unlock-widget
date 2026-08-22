@@ -16,7 +16,7 @@
 import Stripe from "stripe";
 import { createHash, randomUUID } from "node:crypto";
 import { keccak256, toBytes } from "viem";
-import { assertFiatEmbedAuthorized } from "./embed-signature.mjs";
+import { assertFiatEmbedAuthorized, isOfficialUnlockContract, MAINNET_USDC_UNLOCK_CONTRACT } from "./embed-signature.mjs";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
@@ -100,12 +100,12 @@ export function articleIdHash(articleId) {
 export async function lookupArticle(articleId) {
   const hash = articleIdHash(articleId);
   const bySlug = await supabase(
-    `articles?select=article_id,article_id_hash,publisher,price_wei&article_id=eq.${encodeURIComponent(articleId)}&limit=1`
+    `articles?select=article_id,article_id_hash,publisher,price_wei,payment_asset&article_id=eq.${encodeURIComponent(articleId)}&limit=1`
   );
   if (Array.isArray(bySlug) && bySlug[0]) return bySlug[0];
 
   const byHash = await supabase(
-    `articles?select=article_id,article_id_hash,publisher,price_wei&article_id_hash=eq.${encodeURIComponent(hash)}&limit=1`
+    `articles?select=article_id,article_id_hash,publisher,price_wei,payment_asset&article_id_hash=eq.${encodeURIComponent(hash)}&limit=1`
   );
   if (Array.isArray(byHash) && byHash[0]) return byHash[0];
   return null;
@@ -155,17 +155,50 @@ export async function createPaymentIntent(input) {
     throw err;
   }
 
-  const auth = await assertFiatEmbedAuthorized({
-    embedSig,
-    contract,
-    articleId,
-    priceWei: article.price_wei,
-    publisher: article.publisher,
-  });
-  if (!auth.ok) {
-    const err = new Error(auth.error);
-    err.status = auth.status;
-    throw err;
+  const paymentAsset = String(article.payment_asset || "mon").toLowerCase();
+  if (!embedSig) {
+    // Short embeds (e.g. homepage): allow fiat when USD cents match registered USDC price.
+    if (paymentAsset !== "usdc") {
+      const err = new Error("missing_embed_sig");
+      err.status = 400;
+      throw err;
+    }
+    if (!isOfficialUnlockContract(contract)) {
+      const err = new Error("unsupported_contract");
+      err.status = 400;
+      throw err;
+    }
+    if (contract.toLowerCase() !== MAINNET_USDC_UNLOCK_CONTRACT.toLowerCase()) {
+      const err = new Error("unsupported_contract");
+      err.status = 400;
+      throw err;
+    }
+    let expectedCents;
+    try {
+      expectedCents = Number(BigInt(article.price_wei) / 10_000n);
+    } catch {
+      const err = new Error("invalid_price");
+      err.status = 400;
+      throw err;
+    }
+    if (!Number.isFinite(expectedCents) || expectedCents < 50 || amountUsdCents !== expectedCents) {
+      const err = new Error("amount_mismatch");
+      err.status = 400;
+      throw err;
+    }
+  } else {
+    const auth = await assertFiatEmbedAuthorized({
+      embedSig,
+      contract,
+      articleId,
+      priceWei: article.price_wei,
+      publisher: article.publisher,
+    });
+    if (!auth.ok) {
+      const err = new Error(auth.error);
+      err.status = auth.status;
+      throw err;
+    }
   }
 
   const sessionToken = randomUUID();

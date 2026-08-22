@@ -4,6 +4,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   EMBED_SIG_PREFIX_OPENPAYWALL,
   MAINNET_UNLOCK_CONTRACT,
+  MAINNET_USDC_UNLOCK_CONTRACT,
   assertFiatEmbedAuthorized,
   buildEmbedSignMessage,
 } from "./embed-signature.mjs";
@@ -80,6 +81,24 @@ test("assertFiatEmbedAuthorized accepts Open Paywall v1 signatures", async () =>
     contract: GOLDEN.contract,
     articleId: GOLDEN.articleId,
     priceWei: GOLDEN.priceWei,
+    publisher: account.address,
+  });
+  assert.equal(result.ok, true);
+});
+
+test("assertFiatEmbedAuthorized accepts USDC unlock contract", async () => {
+  const usdcGolden = {
+    ...GOLDEN,
+    contract: MAINNET_USDC_UNLOCK_CONTRACT,
+    priceWei: 500_000n,
+  };
+  const message = buildEmbedSignMessage(usdcGolden);
+  const embedSig = await account.signMessage({ message });
+  const result = await assertFiatEmbedAuthorized({
+    embedSig,
+    contract: MAINNET_USDC_UNLOCK_CONTRACT,
+    articleId: usdcGolden.articleId,
+    priceWei: usdcGolden.priceWei,
     publisher: account.address,
   });
   assert.equal(result.ok, true);
