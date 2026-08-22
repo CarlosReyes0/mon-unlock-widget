@@ -6,7 +6,8 @@ import {
   postCheckoutMessage,
   type CheckoutMessage,
 } from "../core/checkout-protocol.js";
-import { formatMon, parseMonAmount } from "../core/types.js";
+import { formatMon, formatUsd, parseMonAmount, parseUsdAmount } from "../core/types.js";
+import { resolvePaymentAsset } from "../core/payment-asset.js";
 import { estimateUsdcForMon, formatUsdc } from "../core/swap-usdc-to-mon.js";
 import { StripeFiatPay, stripeFiatEnabled } from "./StripeFiatPay.js";
 import { CryptoPaySection, cryptoPrivyConfigured } from "./CryptoPaySection.js";
@@ -19,6 +20,7 @@ type CheckoutQuery = {
   embedSig: string;
   parentOrigin: string;
   returnUrl: string | null;
+  paymentAsset: string;
 };
 
 function readQuery(): CheckoutQuery | null {
@@ -29,6 +31,7 @@ function readQuery(): CheckoutQuery | null {
   const contract = (params.get("contract")?.trim() ?? "") as Address;
   const embedSig = params.get("embedSig")?.trim() ?? "";
   const parentOrigin = params.get("parentOrigin")?.trim() ?? "";
+  const paymentAssetRaw = params.get("paymentAsset")?.trim() ?? "";
   const returnUrlRaw = params.get("returnUrl")?.trim() ?? "";
 
   if (!articleId || !price || !contract?.startsWith("0x") || !parentOrigin) {
@@ -52,7 +55,8 @@ function readQuery(): CheckoutQuery | null {
     }
   }
 
-  return { articleId, title, price, contract, embedSig, parentOrigin, returnUrl };
+  const paymentAsset = resolvePaymentAsset({ explicit: paymentAssetRaw, contract });
+  return { articleId, title, price, contract, embedSig, parentOrigin, returnUrl, paymentAsset };
 }
 
 function hasOpener(): boolean {
@@ -136,13 +140,26 @@ export function CheckoutApp() {
   const [phaseDone, setPhaseDone] = useState(false);
   const [showCrypto, setShowCrypto] = useState(!stripeFiatEnabled());
 
-  const priceWei = query ? parseMonAmount(query.price) : 0n;
-  const priceLabel = query ? formatMon(priceWei) : "—";
+  const settleUsdc = query?.paymentAsset === "usdc";
+  const priceWei = query
+    ? settleUsdc
+      ? parseUsdAmount(query.price)
+      : parseMonAmount(query.price)
+    : 0n;
+  const priceLabel = query
+    ? settleUsdc
+      ? formatUsd(priceWei)
+      : formatMon(priceWei)
+    : "—";
   const hasPrivy = cryptoPrivyConfigured();
 
   useEffect(() => {
     if (!query || priceWei <= 0n) {
       setUsdEstimate(null);
+      return;
+    }
+    if (settleUsdc) {
+      setUsdEstimate(formatUsd(priceWei));
       return;
     }
     let cancelled = false;
@@ -190,9 +207,11 @@ export function CheckoutApp() {
     );
   }
 
-  const amountUsdCents = usdEstimate
-    ? Math.max(50, Math.round(Number.parseFloat(usdEstimate) * 100))
-    : null;
+  const amountUsdCents = settleUsdc
+    ? Math.max(50, Math.round(Number.parseFloat(priceLabel) * 100))
+    : usdEstimate
+      ? Math.max(50, Math.round(Number.parseFloat(usdEstimate) * 100))
+      : null;
 
   const onFiatUnlocked = (sessionToken: string) => {
     setPhaseDone(true);
@@ -216,7 +235,11 @@ export function CheckoutApp() {
         <h1>Unlock article</h1>
         <p className="checkout-title">{query.title}</p>
         <p className="checkout-price">
-          {usdEstimate ? (
+          {settleUsdc ? (
+            <>
+              ${priceLabel} <span>USDC</span>
+            </>
+          ) : usdEstimate ? (
             <>
               ${usdEstimate} <span>USD</span>
               <span className="checkout-usd"> · {priceLabel} MON</span>
@@ -273,6 +296,7 @@ export function CheckoutApp() {
             contract={query.contract}
             embedSig={query.embedSig}
             usdEstimate={usdEstimate}
+            paymentAsset={query.paymentAsset}
             onCloseWith={onCryptoClose}
             disabled={fiatBusy || phaseDone}
           />

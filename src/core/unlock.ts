@@ -2,14 +2,17 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  erc20Abi,
   http,
   keccak256,
+  maxUint256,
   toBytes,
   type Address,
   type Hash,
 } from "viem";
 import { monadMainnet } from "./chains.js";
 import { assertEmbedAuthorized, EmbedSignatureError } from "./embed-signature.js";
+import { MONAD_USDC } from "./swap-usdc-to-mon.js";
 import type { Eip1193Provider } from "./wallet.js";
 import type { UnlockRecord } from "./types.js";
 
@@ -275,5 +278,87 @@ export class OnchainUnlockService {
     })) as Hash;
 
     return txHash;
+  }
+
+  /**
+   * Pay USDC on ArticleUnlockUsdc — publisher receives USDC (no swap to MON).
+   * Reader must hold USDC + a tiny MON balance for gas.
+   */
+  async unlockWithUsdc(
+    articleId: string,
+    wallet: string,
+    priceUsdc: bigint,
+    embedSig?: string
+  ): Promise<UnlockRecord> {
+    const eth = this.getEthProvider();
+    if (!eth) throw new Error("No wallet connected. Connect your wallet and try again.");
+
+    const publicClient = createPublicClient({ chain: this.chain, transport: custom(eth) });
+    const walletClient = createWalletClient({ chain: this.chain, transport: custom(eth) });
+
+    const account = wallet as Address;
+    const articleIdBytes = toArticleId(articleId);
+
+    try {
+      await assertEmbedAuthorized({
+        embedSig,
+        articleId,
+        priceWei: priceUsdc,
+        contractAddress: this.contractAddress,
+        publicClient,
+      });
+    } catch (e) {
+      if (e instanceof EmbedSignatureError) throw e;
+      throw e;
+    }
+
+    const allowance = (await publicClient.readContract({
+      address: MONAD_USDC,
+      abi: erc20Abi,
+      functionName: "allowance",
+      args: [account, this.contractAddress],
+    })) as bigint;
+
+    if (allowance < priceUsdc) {
+      const approveHash = (await walletClient.writeContract({
+        account,
+        address: MONAD_USDC,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [this.contractAddress, maxUint256],
+        gas: 100000n,
+      })) as Hash;
+      await publicClient.waitForTransactionReceipt({ hash: approveHash });
+    }
+
+    const txHash = (await walletClient.writeContract({
+      account,
+      address: this.contractAddress,
+      abi: [
+        {
+          name: "unlock",
+          type: "function",
+          stateMutability: "nonpayable",
+          inputs: [{ name: "articleId", type: "bytes32" }],
+          outputs: [],
+        },
+      ],
+      functionName: "unlock",
+      args: [articleIdBytes],
+      gas: 250000n,
+    })) as Hash;
+
+    await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+    const record: UnlockRecord = {
+      articleId,
+      wallet,
+      unlockedAt: Date.now(),
+      mode: "onchain",
+      txHash,
+    };
+
+    this.store.record(record);
+    return record;
   }
 }

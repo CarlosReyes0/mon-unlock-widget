@@ -149,6 +149,13 @@
       const CONTRACT = NETWORKS[143].contract;
 
       // Inlined helpers (from src/core/types.ts) so the page works in static production
+      function formatUsdAmount(amount, decimals = 6) {
+        const neg = amount < 0n; if (neg) amount = -amount;
+        const base = 10n ** BigInt(decimals);
+        const whole = amount / base;
+        const frac = (amount % base).toString().padStart(decimals, "0").slice(0, 2);
+        return `${neg ? "-" : ""}${whole}.${frac}`;
+      }
       function formatMon(amount, decimals = 18) {
         const divisor = 10n ** BigInt(decimals);
         const whole = amount / divisor;
@@ -311,9 +318,11 @@
             articleId: a.article_id || "",
             articleIdHash: a.article_id_hash,
             priceMon: BigInt(a.price_wei),
+            paymentAsset: a.payment_asset || "mon",
             active: a.active,
             unlockCount: stats[a.article_id_hash]?.count || 0,
             revenueMon: stats[a.article_id_hash]?.revenue || 0n,
+            paymentAsset: a.payment_asset || "mon",
             title: a.article_id || a.article_id_hash,
             teaser: a.teaser,
             body: a.body,
@@ -348,9 +357,9 @@
           const row = document.createElement("tr");
           row.innerHTML = `
             <td class="mono">${a.displayId}</td>
-            <td>${formatMon(a.priceMon)} MON</td>
+            <td>${a.paymentAsset === "usdc" ? `$${formatUsdAmount(a.priceMon)} USDC` : `${formatMon(a.priceMon)} MON`}</td>
             <td>${a.unlockCount ?? 0}</td>
-            <td>${formatMon(a.revenueMon ?? 0n)} MON</td>
+            <td>${a.paymentAsset === "usdc" ? `$${formatUsdAmount(a.revenueMon ?? 0n)} USDC` : `${formatMon(a.revenueMon ?? 0n)} MON`}</td>
             <td>
               <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-idx="${idx}" ${a.hasSlug ? "" : "disabled title=\"Set slug via generator before copying embed\""}>${a.hasSlug ? "Copy embed" : "Slug required"}</button>
             </td>
@@ -506,7 +515,14 @@ ${teaser}
         const totalUnlocks = myArticles.reduce((sum, a) => sum + (a.unlockCount ?? 0), 0);
         const totalRevenue = myArticles.reduce((sum, a) => sum + (a.revenueMon ?? 0n), 0n);
         document.getElementById("totalUnlocks").textContent = totalUnlocks;
-        document.getElementById("totalRevenue").textContent = formatMon(totalRevenue) + " MON";
+        const usdcArts = myArticles.filter(a => a.paymentAsset === "usdc");
+        const monArts = myArticles.filter(a => a.paymentAsset !== "usdc");
+        const usdcRev = usdcArts.reduce((s,a)=>s+(a.revenueMon??0n),0n);
+        const monRev = monArts.reduce((s,a)=>s+(a.revenueMon??0n),0n);
+        const parts = [];
+        if (usdcRev > 0n) parts.push(`$${formatUsdAmount(usdcRev)} USDC`);
+        if (monRev > 0n) parts.push(`${formatMon(monRev)} MON`);
+        document.getElementById("totalRevenue").textContent = parts.join(" · ") || "0";
       }
 
       function getInjectedProvider() {

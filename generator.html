@@ -183,8 +183,14 @@
               <input id="author" type="text" placeholder="Your Name" autocomplete="name" enterkeyhint="next" />
             </div>
             <div>
-              <label for="price">Price (MON)</label>
-              <input id="price" type="number" inputmode="decimal" step="0.1" min="0.1" value="5" />
+              <label for="paymentAsset">Payment asset</label>
+              <select id="paymentAsset">
+                <option value="usdc">USDC (USD — recommended)</option>
+                <option value="mon">MON (legacy)</option>
+              </select>
+              <p class="hint" id="assetHint">Readers pay USDC; you receive USDC. MON is only used for gas.</p>
+              <label for="price" id="priceLabel">Price (USD)</label>
+              <input id="price" type="number" inputmode="decimal" step="0.01" min="0.01" value="0.50" />
             </div>
           </div>
 
@@ -292,6 +298,48 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+      // Set after deploying ArticleUnlockUsdc (forge script script/DeployUsdc.s.sol)
+      const USDC_UNLOCK_CONTRACT = (window.__USDC_UNLOCK_CONTRACT__ || localStorage.getItem("usdcUnlockContract") || "").trim();
+      const MONAD_USDC = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603";
+      function selectedAsset() {
+        const el = document.getElementById("paymentAsset");
+        const v = (el && el.value) || "usdc";
+        if (v === "usdc" && !/^0x[a-fA-F0-9]{40}$/.test(USDC_UNLOCK_CONTRACT)) return "mon";
+        return v;
+      }
+      function activeContract() {
+        return selectedAsset() === "usdc" ? USDC_UNLOCK_CONTRACT : MAINNET_CONTRACT;
+      }
+      async function parsePriceUnits(priceStr, asset, viem) {
+        if (asset === "usdc") return viem.parseUnits(priceStr || "0.50", 6);
+        return viem.parseEther(priceStr || "1");
+      }
+      function syncAssetUi() {
+        const asset = selectedAsset();
+        const label = document.getElementById("priceLabel");
+        const hint = document.getElementById("assetHint");
+        const price = document.getElementById("price");
+        const select = document.getElementById("paymentAsset");
+        if (select && !/^0x[a-fA-F0-9]{40}$/.test(USDC_UNLOCK_CONTRACT)) {
+          // No USDC contract deployed yet — keep control visible but force MON.
+          const usdcOpt = select.querySelector('option[value="usdc"]');
+          if (usdcOpt) usdcOpt.textContent = "USDC (deploy contract to enable)";
+          if (select.value === "usdc") select.value = "mon";
+        }
+        const a = selectedAsset();
+        if (label) label.textContent = a === "usdc" ? "Price (USD)" : "Price (MON)";
+        if (hint) hint.textContent = a === "usdc"
+          ? "Readers pay USDC; you receive USDC. MON is only used for gas."
+          : "Legacy path: readers pay native MON. Existing embeds keep working.";
+        if (price && a === "usdc" && (price.value === "5" || price.value === "5.0")) {
+          price.value = "0.50";
+          price.step = "0.01";
+          price.min = "0.01";
+        }
+      }
+      document.getElementById("paymentAsset")?.addEventListener("change", syncAssetUi);
+      syncAssetUi();
+
       const WIDGET_VERSION = "20240714"; // bump this when widget behavior changes
 
       function looksLikeHtml(text) {
@@ -760,7 +808,7 @@
           chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
           transport: custom(eth),
         });
-        const message = buildEmbedSignMessage(143, MAINNET_CONTRACT, articleId, priceWei);
+        const message = buildEmbedSignMessage(143, activeContract(), articleId, priceWei);
         return walletClient.signMessage({ account, message });
       }
 
@@ -783,7 +831,8 @@
   title="${v.title}"
   author="${v.author}"
   price="${v.price}"
-  unlock-contract="${MAINNET_CONTRACT}"
+  unlock-contract="${activeContract()}"
+  payment-asset="${selectedAsset()}"
   walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
@@ -893,7 +942,9 @@ ${teaserEsc}
               const { keccak256, toBytes, createWalletClient, custom, parseEther, createPublicClient, http } = await import("https://esm.sh/viem@2");
 
               const articleIdBytes = keccak256(toBytes(v.articleId));
-              const priceWei = parseEther(v.price || "1");
+              const priceWei = selectedAsset() === "usdc"
+                ? (await import("https://esm.sh/viem@2")).parseUnits(v.price || "0.50", 6)
+                : parseEther(v.price || "1");
 
               // Helper that performs the actual registration (chain switch + write)
               async function doRegister() {
@@ -932,7 +983,7 @@ ${teaserEsc}
                 });
 
                 await walletClient.writeContract({
-                  address: MAINNET_CONTRACT,
+                  address: activeContract(),
                   abi: [
                     {
                       name: "registerArticle",
@@ -1046,7 +1097,7 @@ ${teaserEsc}
 
               try {
                 const existing = await publicClient.readContract({
-                  address: MAINNET_CONTRACT,
+                  address: activeContract(),
                   abi: [
                     {
                       name: "getArticle",
@@ -1122,7 +1173,10 @@ ${teaserEsc}
             let embedSig = "";
             try {
               const eth = getInjectedProvider();
-              const priceWei = (await import("https://esm.sh/viem@2")).parseEther(v.price || "1");
+              const _viem = await import("https://esm.sh/viem@2");
+              const priceWei = selectedAsset() === "usdc"
+                ? _viem.parseUnits(v.price || "0.50", 6)
+                : _viem.parseEther(v.price || "1");
               status.textContent = "Signing embed…";
               embedSig = await signEmbed(eth, connectedWallet, v.articleId, priceWei);
             } catch (e) {
@@ -1145,7 +1199,9 @@ ${teaserEsc}
               const metaPayload = {
                 slug: v.articleId,
                 articleIdHash: keccak256(toBytes(v.articleId)),
-                priceWei: parseEther(v.price || "1").toString(),
+                priceWei: (selectedAsset() === "usdc"
+                  ? (await import("https://esm.sh/viem@2")).parseUnits(v.price || "0.50", 6)
+                  : parseEther(v.price || "1")).toString(),
                 publisher: connectedWallet,
                 teaser: v.teaser,
                 body: v.body,
@@ -1196,7 +1252,8 @@ ${teaserEsc}
   title="${v.title}"
   author="${v.author}"
   price="${v.price}"
-  unlock-contract="${MAINNET_CONTRACT}"
+  unlock-contract="${activeContract()}"
+  payment-asset="${selectedAsset()}"
   embed-sig="${embedSig}"
   walletconnect-project-id="${WC_PROJECT_ID}"
 >

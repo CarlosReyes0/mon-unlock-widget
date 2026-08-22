@@ -7,8 +7,9 @@ import {
   type CheckoutMessage,
 } from "../core/checkout-protocol.js";
 import { OnchainUnlockService } from "../core/unlock.js";
-import { formatMon, parseMonAmount } from "../core/types.js";
+import { formatMon, formatUsd, parseMonAmount, parseUsdAmount } from "../core/types.js";
 import { monadMainnet } from "../core/chains.js";
+import { normalizePaymentAsset, type PaymentAsset } from "../core/payment-asset.js";
 import {
   cardFundGasMonConfig,
   cardFundUsdcConfig,
@@ -30,24 +31,30 @@ const GAS_RESERVE = parseEther("0.05");
 type Props = {
   articleId: string;
   title: string;
+  /** MON amount, or USD amount when paymentAsset is "usdc". */
   price: string;
   contract: Address;
   embedSig: string;
   usdEstimate: string | null;
+  /** "usdc" = settle USDC to publisher (no swap). "mon" = legacy native MON path. */
+  paymentAsset?: PaymentAsset | string;
   onCloseWith: (message: CheckoutMessage) => void;
   disabled?: boolean;
 };
 
-/** Privy + Coinbase crypto unlock path (must render inside PrivyProvider). */
+/** Privy + Coinbase crypto unlock (must render inside PrivyProvider). */
 export function CryptoPaySection({
   articleId,
   price,
   contract,
   embedSig,
   usdEstimate,
+  paymentAsset: paymentAssetProp = "mon",
   onCloseWith,
   disabled = false,
 }: Props) {
+  const settleUsdc = normalizePaymentAsset(paymentAssetProp) === "usdc";
+
   const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
   const { fundWallet } = useFundWallet();
@@ -60,8 +67,9 @@ export function CryptoPaySection({
 
   const embedded = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
   const address = embedded?.address ?? null;
-  const priceWei = parseMonAmount(price);
-  const priceLabel = formatMon(priceWei);
+
+  const priceUnits = settleUsdc ? parseUsdAmount(price) : parseMonAmount(price);
+  const priceLabel = settleUsdc ? formatUsd(priceUnits) : formatMon(priceUnits);
 
   const refreshBalances = useCallback(async () => {
     if (!address) {
@@ -119,13 +127,11 @@ export function CryptoPaySection({
     return false;
   };
 
-  const buyUsdc = async () => {
+  const buyUsdcAmount = async (amount: string) => {
     if (!address) return;
     setPhase("funding");
     setError(null);
     try {
-      const need = await estimateUsdcForMon(priceWei + GAS_RESERVE);
-      const amount = formatUsdc(need);
       const viaCoinbase = await openCardBuy(address, "USDC", amount);
       if (viaCoinbase) {
         setError("Finish buying USDC in the Coinbase tab, then tap Pay with USDC.");
@@ -144,13 +150,26 @@ export function CryptoPaySection({
     }
   };
 
+  const buyUsdc = async () => {
+    if (settleUsdc) {
+      await buyUsdcAmount(formatUsd(priceUnits));
+      return;
+    }
+    try {
+      const need = await estimateUsdcForMon(priceUnits + GAS_RESERVE);
+      await buyUsdcAmount(formatUsdc(need));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open USDC checkout.");
+    }
+  };
+
   const receiveMon = async () => {
     if (!address) return;
     setPhase("funding");
     setError(null);
     try {
       const { mon } = await refreshBalances();
-      const need = priceWei + GAS_RESERVE;
+      const need = settleUsdc ? GAS_RESERVE : priceUnits + GAS_RESERVE;
       const shortfall = need > mon ? need - mon : need;
       await fundWallet({
         address,
@@ -163,6 +182,7 @@ export function CryptoPaySection({
     }
   };
 
+  /** Legacy: fund/swap USDC → MON, then native unlock. */
   const convertUsdcAndPrepare = async (): Promise<boolean> => {
     if (!address || !embedded) return false;
     const gasOk = await ensureGasMon();
@@ -172,7 +192,7 @@ export function CryptoPaySection({
     setError(null);
 
     let { mon, usdc } = await refreshBalances();
-    const needMon = priceWei + GAS_RESERVE;
+    const needMon = priceUnits + GAS_RESERVE;
     if (mon >= needMon) return true;
 
     const monShortfall = needMon > mon ? needMon - mon : needMon;
@@ -213,7 +233,7 @@ export function CryptoPaySection({
       minMonOut: monShortfall,
     });
     ({ mon } = await refreshBalances());
-    if (mon < priceWei) {
+    if (mon < priceUnits) {
       setError("Swap finished but MON balance is still short. Tap Pay with USDC again.");
       setPhase("ready");
       return false;
@@ -221,12 +241,23 @@ export function CryptoPaySection({
     return true;
   };
 
+  const emitUnlocked = (addr: string, hash?: string | null) => {
+    onCloseWith({
+      source: CHECKOUT_MESSAGE_SOURCE,
+      type: "mon:unlocked",
+      articleId,
+      address: addr,
+      ...(hash ? { txHash: hash } : {}),
+      mode: "onchain",
+    });
+  };
+
   const payWithMon = async () => {
     if (!address || !embedded) return;
     setError(null);
     try {
       const { mon } = await refreshBalances();
-      if (mon < priceWei + parseEther("0.01")) {
+      if (mon < priceUnits + parseEther("0.01")) {
         setError("Not enough MON. Use Pay with USDC, or Receive MON.");
         return;
       }
@@ -240,27 +271,14 @@ export function CryptoPaySection({
       const already = await service.checkOnchainAccess(articleId, address);
       if (already) {
         setPhase("done");
-        onCloseWith({
-          source: CHECKOUT_MESSAGE_SOURCE,
-          type: "mon:unlocked",
-          articleId,
-          address,
-          mode: "onchain",
-        });
+        emitUnlocked(address);
         return;
       }
 
-      const record = await service.unlock(articleId, address, priceWei, embedSig || undefined);
+      const record = await service.unlock(articleId, address, priceUnits, embedSig || undefined);
       setTxHash(record.txHash ?? null);
       setPhase("done");
-      onCloseWith({
-        source: CHECKOUT_MESSAGE_SOURCE,
-        type: "mon:unlocked",
-        articleId,
-        address,
-        txHash: record.txHash,
-        mode: "onchain",
-      });
+      emitUnlocked(address, record.txHash);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Payment failed.";
       if (/insufficient|funds|balance/i.test(msg)) {
@@ -273,8 +291,71 @@ export function CryptoPaySection({
     }
   };
 
-  const payWithUsdc = async () => {
+  /** Settle USDC on ArticleUnlockUsdc — publisher receives USDC (no MON conversion). */
+  const paySettleUsdc = async () => {
     if (!address || !embedded) return;
+    setError(null);
+    try {
+      const gasOk = await ensureGasMon();
+      if (!gasOk) return;
+
+      let { usdc } = await refreshBalances();
+      if (usdc < priceUnits) {
+        setPhase("funding");
+        const amount = formatUsd(priceUnits);
+        const viaCoinbase = await openCardBuy(address, "USDC", amount);
+        if (!viaCoinbase) {
+          try {
+            await fundWallet({ address, options: cardFundUsdcConfig(amount) });
+          } catch {
+            openRampBuy(address, "MONAD_USDC");
+          }
+        }
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          ({ usdc } = await refreshBalances());
+          if (usdc >= priceUnits) break;
+        }
+        if (usdc < priceUnits) {
+          setError("USDC is still arriving. When it shows in your balance, tap Pay with USDC.");
+          setPhase("ready");
+          return;
+        }
+      }
+
+      setPhase("paying");
+      await embedded.switchChain(monad.id);
+      const provider = await embedded.getEthereumProvider();
+      const service = new OnchainUnlockService(contract);
+      service.setProvider(provider);
+
+      const already = await service.checkOnchainAccess(articleId, address);
+      if (already) {
+        setPhase("done");
+        emitUnlocked(address);
+        return;
+      }
+
+      const record = await service.unlockWithUsdc(
+        articleId,
+        address,
+        priceUnits,
+        embedSig || undefined
+      );
+      setTxHash(record.txHash ?? null);
+      setPhase("done");
+      emitUnlocked(address, record.txHash);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "USDC payment failed.");
+      setPhase("error");
+    }
+  };
+
+  const payWithUsdcButton = async () => {
+    if (settleUsdc) {
+      await paySettleUsdc();
+      return;
+    }
     setError(null);
     try {
       const readyToPay = await convertUsdcAndPrepare();
@@ -288,12 +369,16 @@ export function CryptoPaySection({
 
   const pay = async () => {
     if (!address) return;
+    if (settleUsdc) {
+      await paySettleUsdc();
+      return;
+    }
     const { mon } = await refreshBalances();
-    if (mon >= priceWei + parseEther("0.01")) {
+    if (mon >= priceUnits + parseEther("0.01")) {
       await payWithMon();
       return;
     }
-    await payWithUsdc();
+    await payWithUsdcButton();
   };
 
   if (!ready) {
@@ -315,6 +400,22 @@ export function CryptoPaySection({
       </>
     );
   }
+
+  const primaryLabel = settleUsdc
+    ? phase === "funding"
+      ? "Adding funds…"
+      : phase === "paying"
+        ? "Paying…"
+        : `Pay $${priceLabel} USDC`
+    : phase === "funding"
+      ? "Adding funds…"
+      : phase === "swapping"
+        ? "Converting…"
+        : phase === "paying"
+          ? "Paying…"
+          : usdEstimate
+            ? `Pay ≈ $${usdEstimate} (crypto)`
+            : `Pay ${priceLabel} MON`;
 
   return (
     <>
@@ -341,24 +442,18 @@ export function CryptoPaySection({
           disabled={busy || !address}
           onClick={() => void pay()}
         >
-          {phase === "funding"
-            ? "Adding funds…"
-            : phase === "swapping"
-              ? "Converting…"
-              : phase === "paying"
-                ? "Paying…"
-                : usdEstimate
-                  ? `Pay ≈ $${usdEstimate} (crypto)`
-                  : `Pay ${priceLabel} MON`}
+          {primaryLabel}
         </button>
-        <button
-          type="button"
-          className="checkout-btn ghost"
-          disabled={busy || !address}
-          onClick={() => void payWithUsdc()}
-        >
-          Pay with USDC
-        </button>
+        {!settleUsdc ? (
+          <button
+            type="button"
+            className="checkout-btn ghost"
+            disabled={busy || !address}
+            onClick={() => void payWithUsdcButton()}
+          >
+            Pay with USDC
+          </button>
+        ) : null}
         <button
           type="button"
           className="checkout-btn ghost"
@@ -373,11 +468,13 @@ export function CryptoPaySection({
           disabled={busy || !address}
           onClick={() => void receiveMon()}
         >
-          Receive MON
+          {settleUsdc ? "Receive MON (gas)" : "Receive MON"}
         </button>
       </div>
       <p className="checkout-hint">
-        Crypto path funds via Coinbase, settles MON on-chain to the publisher.
+        {settleUsdc
+          ? "You pay USDC on Monad. The publisher receives USDC — nothing is converted to MON (MON is only for gas)."
+          : "Legacy path: funds via Coinbase, may swap USDC → MON, then pays MON on-chain."}
       </p>
       <button type="button" className="checkout-link" onClick={() => logout()}>
         Use a different account

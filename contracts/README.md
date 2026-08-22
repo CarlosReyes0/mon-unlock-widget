@@ -96,3 +96,19 @@ event ArticleUnlocked(
 ```
 
 Use explorer link + this event for “Paid X MON” proof in the UI.
+
+## USDC unlock (ArticleUnlockUsdc)
+
+Path A: keep the native MON `ArticleUnlock` live for existing embeds. Deploy `ArticleUnlockUsdc` for new USD-priced articles.
+
+```bash
+export PRIVATE_KEY=...
+export USDC_TOKEN=0x754704Bc059F8C67012fEd69BC8A327a5aafb603
+# optional demo publisher
+export PUBLISHER_ADDRESS=0x...
+
+forge script script/DeployUsdc.s.sol --rpc-url https://rpc.monad.xyz --broadcast -vvvv
+```
+
+Then set `VITE_USDC_UNLOCK_CONTRACT` (app) and `USDC_CONTRACT_ADDRESS` (indexer) to the deployed address.
+Publishers receive USDC; readers only need a tiny MON balance for gas.

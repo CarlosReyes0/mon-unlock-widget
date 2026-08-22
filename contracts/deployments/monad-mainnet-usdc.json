@@ -1,0 +1,9 @@
+{
+  "network": "monad-mainnet",
+  "chainId": 143,
+  "rpcUrl": "https://rpc.monad.xyz",
+  "usdcToken": "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+  "contract": null,
+  "status": "pending_deploy",
+  "notes": "ArticleUnlockUsdc \u2014 publishers receive USDC. Deploy with forge script script/DeployUsdc.s.sol. Leave MON ArticleUnlock (0x27cA0c\u2026) live for existing embeds (path A)."
+}

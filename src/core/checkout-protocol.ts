@@ -49,6 +49,8 @@ export type CheckoutParams = {
   parentOrigin: string;
   /** Full article page URL — used to send mobile / same-tab users back after pay. */
   returnUrl?: string;
+  /** "usdc" settles USDC to publisher; omit/mon = legacy MON path. */
+  paymentAsset?: string;
 };
 
 export function getCheckoutBaseUrl(): string {
@@ -80,6 +82,7 @@ export function buildCheckoutUrl(params: CheckoutParams, baseUrl = getCheckoutBa
   url.searchParams.set("contract", params.contract);
   if (params.embedSig) url.searchParams.set("embedSig", params.embedSig);
   url.searchParams.set("parentOrigin", params.parentOrigin);
+  if (params.paymentAsset) url.searchParams.set("paymentAsset", params.paymentAsset);
   if (params.returnUrl) {
     try {
       const ret = new URL(params.returnUrl);

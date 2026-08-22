@@ -8,7 +8,9 @@ import {
   WalletManager,
   monadMainnet,
   formatMon,
+  formatUsd,
   parseMonAmount,
+  parseUsdAmount,
   truncateAddress,
   hasReliableInjectedProvider,
   buildCheckoutUrl,
@@ -19,6 +21,7 @@ import {
   type WalletState,
   looksLikeHtml,
   sanitizeRichHtml,
+  resolvePaymentAsset,
 } from "../core/index.js";
 import "./styles.css";
 
@@ -42,6 +45,8 @@ export class MonUnlock extends LitElement {
   @property({ type: String, attribute: "unlock-contract" }) unlockContract = "";
   /** Publisher signature authorizing this embed (required with unlock-contract) */
   @property({ type: String, attribute: "embed-sig" }) embedSig = "";
+  /** "usdc" = USD price settled in USDC; omit/mon = legacy MON */
+  @property({ type: String, attribute: "payment-asset" }) paymentAsset = "";
   /** WalletConnect Project ID (enables mobile connection via WalletConnect) */
   @property({ type: String, attribute: "walletconnect-project-id" }) walletConnectProjectId = "";
 
@@ -475,6 +480,10 @@ export class MonUnlock extends LitElement {
         contract: this.unlockContract.trim(),
         embedSig: this.embedSig,
         parentOrigin: window.location.origin,
+        paymentAsset: resolvePaymentAsset({
+          explicit: this.paymentAsset,
+          contract: this.unlockContract.trim(),
+        }),
       })).origin;
     } catch {
       return;
@@ -589,6 +598,10 @@ export class MonUnlock extends LitElement {
       embedSig: this.embedSig,
       parentOrigin: window.location.origin,
       returnUrl: window.location.href,
+      paymentAsset: resolvePaymentAsset({
+        explicit: this.paymentAsset,
+        contract: this.unlockContract.trim(),
+      }),
     });
 
     // Mobile: same-tab navigation so Apple Pay can return to the article reliably.
@@ -772,12 +785,25 @@ export class MonUnlock extends LitElement {
       }
 
       if (needsPayment) {
-        const record = await this.unlockService.unlock(
-          this.article.id,
-          address,
-          this.article.priceMon,
-          this.embedSig || undefined
-        );
+        const asset = resolvePaymentAsset({
+          explicit: this.paymentAsset,
+          contract: this.unlockContract.trim(),
+        });
+        const onchain = this.unlockService as OnchainUnlockService;
+        const record =
+          asset === "usdc" && this.isOnchain
+            ? await onchain.unlockWithUsdc(
+                this.article.id,
+                address,
+                parseUsdAmount(this.price),
+                this.embedSig || undefined
+              )
+            : await this.unlockService.unlock(
+                this.article.id,
+                address,
+                this.article.priceMon,
+                this.embedSig || undefined
+              );
         if (record.txHash) this.txHash = record.txHash;
         this.emit("mon:unlocked", { article: this.article, record });
       }
@@ -815,7 +841,13 @@ export class MonUnlock extends LitElement {
     }
 
     const a = this.article;
-    const price = formatMon(a.priceMon);
+    const asset = resolvePaymentAsset({
+      explicit: this.paymentAsset,
+      contract: this.unlockContract.trim(),
+    });
+    const price =
+      asset === "usdc" ? this.price : formatMon(a.priceMon);
+    const priceUnit = asset === "usdc" ? "USDC" : "MON";
 
     return html`
       <article class="mon-card ${classMap({ dark: this.theme === "dark" })}">
@@ -839,7 +871,7 @@ export class MonUnlock extends LitElement {
                 <p class="mt-6 text-xs text-black">
                   Unlocked · ${this.unlockedStatusLabel()}
                   ${this.txHash
-                    ? html`· <a href="https://monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} MON ↗</a>`
+                    ? html`· <a href="https://monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} ${priceUnit} ↗</a>`
                     : nothing}
                 </p>
               `
@@ -847,11 +879,13 @@ export class MonUnlock extends LitElement {
                 <div class="mon-title-box whitespace-pre-wrap">${a.teaser}</div>
                 <div class="mt-6 rounded-xl border border-violet-100 bg-violet-50/80 p-5 dark:border-violet-900/40 dark:bg-violet-950/30">
                   <p class="text-sm font-medium">
-                    Unlock for <span class="text-violet-700 dark:text-violet-300">${price} MON</span>
+                    Unlock for <span class="text-violet-700 dark:text-violet-300">${price} ${priceUnit}</span>
                   </p>
                   <p class="mt-1 text-xs text-stone-500">
                     ${this.isOnchain
-                      ? "Pay with MON on Monad. Continue with email, or use MetaMask."
+                      ? asset === "usdc"
+                        ? "Pay with USDC on Monad. Continue with email, or use MetaMask."
+                        : "Pay with MON on Monad. Continue with email, or use MetaMask."
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">${this.renderUnlockActions()}</div>
