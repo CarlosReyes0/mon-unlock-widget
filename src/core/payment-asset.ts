@@ -7,15 +7,17 @@ export const MONAD_USDC_ADDRESS =
   "0x754704Bc059F8C67012fEd69BC8A327a5aafb603" as const;
 
 /**
- * USDC unlock contract (ArticleUnlockUsdc).
- * Empty until deployed — set VITE_USDC_UNLOCK_CONTRACT after forge deploy.
+ * USDC unlock contract (ArticleUnlockUsdc) on Monad mainnet.
+ * Override with VITE_USDC_UNLOCK_CONTRACT when needed (e.g. local forks).
  */
 export const MAINNET_USDC_UNLOCK_CONTRACT: string = (
-  typeof import.meta !== "undefined" &&
-  import.meta.env &&
-  typeof import.meta.env.VITE_USDC_UNLOCK_CONTRACT === "string"
-    ? import.meta.env.VITE_USDC_UNLOCK_CONTRACT.trim()
-    : ""
+  (
+    typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    typeof import.meta.env.VITE_USDC_UNLOCK_CONTRACT === "string"
+      ? import.meta.env.VITE_USDC_UNLOCK_CONTRACT.trim()
+      : ""
+  ) || "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f"
 );
 
 /** Legacy native-MON unlock contract (kept live — path A). */

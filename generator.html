@@ -298,8 +298,9 @@
     <script>
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
-      // Set after deploying ArticleUnlockUsdc (forge script script/DeployUsdc.s.sol)
-      const USDC_UNLOCK_CONTRACT = (window.__USDC_UNLOCK_CONTRACT__ || localStorage.getItem("usdcUnlockContract") || "").trim();
+      // ArticleUnlockUsdc on Monad mainnet (override via window / localStorage for forks)
+      const MAINNET_USDC_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+      const USDC_UNLOCK_CONTRACT = (window.__USDC_UNLOCK_CONTRACT__ || localStorage.getItem("usdcUnlockContract") || MAINNET_USDC_CONTRACT).trim();
       const MONAD_USDC = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603";
       function selectedAsset() {
         const el = document.getElementById("paymentAsset");

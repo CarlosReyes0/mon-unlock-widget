@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   MAINNET_MON_UNLOCK_CONTRACT,
+  MAINNET_USDC_UNLOCK_CONTRACT,
+  isUsdcUnlockConfigured,
   normalizePaymentAsset,
   paymentAssetForContract,
   resolvePaymentAsset,
@@ -14,6 +16,12 @@ describe("payment-asset", () => {
     assert.equal(normalizePaymentAsset("usd"), "usdc");
     assert.equal(normalizePaymentAsset("mon"), "mon");
     assert.equal(normalizePaymentAsset(""), "mon");
+  });
+
+  it("treats mainnet USDC unlock as configured", () => {
+    assert.equal(isUsdcUnlockConfigured(), true);
+    assert.match(MAINNET_USDC_UNLOCK_CONTRACT, /^0x[a-fA-F0-9]{40}$/);
+    assert.equal(paymentAssetForContract(MAINNET_USDC_UNLOCK_CONTRACT), "usdc");
   });
 
   it("defaults unknown contracts to mon (path A)", () => {

@@ -110,5 +110,6 @@ export PUBLISHER_ADDRESS=0x...
 forge script script/DeployUsdc.s.sol --rpc-url https://rpc.monad.xyz --broadcast -vvvv
 ```
 
-Then set `VITE_USDC_UNLOCK_CONTRACT` (app) and `USDC_CONTRACT_ADDRESS` (indexer) to the deployed address.
+Mainnet deploy: `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f` (wired as the app/indexer default).
+Override with `VITE_USDC_UNLOCK_CONTRACT` / `USDC_CONTRACT_ADDRESS` for forks.
 Publishers receive USDC; readers only need a tiny MON balance for gas.

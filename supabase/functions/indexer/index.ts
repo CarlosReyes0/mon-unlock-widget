@@ -5,7 +5,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createPublicClient, http, parseAbiItem } from "https://esm.sh/viem@2";
 
 const MON_CONTRACT = (Deno.env.get("CONTRACT_ADDRESS") || "") as `0x${string}`;
-const USDC_CONTRACT = (Deno.env.get("USDC_CONTRACT_ADDRESS") || "") as `0x${string}`;
+const USDC_CONTRACT = (Deno.env.get("USDC_CONTRACT_ADDRESS") ||
+  "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f") as `0x${string}`;
 const RPC_URL = Deno.env.get("RPC_URL") || "https://rpc.monad.xyz";
 const CHUNK_SIZE = 100n;
 const MAX_BLOCKS_PER_RUN = 2000n;
