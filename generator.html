@@ -185,8 +185,8 @@
             <div>
               <label for="paymentAsset">Payment asset</label>
               <select id="paymentAsset">
-                <option value="usdc">USDC (USD — recommended)</option>
-                <option value="mon">MON (legacy)</option>
+                <option value="usdc">USDC</option>
+                <option value="mon">MON</option>
               </select>
               <p class="hint" id="assetHint">Readers pay USDC; you receive USDC. MON is only used for gas.</p>
               <label for="price" id="priceLabel">Price (USD)</label>
@@ -323,7 +323,7 @@
         if (select && !/^0x[a-fA-F0-9]{40}$/.test(USDC_UNLOCK_CONTRACT)) {
           // No USDC contract deployed yet — keep control visible but force MON.
           const usdcOpt = select.querySelector('option[value="usdc"]');
-          if (usdcOpt) usdcOpt.textContent = "USDC (deploy contract to enable)";
+          if (usdcOpt) usdcOpt.textContent = "USDC unavailable";
           if (select.value === "usdc") select.value = "mon";
         }
         const a = selectedAsset();
