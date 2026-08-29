@@ -84,7 +84,21 @@ const MIME = {
   ".map": "application/json",
   ".txt": "text/plain; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
 };
+
+function parseByteRange(rangeHeader, size) {
+  if (!rangeHeader || !rangeHeader.startsWith("bytes=")) return null;
+  const [startStr, endStr] = rangeHeader.slice(6).split("-", 2);
+  let start = startStr ? Number.parseInt(startStr, 10) : 0;
+  let end = endStr ? Number.parseInt(endStr, 10) : size - 1;
+  if (!Number.isFinite(start) || start < 0) start = 0;
+  if (!Number.isFinite(end) || end >= size) end = size - 1;
+  if (start > end) return null;
+  return { start, end };
+}
 
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -286,33 +300,65 @@ function serveStatic(req, res, urlPath) {
     return res.end("Forbidden");
   }
 
-  fs.stat(filePath, (err, stat) => {
-    if (err || !stat.isFile()) {
-      // Directory index fallback
-      if (!err && stat?.isDirectory()) {
-        filePath = path.join(filePath, "index.html");
-      } else {
-        cors(res);
-        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-        return res.end("Not found");
-      }
-    }
+  const method = req.method || "GET";
 
-    fs.readFile(filePath, (readErr, data) => {
-      if (readErr) {
+  function sendFile(targetPath) {
+    fs.stat(targetPath, (statErr, fileStat) => {
+      if (statErr || !fileStat.isFile()) {
         cors(res);
         res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
         return res.end("Not found");
       }
-      const ext = path.extname(filePath).toLowerCase();
-      cors(res);
-      // Match previous http-server -c-1: avoid stale checkout/widget bundles after deploy.
-      res.writeHead(200, {
-        "Content-Type": MIME[ext] || "application/octet-stream",
+
+      const ext = path.extname(targetPath).toLowerCase();
+      const contentType = MIME[ext] || "application/octet-stream";
+      const size = fileStat.size;
+      const range = parseByteRange(req.headers.range, size);
+      const headers = {
+        "Content-Type": contentType,
         "Cache-Control": "no-cache",
+        "Accept-Ranges": "bytes",
+      };
+
+      if (range) {
+        const { start, end } = range;
+        const chunkSize = end - start + 1;
+        cors(res);
+        res.writeHead(206, {
+          ...headers,
+          "Content-Range": `bytes ${start}-${end}/${size}`,
+          "Content-Length": chunkSize,
+        });
+        if (method === "HEAD") return res.end();
+        fs.createReadStream(targetPath, { start, end }).pipe(res);
+        return;
+      }
+
+      cors(res);
+      res.writeHead(200, {
+        ...headers,
+        "Content-Length": size,
       });
-      res.end(data);
+      if (method === "HEAD") return res.end();
+      fs.createReadStream(targetPath).pipe(res);
     });
+  }
+
+  fs.stat(filePath, (err, stat) => {
+    if (err) {
+      cors(res);
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Not found");
+    }
+    if (stat.isDirectory()) {
+      return sendFile(path.join(filePath, "index.html"));
+    }
+    if (!stat.isFile()) {
+      cors(res);
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Not found");
+    }
+    sendFile(filePath);
   });
 }
 

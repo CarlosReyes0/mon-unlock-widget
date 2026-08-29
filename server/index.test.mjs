@@ -114,6 +114,26 @@ test("GET / serves index.html", async () => {
   assert.match(text, /<!DOCTYPE html>/i);
 });
 
+test("GET /assets/unlock-demo.mp4 serves video/mp4 with range support", async () => {
+  const head = await fetch(`http://127.0.0.1:${PORT}/assets/unlock-demo.mp4`, {
+    method: "HEAD",
+  });
+  assert.equal(head.status, 200);
+  assert.equal(head.headers.get("content-type"), "video/mp4");
+  assert.equal(head.headers.get("accept-ranges"), "bytes");
+  const size = Number(head.headers.get("content-length"));
+  assert.ok(Number.isFinite(size) && size > 0);
+
+  const ranged = await fetch(`http://127.0.0.1:${PORT}/assets/unlock-demo.mp4`, {
+    headers: { Range: "bytes=0-1023" },
+  });
+  assert.equal(ranged.status, 206);
+  assert.equal(ranged.headers.get("content-type"), "video/mp4");
+  assert.match(ranged.headers.get("content-range") || "", /^bytes 0-1023\//);
+  const chunk = await ranged.arrayBuffer();
+  assert.equal(chunk.byteLength, 1024);
+});
+
 test("GET /llms.txt is crawlable", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/llms.txt`);
   assert.equal(res.status, 200);
