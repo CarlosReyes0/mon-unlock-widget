@@ -9,8 +9,6 @@
       content="Embeddable paywall for independent publishers. Paste one HTML block to monetize long-form articles with pay-per-article Monad payments, plus fiat / Apple Pay / Google Pay. AI agents can create paywalls via MPP or OpenClaw."
     />
     <link rel="llms-txt" href="/llms.txt" />
-    <link rel="stylesheet" href="/dist/mon-unlock.css" />
-    <script type="module" src="/dist/mon-unlock.js?v=20240714"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
@@ -107,21 +105,24 @@
 
       .demo-intro p {
         margin: 0.75rem auto 0;
-        max-width: 26rem;
+        max-width: 28rem;
         color: var(--muted);
         line-height: 1.5;
       }
 
-      /* Light-DOM slots must stay hidden for both tag names */
-      open-paywall [slot],
-      mon-unlock [slot] {
-        display: none !important;
+      .demo-video {
+        width: 100%;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: #000;
+        box-shadow: 0 10px 30px rgba(17, 24, 39, 0.08);
       }
 
-      open-paywall,
-      mon-unlock {
-        display: block;
-        text-align: left;
+      .demo-note {
+        margin: 0.85rem 0 0;
+        text-align: center;
+        font-size: 0.875rem;
+        color: var(--soft);
       }
 
       #site-footer {
@@ -148,25 +149,22 @@
       <div class="wrap">
         <div class="demo-intro">
           <h2 id="demo-heading">See it in action</h2>
-          <p>A live preview of the Open Paywall unlock experience.</p>
+          <p>Screen recording of the unlock flow. Nothing on this page takes payment.</p>
         </div>
-        <open-paywall
-          article-id="founder-manifesto"
-          title="Why Every Founder Should Own Their Reader Relationship"
-          author="Your Name"
-          price="0.50"
-          payment-asset="usdc"
-          theme="light"
+        <video
+          class="demo-video"
+          controls
+          playsinline
+          preload="metadata"
+          poster="/assets/home-hero.jpg"
+          aria-label="Simulated Open Paywall unlock demo"
         >
-          <div slot="teaser">Platforms take 30% and your audience isn't yours. Micropayments with one embed change the math for indie publishers. This preview is free — the rest unlocks for $0.50 USDC…</div>
-          <div slot="body">Platforms take 30% and your audience isn't yours. Micropayments with one embed change the math for indie publishers.
-
-When you publish on someone else's turf, you're renting attention. Algorithm changes or policy updates can cut you off overnight.
-
-Open Paywall lets readers pay per article while you keep the relationship. The widget pastes into any website — no app store, no platform lock-in.
-
-This section only appears after unlock. Use the generator for a signed embed with live checkout.</div>
-        </open-paywall>
+          <source src="/assets/unlock-demo.mp4" type="video/mp4" />
+        </video>
+        <p class="demo-note">
+          Simulated preview only. For a live embed with real checkout, use the
+          <a href="/generator.html">generator</a>.
+        </p>
         <div id="site-footer"></div>
       </div>
     </section>
@@ -192,7 +190,6 @@ This section only appears after unlock. Use the generator for a signed embed wit
           brand.style.marginLeft = "0px";
           lede.style.marginLeft = "0px";
           const dx = glyphLeft(lede) - glyphLeft(brand);
-          // Slight optical bias so flat U meets round O
           lede.style.marginLeft = -dx - 1 + "px";
         }
 

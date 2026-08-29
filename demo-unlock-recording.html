@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Unlock demo recording</title>
+    <link rel="stylesheet" href="/dist/mon-unlock.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #fafaf9;
+        font-family: "DM Sans", system-ui, sans-serif;
+        padding: 1.5rem;
+      }
+      .wrap {
+        width: min(42rem, 100%);
+      }
+      .mon-card {
+        border-radius: 16px;
+        border: 1px solid #e7e5e4;
+        background: #fff;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(17, 24, 39, 0.06);
+      }
+      .mon-badge {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #7c3aed;
+      }
+      .mon-title-box {
+        color: #111827;
+        line-height: 1.6;
+      }
+      .mon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
+        padding: 0.85rem 1rem;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .mon-btn-primary {
+        background: #7c3aed;
+        color: #fff;
+      }
+      .mon-btn:disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .mon-body {
+        color: #111827;
+        line-height: 1.65;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <article class="mon-card" id="card">
+        <header style="border-bottom: 1px solid #f5f5f4; padding: 1.25rem 1.5rem">
+          <p class="mon-badge" style="margin: 0 0 0.5rem">Unlock with USDC or card</p>
+          <h1 style="margin: 0; font-family: Literata, Georgia, serif; font-size: 1.5rem">
+            Why Every Founder Should Own Their Reader Relationship
+          </h1>
+          <p style="margin: 0.5rem 0 0; font-size: 0.875rem; color: #57534e">Your Name · 8/29/2026</p>
+        </header>
+        <div style="padding: 1.25rem 1.5rem">
+          <div id="locked-view">
+            <div class="mon-title-box">
+              Platforms take 30% and your audience isn't yours. Micropayments with one embed change the math for indie publishers. This preview is free — the rest unlocks for $0.50 USDC…
+            </div>
+            <div style="margin-top: 1.25rem; border: 1px solid #ede9fe; border-radius: 12px; background: rgba(245, 243, 255, 0.8); padding: 1rem 1.1rem">
+              <p style="margin: 0; font-size: 0.875rem; font-weight: 500">
+                Unlock for <span style="color: #7c3aed">0.50 USDC</span>
+              </p>
+              <p style="margin: 0.35rem 0 0; font-size: 0.75rem; color: #78716c">
+                Pay with card, Apple Pay, or USDC. Continue opens checkout.
+              </p>
+              <button type="button" class="mon-btn mon-btn-primary" id="unlock-btn" style="margin-top: 1rem">
+                Continue
+              </button>
+            </div>
+          </div>
+          <div id="unlocked-view" class="hidden">
+            <div class="mon-title-box">
+              Platforms take 30% and your audience isn't yours. Micropayments with one embed change the math for indie publishers. This preview is free — the rest unlocks for $0.50 USDC…
+            </div>
+            <div class="mon-body" style="margin-top: 1.25rem">
+When you publish on someone else's turf, you're renting attention. Algorithm changes or policy updates can cut you off overnight.
+
+Open Paywall lets readers pay per article while you keep the relationship. The widget pastes into any website — no app store, no platform lock-in.
+
+This section appears after unlock. Readers can pay with card / Apple Pay / Google Pay, or with USDC on Monad.
+            </div>
+            <p style="margin: 1.25rem 0 0; font-size: 0.75rem; color: #111827">Unlocked · Simulated preview</p>
+          </div>
+        </div>
+      </article>
+    </div>
+    <script>
+      const btn = document.getElementById("unlock-btn");
+      const locked = document.getElementById("locked-view");
+      const unlocked = document.getElementById("unlocked-view");
+      btn.addEventListener("click", () => {
+        btn.disabled = true;
+        btn.textContent = "Unlocking…";
+        setTimeout(() => {
+          locked.classList.add("hidden");
+          unlocked.classList.remove("hidden");
+        }, 900);
+      });
+    </script>
+  </body>
+</html>
