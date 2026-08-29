@@ -255,14 +255,9 @@ export function CheckoutApp() {
           <>
             <p className="checkout-copy">Pay with Apple Pay, Google Pay, or card. No wallet needed.</p>
             {error ? <p className="checkout-error">{error}</p> : null}
-            {!query.embedSig ? (
-              <p className="checkout-error">
-                This embed is missing a publisher signature. Get a new embed from the generator.
-              </p>
-            ) : null}
             {phaseDone ? (
               <p className="checkout-status ok">Unlocked — returning to article…</p>
-            ) : query.embedSig ? (
+            ) : (
               <StripeFiatPay
                 articleId={query.articleId}
                 title={query.title}
@@ -273,7 +268,7 @@ export function CheckoutApp() {
                 onError={setError}
                 onBusy={setFiatBusy}
               />
-            ) : null}
+            )}
             {hasPrivy && !showCrypto ? (
               <button
                 type="button"

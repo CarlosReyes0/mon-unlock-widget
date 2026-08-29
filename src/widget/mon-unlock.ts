@@ -222,7 +222,10 @@ export class MonUnlock extends LitElement {
       changed.has("articleId") ||
       changed.has("title") ||
       changed.has("author") ||
-      changed.has("price")
+      changed.has("price") ||
+      changed.has("unlockContract") ||
+      changed.has("paymentAsset") ||
+      changed.has("embedSig")
     ) {
       this.loadArticle();
     }
@@ -587,7 +590,8 @@ export class MonUnlock extends LitElement {
       void this.connect();
       return;
     }
-    if (!this.requireEmbedSigForPayment()) return;
+    // Fiat checkout can authorize via registered USDC price without embed-sig.
+    // MetaMask / on-chain crypto still requires embed-sig (see startMetaMaskPath).
 
     this.error = null;
     const url = buildCheckoutUrl({
@@ -654,12 +658,6 @@ export class MonUnlock extends LitElement {
       `;
     }
 
-    if (missingSig) {
-      return html`
-        <p class="text-sm text-red-700">${this.missingEmbedSigMessage()}</p>
-      `;
-    }
-
     return html`
       <div class="mon-unlock-actions">
         <button
@@ -670,16 +668,19 @@ export class MonUnlock extends LitElement {
         >
           ${this.checkoutOpen ? "Checkout open…" : this.loading ? "Unlocking…" : "Continue"}
         </button>
-        <p class="mon-unlock-hint">Pay with email or Google. No MetaMask needed.</p>
+        <p class="mon-unlock-hint">Pay with card, Apple Pay, or crypto. No MetaMask needed.</p>
 
         <button
           type="button"
           class="mon-btn mon-btn-secondary"
-          ?disabled=${this.loading || this.checkoutOpen}
+          ?disabled=${this.loading || this.checkoutOpen || missingSig}
           @click=${() => this.startMetaMaskPath()}
         >
           Use MetaMask
         </button>
+        ${missingSig
+          ? html`<p class="mt-2 text-xs text-stone-500">MetaMask path needs a signed embed from the generator.</p>`
+          : nothing}
 
         ${this.showMetaMaskHelp
           ? html`
@@ -852,7 +853,7 @@ export class MonUnlock extends LitElement {
     return html`
       <article class="mon-card ${classMap({ dark: this.theme === "dark" })}">
         <header class="border-b border-stone-100 px-6 py-5 dark:border-zinc-800">
-          <p class="mon-badge mb-2">Unlock with MON</p>
+          <p class="mon-badge mb-2">${asset === "usdc" ? "Unlock with USDC or card" : "Unlock with MON or card"}</p>
           <h1 class="font-serif text-2xl font-semibold leading-tight" style="color:#000">${a.title}</h1>
           <p class="mt-2 text-sm text-black dark:text-zinc-400">
             ${a.author} · ${new Date(a.publishedAt).toLocaleDateString()}
@@ -884,8 +885,8 @@ export class MonUnlock extends LitElement {
                   <p class="mt-1 text-xs text-stone-500">
                     ${this.isOnchain
                       ? asset === "usdc"
-                        ? "Pay with USDC on Monad. Continue with email, or use MetaMask."
-                        : "Pay with MON on Monad. Continue with email, or use MetaMask."
+                        ? "Pay with card, Apple Pay, or USDC. Continue opens checkout."
+                        : "Pay with card, Apple Pay, or MON. Continue opens checkout."
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">${this.renderUnlockActions()}</div>
