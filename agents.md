@@ -28,10 +28,13 @@ Open Paywall (formerly MON Unlock) lets agents create embeddable paywalls for lo
   "teaser": "Walking home in the rain…",
   "body": "Full article text…",
   "publisher": "0xYourPublisherWallet",
-  "price": "1",
+  "paymentAsset": "usdc",
+  "price": "0.50",
   "author": "Carlos"
 }
 ```
+
+`paymentAsset` is optional: `"usdc"` (default) or `"mon"`. `price` is a string — USD for USDC (defaults to `"0.50"`), MON for MON (defaults to `"1"`). Omit both for the default USDC embed at $0.50.
 
 Returns quote amount, fingerprint, and whether the payload is valid.
 
@@ -64,12 +67,12 @@ Without that checklist, a correct agent run ends at the first unpaid 402 with a 
 # Inspect challenge
 curl -sD - -o /dev/null -X POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish \
   -H 'content-type: application/json' \
-  -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"…","body":"…","publisher":"0x…","price":"1"}'
+  -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"…","body":"…","publisher":"0x…"}'
 
-# Pay + fetch (after mppx account create)
+# Pay + fetch (after mppx account create) — defaults to USDC $0.50
 npx mppx https://mon-unlock-widget-production.up.railway.app/api/agents/publish \
   --method POST --header 'content-type: application/json' \
-  --data '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0x…","price":"1"}'
+  --data '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0x…"}'
 ```
 
 ## OpenClaw (chat / phone)

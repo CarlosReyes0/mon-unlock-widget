@@ -3,18 +3,42 @@
  * Mirrors skills/mon-unlock-embed/embed.ts so OpenClaw and the HTTP API stay aligned.
  */
 import { createHash } from "node:crypto";
-import { keccak256, toBytes, parseEther } from "viem";
+import { keccak256, toBytes, parseEther, parseUnits } from "viem";
 
 export const CDN_BASE =
   process.env.CDN_BASE || "https://mon-unlock-widget-production.up.railway.app";
-export const MAINNET_CONTRACT =
+/** Legacy native-MON unlock contract (kept live — path A). */
+export const MAINNET_MON_CONTRACT =
   process.env.UNLOCK_CONTRACT || "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+/** @deprecated use MAINNET_MON_CONTRACT */
+export const MAINNET_CONTRACT = MAINNET_MON_CONTRACT;
+/** ArticleUnlockUsdc on Monad mainnet. */
+export const MAINNET_USDC_CONTRACT =
+  process.env.USDC_UNLOCK_CONTRACT || "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+/** Circle USDC on Monad mainnet. */
+export const MONAD_USDC_TOKEN = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603";
 export const WIDGET_VERSION = process.env.WIDGET_VERSION || "20240714";
 export const WC_PROJECT_ID =
   process.env.WALLETCONNECT_PROJECT_ID || "c2a289e11ad2998f8ea4633db536334c";
 export const REGISTER_ARTICLE_URL =
   process.env.REGISTER_ARTICLE_URL ||
   "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
+
+export function normalizePaymentAsset(value) {
+  const v = String(value ?? "").trim().toLowerCase();
+  if (v === "usdc" || v === "usd" || v === "stable") return "usdc";
+  return "mon";
+}
+
+export function defaultPriceForAsset(paymentAsset) {
+  return normalizePaymentAsset(paymentAsset) === "usdc" ? "0.50" : "1";
+}
+
+export function unlockContractForAsset(paymentAsset) {
+  return normalizePaymentAsset(paymentAsset) === "usdc"
+    ? MAINNET_USDC_CONTRACT
+    : MAINNET_MON_CONTRACT;
+}
 
 export function escapeTeaser(text) {
   return String(text)
@@ -27,8 +51,14 @@ export function toArticleIdHash(slug) {
   return keccak256(toBytes(String(slug).trim()));
 }
 
-export function toPriceWei(priceMon) {
-  return parseEther(String(priceMon || "1").trim() || "1").toString();
+export function toPriceWei(price, paymentAsset = "usdc") {
+  const asset = normalizePaymentAsset(paymentAsset);
+  const fallback = defaultPriceForAsset(asset);
+  const p = String(price ?? fallback).trim() || fallback;
+  if (asset === "usdc") {
+    return parseUnits(p, 6).toString();
+  }
+  return parseEther(p).toString();
 }
 
 export function isAddress(value) {
@@ -39,10 +69,14 @@ export function isAddress(value) {
  * Finish-registration page URL. Optional meta (title/author/teaser) lets the page
  * rebuild a fully signed embed for one-click copy after the wallet signs.
  */
-export function buildFinishRegistrationUrl(slug, price = "1", meta = {}) {
+export function buildFinishRegistrationUrl(slug, price, meta = {}) {
+  const paymentAsset = normalizePaymentAsset(meta.paymentAsset ?? "usdc");
+  const resolvedPrice =
+    String(price ?? "").trim() || defaultPriceForAsset(paymentAsset);
   const params = new URLSearchParams({
     slug: String(slug).trim(),
-    price: String(price || "1").trim(),
+    price: resolvedPrice,
+    paymentAsset,
   });
   const title = typeof meta.title === "string" ? meta.title.trim() : "";
   const author = typeof meta.author === "string" ? meta.author.trim() : "";
@@ -56,7 +90,11 @@ export function buildFinishRegistrationUrl(slug, price = "1", meta = {}) {
 
 export function generateEmbed(input, embedSig) {
   const author = (input.author || "Author").trim() || "Author";
-  const price = (input.price || "1").trim() || "1";
+  const paymentAsset = normalizePaymentAsset(input.paymentAsset ?? "usdc");
+  const price =
+    (input.price || defaultPriceForAsset(paymentAsset)).trim() ||
+    defaultPriceForAsset(paymentAsset);
+  const unlockContract = unlockContractForAsset(paymentAsset);
   const teaserEsc = escapeTeaser((input.teaser || "").trim());
   const sig = typeof embedSig === "string" ? embedSig.trim() : "";
   const sigAttr = sig ? `\n  embed-sig="${sig}"` : "";
@@ -71,7 +109,8 @@ export function generateEmbed(input, embedSig) {
   title="${String(input.title).trim()}"
   author="${author}"
   price="${price}"
-  unlock-contract="${MAINNET_CONTRACT}"${sigAttr}
+  payment-asset="${paymentAsset}"
+  unlock-contract="${unlockContract}"${sigAttr}
   walletconnect-project-id="${WC_PROJECT_ID}"
 >
   <div slot="teaser">
@@ -88,7 +127,9 @@ export function validatePublishInput(raw) {
   const body = typeof raw?.body === "string" ? raw.body.trim() : "";
   const publisher = typeof raw?.publisher === "string" ? raw.publisher.trim() : "";
   const author = typeof raw?.author === "string" ? raw.author.trim() : "";
-  const price = typeof raw?.price === "string" ? raw.price.trim() : "1";
+  const paymentAsset = normalizePaymentAsset(raw?.paymentAsset ?? "usdc");
+  const priceRaw = typeof raw?.price === "string" ? raw.price.trim() : "";
+  const price = priceRaw || defaultPriceForAsset(paymentAsset);
 
   if (!title) errors.push("title is required");
   if (!articleId) errors.push("articleId (slug) is required");
@@ -98,7 +139,19 @@ export function validatePublishInput(raw) {
   if (!teaser) errors.push("teaser is required");
   if (!body) errors.push("body is required");
   if (!isAddress(publisher)) errors.push("publisher must be a 0x wallet address");
-  if (price && Number.isNaN(Number(price))) errors.push("price must be a number (MON)");
+  if (raw?.paymentAsset != null) {
+    const rawAsset = String(raw.paymentAsset).trim().toLowerCase();
+    if (!["usdc", "mon", "usd", "stable"].includes(rawAsset)) {
+      errors.push('paymentAsset must be "usdc" or "mon"');
+    }
+  }
+  if (price && Number.isNaN(Number(price))) {
+    errors.push(
+      paymentAsset === "usdc"
+        ? "price must be a USD amount (USDC)"
+        : "price must be a MON amount"
+    );
+  }
 
   if (errors.length) return { ok: false, errors };
 
@@ -111,15 +164,17 @@ export function validatePublishInput(raw) {
       body,
       publisher,
       author: author || undefined,
-      price: price || "1",
+      paymentAsset,
+      price,
     },
   };
 }
 
 export async function syncMetadataToSupabase(input, options = {}) {
   const slug = input.articleId.trim();
+  const paymentAsset = normalizePaymentAsset(input.paymentAsset ?? "usdc");
   const articleIdHash = toArticleIdHash(slug);
-  const priceWei = toPriceWei(input.price || "1");
+  const priceWei = toPriceWei(input.price, paymentAsset);
 
   try {
     const res = await fetch(REGISTER_ARTICLE_URL, {
@@ -185,6 +240,7 @@ export async function publishArticleForAgent(raw) {
   }
 
   const { input } = validated;
+  const paymentAsset = input.paymentAsset;
   // Reserve-on-create: claim the global slug in Supabase before on-chain register.
   const sync = await syncMetadataToSupabase(input);
   if (!sync.ok && sync.error === "slug_taken") {
@@ -212,14 +268,19 @@ export async function publishArticleForAgent(raw) {
     title: input.title,
     author: input.author,
     teaser: input.teaser,
+    paymentAsset,
   });
+
+  const assetLabel = paymentAsset === "usdc" ? "USDC" : "MON";
 
   return {
     ok: true,
     slug: sync.slug || input.articleId,
     articleIdHash: sync.articleIdHash || toArticleIdHash(input.articleId),
-    priceWei: sync.priceWei || toPriceWei(input.price),
-    priceMon: input.price || "1",
+    priceWei: sync.priceWei || toPriceWei(input.price, paymentAsset),
+    paymentAsset,
+    price: input.price,
+    priceMon: paymentAsset === "mon" ? input.price : undefined,
     publisher: input.publisher.toLowerCase(),
     metadataSynced: sync.ok,
     metadataError: sync.error,
@@ -231,13 +292,16 @@ export async function publishArticleForAgent(raw) {
       `Open ${finishRegistrationUrl}, connect your wallet, and click Register on Monad.`,
       "Approve the transaction and the embed signature prompt, then click Copy signed embed.",
       "Paste that signed HTML on your site (payments require embed-sig).",
-      "Readers unlock with MON (wallet) or card / Apple Pay / Google Pay when Stripe is configured.",
+      paymentAsset === "usdc"
+        ? "Readers unlock with USDC (wallet) or card / Apple Pay / Google Pay when Stripe is configured."
+        : "Readers unlock with MON (wallet) or card / Apple Pay / Google Pay when Stripe is configured.",
     ],
   };
 }
 
 /** Stable request fingerprint for quotes (not a secret). */
 export function quoteFingerprint(input) {
+  const paymentAsset = normalizePaymentAsset(input.paymentAsset ?? "usdc");
   const h = createHash("sha256");
   h.update(
     JSON.stringify({
@@ -246,7 +310,8 @@ export function quoteFingerprint(input) {
       teaser: input.teaser,
       bodyLen: input.body.length,
       publisher: input.publisher.toLowerCase(),
-      price: input.price || "1",
+      paymentAsset,
+      price: input.price || defaultPriceForAsset(paymentAsset),
     })
   );
   return h.digest("hex").slice(0, 16);

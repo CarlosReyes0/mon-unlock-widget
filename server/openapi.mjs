@@ -51,7 +51,7 @@ export function buildOpenApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "Open Paywall Agent API",
-      version: "1.0.3",
+      version: "1.0.4",
       description:
         "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, ~$0.05) to publish. If unpaid and no funded payer is configured, agents should stop and ask the human — not chase faucets. On-chain Monad registration may still require one publisher wallet approval.",
       contact: {
@@ -173,8 +173,16 @@ export function buildOpenApiDocument() {
             },
             price: {
               type: "string",
-              description: "Article price in MON",
-              default: "1",
+              description:
+                "Article price as a string. USD amount when paymentAsset is usdc (default 0.50); MON amount when paymentAsset is mon (default 1).",
+              default: "0.50",
+            },
+            paymentAsset: {
+              type: "string",
+              enum: ["usdc", "mon"],
+              description:
+                "Settlement asset for reader unlocks. Default usdc ($0.50). Use mon for legacy native-MON embeds.",
+              default: "usdc",
             },
             author: { type: "string" },
           },

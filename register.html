@@ -80,7 +80,7 @@
       </p>
 
       <p><strong>Slug:</strong> <span class="slug" id="slugDisplay">—</span></p>
-      <p><strong>Price:</strong> <span id="priceDisplay">—</span> MON</p>
+      <p><strong>Price:</strong> <span id="priceDisplay">—</span> <span id="priceUnit">USDC</span></p>
       <p id="titleRow" style="display:none;"><strong>Title:</strong> <span id="titleDisplay">—</span></p>
 
       <ol class="steps">
@@ -114,6 +114,7 @@
 
     <script type="module">
       const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+      const MAINNET_USDC_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const WIDGET_VERSION = "20240714";
       const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
@@ -149,13 +150,21 @@
 
       const params = new URLSearchParams(location.search);
       const slug = (params.get("slug") || params.get("articleId") || "").trim();
-      const price = (params.get("price") || "1").trim();
+      const paymentAssetRaw = (params.get("paymentAsset") || "usdc").trim().toLowerCase();
+      const paymentAsset = paymentAssetRaw === "mon" ? "mon" : "usdc";
+      const defaultPrice = paymentAsset === "usdc" ? "0.50" : "1";
+      const price = (params.get("price") || defaultPrice).trim();
       const title = (params.get("title") || "").trim() || slug;
       const author = (params.get("author") || "").trim() || "Author";
       const teaser = (params.get("teaser") || "").trim();
 
+      function activeContract() {
+        return paymentAsset === "usdc" ? MAINNET_USDC_CONTRACT : MAINNET_CONTRACT;
+      }
+
       const slugEl = document.getElementById("slugDisplay");
       const priceEl = document.getElementById("priceDisplay");
+      const priceUnitEl = document.getElementById("priceUnit");
       const titleRow = document.getElementById("titleRow");
       const titleEl = document.getElementById("titleDisplay");
       const statusEl = document.getElementById("status");
@@ -170,6 +179,9 @@
       } else {
         slugEl.textContent = slug;
         priceEl.textContent = price;
+        if (priceUnitEl) {
+          priceUnitEl.textContent = paymentAsset === "usdc" ? "USDC" : "MON";
+        }
         if (params.get("title")) {
           titleRow.style.display = "block";
           titleEl.textContent = title;
@@ -209,7 +221,8 @@
   title="${title.replace(/"/g, "&quot;")}"
   author="${author.replace(/"/g, "&quot;")}"
   price="${price}"
-  unlock-contract="${MAINNET_CONTRACT}"
+  payment-asset="${paymentAsset}"
+  unlock-contract="${activeContract()}"
   embed-sig="${embedSig}"
   walletconnect-project-id="${WC_PROJECT_ID}"
 >
@@ -262,7 +275,7 @@ ${teaserBlock}
           chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
           transport: custom(eth),
         });
-        const message = buildEmbedSignMessage(143, MAINNET_CONTRACT, articleId, priceWei);
+        const message = buildEmbedSignMessage(143, activeContract(), articleId, priceWei);
         const embedSig = await walletClient.signMessage({ account, message });
         showSignedEmbed(embedSig);
         return embedSig;
@@ -320,11 +333,14 @@ ${teaserBlock}
         try {
           await ensureMonad(eth);
 
-          const { keccak256, toBytes, parseEther, createWalletClient, custom, createPublicClient, http } =
+          const { keccak256, toBytes, parseEther, parseUnits, createWalletClient, custom, createPublicClient, http } =
             await import("https://esm.sh/viem@2");
 
           const articleIdBytes = keccak256(toBytes(slug));
-          const priceWei = parseEther(price);
+          const priceWei = paymentAsset === "usdc"
+            ? parseUnits(price || "0.50", 6)
+            : parseEther(price || "1");
+          const contractAddress = activeContract();
 
           const publicClient = createPublicClient({
             chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
@@ -354,7 +370,7 @@ ${teaserBlock}
           // Already registered?
           try {
             const existing = await publicClient.readContract({
-              address: MAINNET_CONTRACT,
+              address: contractAddress,
               abi: [{
                 name: "getArticle",
                 type: "function",
@@ -400,7 +416,7 @@ ${teaserBlock}
           });
 
           const txHash = await walletClient.writeContract({
-            address: MAINNET_CONTRACT,
+            address: contractAddress,
             abi: [{
               name: "registerArticle",
               type: "function",

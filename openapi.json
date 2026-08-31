@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Open Paywall Agent API",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <open-paywall> HTML (legacy <mon-unlock> still works). On-chain Monad registration may still require one publisher wallet approval.",
     "contact": {
       "name": "Open Paywall",
@@ -121,7 +121,17 @@
           "teaser": { "type": "string" },
           "body": { "type": "string" },
           "publisher": { "type": "string" },
-          "price": { "type": "string", "default": "1" },
+          "paymentAsset": {
+            "type": "string",
+            "enum": ["usdc", "mon"],
+            "default": "usdc",
+            "description": "Settlement asset for reader unlocks. Default usdc ($0.50)."
+          },
+          "price": {
+            "type": "string",
+            "default": "0.50",
+            "description": "USD amount for USDC (default 0.50) or MON amount for MON (default 1)."
+          },
           "author": { "type": "string" }
         }
       }
