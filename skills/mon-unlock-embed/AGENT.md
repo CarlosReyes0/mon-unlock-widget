@@ -16,16 +16,29 @@ If the user is new or asks how this works, briefly explain:
 
 Don't lecture every time — only on first use or when they ask.
 
-## When publishing — collect fields
+## When publishing — accept casual paste
 
-| Field | Example |
-|-------|---------|
-| title | July 3 11pm |
-| articleId (slug) | july-3-11pm |
-| teaser | walking home in the rain |
-| body | Full text (user can paste in follow-up message) |
-| price | 1 MON (optional) |
-| author | Carlos (optional) |
+Humans paste plain text (not JSON):
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+---
+Full article body here…
+```
+
+Ask for **publisher wallet once** and reuse. Derive slug from title unless they set `Slug:`. Default price: **$0.50 USDC**.
+
+| Field | Source |
+|-------|--------|
+| title | `Title:` line |
+| articleId (slug) | `Slug:` or slug from title |
+| teaser | `Teaser:` line |
+| body | everything after `---` |
+| price | `Price:` (optional; default 0.50 USDC) |
+| author | `Author:` (optional) |
+| publisher | ask once, store in config / memory |
 
 ## Always call the tool
 

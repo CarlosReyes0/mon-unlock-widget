@@ -2,6 +2,28 @@
 
 Open Paywall (formerly MON Unlock) lets agents create embeddable paywalls for long-form content. Give your agent this page (or `/llms.txt` / `/skill.md`) so it can publish paste-ready HTML and complete payments programmatically.
 
+## On the go — no JSON
+
+Humans should **not** need to write JSON. They paste plain text like this:
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+---
+Full article text. Keep going as long as you want.
+```
+
+**Agent behavior:**
+1. Ask for the **publisher wallet once** (`0x…`) and reuse it for later articles in the same chat.
+2. Parse the paste → derive slug from title (`july-rain-walk`) unless they set `Slug:`.
+3. Defaults: **USDC $0.50** if `Price:` is omitted.
+4. `POST /api/agents/publish/parse` with `{ "paste": "…", "publisher": "0x…" }` (free) → JSON payload.
+5. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (paid ~$0.05).
+6. Return `finishRegistrationUrl` — they register + **Copy signed embed** once.
+
+Optional header lines: `Author:`, `Slug:`, `Asset: mon` (default is USDC).
+
 ## Discovery surfaces
 - LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`
 - Agent skill: `https://mon-unlock-widget-production.up.railway.app/skill.md`

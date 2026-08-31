@@ -65,6 +65,91 @@ export function isAddress(value) {
   return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+/** URL-safe slug from a title (e.g. "July rain walk" → "july-rain-walk"). */
+export function slugFromTitle(title) {
+  let slug = String(title || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!slug) return "";
+  if (slug.length < 3) slug = `${slug}-post`.replace(/^-+/, "");
+  if (slug.length > 64) slug = slug.slice(0, 64).replace(/-+$/, "");
+  if (!/^[a-z0-9]/.test(slug)) slug = `a-${slug}`;
+  if (!/[a-z0-9]$/.test(slug)) slug = `${slug.replace(/-+$/, "")}0`;
+  return slug.slice(0, 64);
+}
+
+/**
+ * Parse casual human paste into a publish payload.
+ *
+ * Example:
+ *   Title: July rain walk
+ *   Price: 0.50
+ *   Teaser: Walking home in the rain…
+ *   ---
+ *   Full article text…
+ *
+ * `publisher` is passed separately (ask once, reuse). Slug is derived from title
+ * unless the human sets `Slug:` in the header.
+ */
+export function parsePublishPaste(raw, options = {}) {
+  const text = String(raw ?? "").trim();
+  if (!text) return { ok: false, errors: ["paste is empty"] };
+
+  const sep = text.search(/^---\s*$/m);
+  if (sep < 0) {
+    return {
+      ok: false,
+      errors: ['paste must include a "---" line before the full article body'],
+    };
+  }
+
+  const header = text.slice(0, sep).trim();
+  const body = text.slice(sep).replace(/^---\s*\n?/, "").trim();
+  if (!body) return { ok: false, errors: ["article body is required after ---"] };
+
+  const fields = {};
+  for (const line of header.split(/\n/)) {
+    const m = line.match(/^([^:]+):\s*(.*)$/);
+    if (!m) continue;
+    fields[m[1].trim().toLowerCase()] = m[2].trim();
+  }
+
+  const title = fields.title || "";
+  const teaser = fields.teaser || "";
+  const price = fields.price || "";
+  const author = fields.author || "";
+  const articleId =
+    fields.slug || fields["article id"] || fields.articleid || slugFromTitle(title);
+  const assetRaw =
+    fields.asset || fields["payment asset"] || fields.paymentasset || fields.payment || "";
+
+  let paymentAsset;
+  if (assetRaw) {
+    paymentAsset = /mon/i.test(assetRaw) && !/usdc|usd|stable/i.test(assetRaw) ? "mon" : "usdc";
+  }
+
+  const publisher = typeof options.publisher === "string" ? options.publisher.trim() : "";
+
+  const payload = {
+    title,
+    articleId,
+    teaser,
+    body,
+    publisher,
+    ...(author ? { author } : {}),
+    ...(price ? { price } : {}),
+    ...(paymentAsset ? { paymentAsset } : {}),
+  };
+
+  const validated = validatePublishInput(payload);
+  if (!validated.ok) return validated;
+  return { ok: true, input: validated.input, parsedFrom: "paste" };
+}
+
 /**
  * Finish-registration page URL. Optional meta (title/author/teaser) lets the page
  * rebuild a fully signed embed for one-click copy after the wallet signs.

@@ -19,8 +19,21 @@ card / Apple Pay / Google Pay. Live site: https://mon-unlock-widget-production.u
 - User wants pay-per-article (not a full newsletter SaaS).
 
 ## Agent workflow (HTTP)
+
+### Human paste (no JSON)
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+---
+Full article text…
+```
+
+Ask for publisher wallet once and reuse. Slug from title unless `Slug:` is set. Defaults: USDC $0.50.
+
 1. Read https://mon-unlock-widget-production.up.railway.app/llms.txt and /agents.md if you need details.
-2. Collect fields: `title`, `articleId` (slug), `teaser`, `body`, `publisher` (0x), optional `price`, `author`.
+2. Parse the paste (or `POST /api/agents/publish/parse` with `{ paste, publisher }`).
 3. `POST /api/agents/publish/validate` (free) to confirm the payload and quote.
 4. `POST /api/agents/publish` with the same JSON.
    - Expect HTTP 402 + Payment challenge if unpaid (about **$0.05**).

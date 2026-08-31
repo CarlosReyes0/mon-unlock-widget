@@ -51,7 +51,7 @@ export function buildOpenApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "Open Paywall Agent API",
-      version: "1.0.4",
+      version: "1.0.5",
       description:
         "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, ~$0.05) to publish. If unpaid and no funded payer is configured, agents should stop and ask the human — not chase faucets. On-chain Monad registration may still require one publisher wallet approval.",
       contact: {
@@ -77,11 +77,21 @@ export function buildOpenApiDocument() {
     },
     "x-agent-guidance": {
       preferredFlow: [
+        "Accept human paste (Title/Teaser/---/body) or JSON",
+        "POST /api/agents/publish/parse (optional, free)",
         "POST /api/agents/publish/validate",
         "POST /api/agents/publish (pay 402 challenge)",
         "Return embed HTML",
         "Send finishRegistrationUrl if needsManualOnChainRegistration; tell user to Copy signed embed there",
       ],
+      humanPasteFormat: {
+        description:
+          "Mobile-friendly plain text. Agent derives slug from title; asks publisher wallet once.",
+        example:
+          "Title: July rain walk\\nPrice: 0.50\\nTeaser: Walking home in the rain…\\n---\\nFull article text.",
+        optionalLines: ["Author:", "Slug:", "Asset: mon"],
+        defaults: { paymentAsset: "usdc", price: "0.50" },
+      },
       skill: `${origin}/skill.md`,
       cursorSkill: `${origin}/.well-known/skills/mon-unlock/SKILL.md`,
       mppConfigured: mppConfigured(),
@@ -93,6 +103,41 @@ export function buildOpenApiDocument() {
           summary: "Agent API + MPP configuration status",
           security: [],
           responses: { "200": { description: "Health payload" } },
+        },
+      },
+      "/api/agents/publish/parse": {
+        post: {
+          operationId: "parsePublishPaste",
+          summary: "Parse casual human paste into publish JSON (free)",
+          description:
+            "Converts Title/Teaser/---/body plain text into the PublishRequest shape. Pass publisher separately.",
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["paste", "publisher"],
+                  properties: {
+                    paste: {
+                      type: "string",
+                      description:
+                        "Plain text with Title/Price/Teaser header lines, --- separator, then body",
+                    },
+                    publisher: {
+                      type: "string",
+                      description: "0x publisher wallet (ask once, reuse)",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "Parsed publish payload" },
+            "400": { description: "Invalid paste" },
+          },
         },
       },
       "/api/agents/publish/validate": {

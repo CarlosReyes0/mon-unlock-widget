@@ -6,6 +6,8 @@ import {
   buildFinishRegistrationUrl,
   toArticleIdHash,
   toPriceWei,
+  slugFromTitle,
+  parsePublishPaste,
   MAINNET_USDC_CONTRACT,
   MAINNET_MON_CONTRACT,
 } from "./publish.mjs";
@@ -141,6 +143,50 @@ test("buildFinishRegistrationUrl omits very long teasers", () => {
   });
   assert.match(url, /title=T/);
   assert.doesNotMatch(url, /teaser=/);
+});
+
+test("slugFromTitle kebab-cases titles", () => {
+  assert.equal(slugFromTitle("July rain walk"), "july-rain-walk");
+  assert.equal(slugFromTitle("  Hello, World!  "), "hello-world");
+});
+
+test("parsePublishPaste converts casual human paste", () => {
+  const result = parsePublishPaste(
+    `Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+---
+Full article text. Keep going as long as you want.`,
+    { publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.input.title, "July rain walk");
+  assert.equal(result.input.articleId, "july-rain-walk");
+  assert.equal(result.input.teaser, "Walking home in the rain…");
+  assert.equal(result.input.body.includes("Full article text"), true);
+  assert.equal(result.input.price, "0.50");
+  assert.equal(result.input.paymentAsset, "usdc");
+});
+
+test("parsePublishPaste defaults USDC price when Price omitted", () => {
+  const result = parsePublishPaste(
+    `Title: Quick post
+Teaser: Preview
+---
+Body text here.`,
+    { publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.input.price, "0.50");
+  assert.equal(result.input.paymentAsset, "usdc");
+});
+
+test("parsePublishPaste requires --- separator", () => {
+  const result = parsePublishPaste("Title: Nope\nTeaser: x", {
+    publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("---")));
 });
 
 test("toArticleIdHash is stable hex", () => {
