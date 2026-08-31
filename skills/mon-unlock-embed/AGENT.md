@@ -16,16 +16,35 @@ If the user is new or asks how this works, briefly explain:
 
 Don't lecture every time — only on first use or when they ask.
 
-## When publishing — collect fields
+## When publishing — accept casual paste
 
-| Field | Example |
-|-------|---------|
-| title | July 3 11pm |
-| articleId (slug) | july-3-11pm |
-| teaser | walking home in the rain |
-| body | Full text (user can paste in follow-up message) |
-| price | 1 MON (optional) |
-| author | Carlos (optional) |
+Messy input is OK. No perfect labels required.
+
+**Step 1 — interpret and confirm (required):** After they send the article, reply with what you understood (Title, Price, Teaser, Slug you'll generate, body preview). Ask them to fix anything or say **looks good**. Do not publish until they confirm.
+
+**Step 2 — publish** after OK. Always auto-generate a new slug.
+
+Ideal template:
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+---
+Full article body here…
+```
+
+Ask for **publisher wallet once** and reuse.
+
+| Field | Who provides |
+|-------|----------------|
+| title | human (`Title:`) |
+| price | human (`Price:`) |
+| teaser | human (`Teaser:`) |
+| articleId (slug) | **you** — auto every time |
+| body | human (after `---`) |
+| author | optional human (`Author:`) |
+| publisher | ask once, store in config / memory |
 
 ## Always call the tool
 

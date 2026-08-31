@@ -42,6 +42,7 @@ import {
   publishArticleForAgent,
   validatePublishInput,
   quoteFingerprint,
+  parsePublishPaste,
 } from "./publish.mjs";
 import { withMppCharge, mppStatus, publishAmount } from "./mpp.mjs";
 import { buildOpenApiDocument } from "./openapi.mjs";
@@ -541,6 +542,29 @@ const server = http.createServer(async (req, res) => {
         openapi: "/openapi.json",
       },
     });
+  }
+
+  if (method === "POST" && url.pathname === "/api/agents/publish/parse") {
+    try {
+      const raw = await readBody(req, 512_000);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = parsePublishPaste(parsed.paste, { publisher: parsed.publisher });
+      if (!result.ok) {
+        return sendJson(res, 400, { ok: false, errors: result.errors });
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        input: result.input,
+        formattedPaste: result.formattedPaste,
+        parsedFrom: "paste",
+        next: "POST /api/agents/publish/validate then /api/agents/publish with this input object.",
+      });
+    } catch (e) {
+      if (e?.message === "body_too_large") {
+        return sendJson(res, 413, { error: "body_too_large" });
+      }
+      return sendJson(res, 400, { error: "invalid_json" });
+    }
   }
 
   if (method === "POST" && url.pathname === "/api/agents/publish/validate") {

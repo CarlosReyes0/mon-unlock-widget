@@ -50,5 +50,5 @@ test("GET /openapi.json is served dynamically with mpp protocol object", async (
   const doc = await res.json();
   const pay = doc.paths["/api/agents/publish"].post["x-payment-info"];
   assert.equal(pay.protocols[0].mpp.recipient, RECIPIENT);
-  assert.equal(doc.info.version, "1.0.4");
+  assert.equal(doc.info.version, "1.0.5");
 });

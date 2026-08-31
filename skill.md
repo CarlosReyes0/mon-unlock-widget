@@ -14,14 +14,36 @@ Open Paywall creates an **embeddable paywall** for long-form articles. You get p
 - OpenClaw plugin: install from `skills/mon-unlock-embed` in the GitHub repo
 
 ## Preferred agent path (HTTP / MPP)
-1. Collect: `title`, `articleId` (slug), `teaser`, `body`, `publisher` (0x wallet), optional `paymentAsset` (`"usdc"` default or `"mon"`), optional `price` (USD for USDC — default `"0.50"`; MON for MON — default `"1"`), and optional `author`.
-2. Validate (free): `POST /api/agents/publish/validate` with that JSON.
-3. Publish (paid): `POST /api/agents/publish` with the same JSON.
+
+### Human paste (recommended on mobile)
+
+**Messy is OK** — labels, order, and `---` are optional. You interpret.
+
+**Always confirm first:** after they send the article, reply with Title / Price / Teaser / Slug (you'll generate) / body summary. Wait for **looks good** or edits. **Then** validate and publish.
+
+Ideal template if they ask:
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+---
+Full article text…
+```
+
+You add a fresh `Slug:` on publish. `POST /api/agents/publish/parse` is optional — use it on the **confirmed** draft, not on first messy paste.
+
+### API fields (after parsing)
+
+Collect: `title`, `articleId` (slug), `teaser`, `body`, `publisher` (0x wallet), optional `paymentAsset` (`"usdc"` default), optional `price` (default `"0.50"` USDC), optional `author`.
+
+1. Validate (free): `POST /api/agents/publish/validate` with that JSON.
+2. Publish (paid): `POST /api/agents/publish` with the same JSON.
    - Unpaid → HTTP **402** + `WWW-Authenticate: Payment …` (default **$0.05** PathUSD on Tempo mainnet; Stripe SPT may also be offered).
    - **If you already have a funded payer** (`MPPX_PRIVATE_KEY` with mainnet PathUSD, or working Stripe/Link): pay once, retry with `Authorization: Payment …`, continue.
    - **If you do not:** **STOP after this first unpaid 402.** Tell the human they must pay $0.05 (or provide a funded payer), then retry publish. Do **not** install keyrings, chase faucets, create Tempo/AgentCash accounts, or invent workarounds.
-4. After a **paid** publish succeeds: return `finishRegistrationUrl` (and mention the unsigned `embed` is not for the site).
-5. Tell them to open `finishRegistrationUrl` → register on Monad → approve the embed signature → **Copy signed embed** → paste that HTML. Readers cannot pay until the signed HTML is on the site.
+3. After a **paid** publish succeeds: return `finishRegistrationUrl` (and mention the unsigned `embed` is not for the site).
+4. Tell them to open `finishRegistrationUrl` → register on Monad → approve the embed signature → **Copy signed embed** → paste that HTML. Readers cannot pay until the signed HTML is on the site.
 
 ## Hard stop on unpaid 402 (required)
 

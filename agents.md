@@ -2,6 +2,64 @@
 
 Open Paywall (formerly MON Unlock) lets agents create embeddable paywalls for long-form content. Give your agent this page (or `/llms.txt` / `/skill.md`) so it can publish paste-ready HTML and complete payments programmatically.
 
+## On the go — no JSON
+
+**Messy input is fine.** Humans don't need perfect labels, order, or a `---` line. You interpret what they meant.
+
+**Ideal** paste (if they want a template):
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+---
+Full article text. Keep going as long as you want.
+```
+
+**Also fine:** a rambling message, title on line 1, article below, no `Price:` (default **$0.50 USDC**), teaser mixed into the first paragraph, etc. Use judgment.
+
+### Confirm before you publish (required)
+
+After they send the article, **do not validate or publish yet.** Reply with your interpretation:
+
+```
+Here's what I'll publish:
+
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+Slug: july-rain-walk-k3m9x2   ← I'll generate a fresh one on publish
+---
+[first ~2 lines of body, or "Full article (N words)"]
+
+Reply with changes, or say "looks good" to publish.
+```
+
+Wait for **looks good** (or edits). Then validate → publish. Regenerate slug on the actual publish call.
+
+Completed block (all fields — you add `Slug:`):
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+Slug: july-rain-walk-k3m9x2
+---
+Full article text…
+```
+
+(`k3m9x2` is an example — yours differs every time. Never ask them to write Slug.)
+
+**Agent behavior:**
+1. Ask for the **publisher wallet once** (`0x…`) and reuse it.
+2. Interpret messy paste → show interpretation → **wait for confirmation**.
+3. On publish: **always** auto-generate a new slug. Ignore any `Slug:` they included.
+4. Optional: `POST /api/agents/publish/parse` only after they confirm (strict checker for the final shape).
+5. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (paid ~$0.05).
+6. Return `finishRegistrationUrl` — register + **Copy signed embed** once.
+
+Optional: `Author:`. `Asset: mon` (default USDC).
+
 ## Discovery surfaces
 - LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`
 - Agent skill: `https://mon-unlock-widget-production.up.railway.app/skill.md`
