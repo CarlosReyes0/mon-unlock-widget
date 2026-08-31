@@ -5,6 +5,9 @@ import {
   generateEmbed,
   buildFinishRegistrationUrl,
   toArticleIdHash,
+  toPriceWei,
+  MAINNET_USDC_CONTRACT,
+  MAINNET_MON_CONTRACT,
 } from "./publish.mjs";
 
 test("validatePublishInput requires core fields", () => {
@@ -24,21 +27,69 @@ test("validatePublishInput accepts a good payload", () => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.input.articleId, "hello-world");
+  assert.equal(result.input.paymentAsset, "usdc");
+  assert.equal(result.input.price, "2");
 });
 
-test("generateEmbed includes contract and teaser", () => {
+test("validatePublishInput defaults to USDC $0.50 when price and paymentAsset omitted", () => {
+  const result = validatePublishInput({
+    title: "Hello",
+    articleId: "hello-world",
+    teaser: "Teaser",
+    body: "Body",
+    publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.input.paymentAsset, "usdc");
+  assert.equal(result.input.price, "0.50");
+});
+
+test("validatePublishInput accepts explicit MON with default price 1", () => {
+  const result = validatePublishInput({
+    title: "Hello",
+    articleId: "hello-world",
+    teaser: "Teaser",
+    body: "Body",
+    publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    paymentAsset: "mon",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.input.paymentAsset, "mon");
+  assert.equal(result.input.price, "1");
+});
+
+test("toPriceWei uses 6 decimals for USDC and 18 for MON", () => {
+  assert.equal(toPriceWei("0.50", "usdc"), "500000");
+  assert.equal(toPriceWei("1", "mon"), "1000000000000000000");
+});
+
+test("generateEmbed defaults to USDC contract and payment-asset", () => {
   const html = generateEmbed({
     title: "Hello",
     articleId: "hello-world",
     teaser: "Free preview <b>x</b>",
-    price: "1",
   });
   assert.match(html, /<open-paywall/);
   assert.match(html, /article-id="hello-world"/);
+  assert.match(html, /payment-asset="usdc"/);
+  assert.match(html, new RegExp(`unlock-contract="${MAINNET_USDC_CONTRACT}"`));
+  assert.match(html, /price="0.50"/);
   assert.match(html, /Free preview &lt;b&gt;x&lt;\/b&gt;/);
-  assert.match(html, /unlock-contract=/);
   assert.match(html, /openpaywall\.js/);
   assert.doesNotMatch(html, /embed-sig=/);
+});
+
+test("generateEmbed includes MON contract when paymentAsset is mon", () => {
+  const html = generateEmbed({
+    title: "Hello",
+    articleId: "hello-world",
+    teaser: "Preview",
+    price: "2",
+    paymentAsset: "mon",
+  });
+  assert.match(html, /payment-asset="mon"/);
+  assert.match(html, new RegExp(`unlock-contract="${MAINNET_MON_CONTRACT}"`));
+  assert.match(html, /price="2"/);
 });
 
 test("generateEmbed includes embed-sig when provided", () => {
@@ -48,17 +99,25 @@ test("generateEmbed includes embed-sig when provided", () => {
       articleId: "hello-world",
       teaser: "Preview",
       price: "1",
+      paymentAsset: "mon",
     },
     "0xabc123",
   );
   assert.match(html, /embed-sig="0xabc123"/);
 });
 
-test("buildFinishRegistrationUrl encodes slug + price", () => {
-  const url = buildFinishRegistrationUrl("my-slug", "3");
+test("buildFinishRegistrationUrl encodes slug + price + paymentAsset", () => {
+  const url = buildFinishRegistrationUrl("my-slug", "3", { paymentAsset: "mon" });
   assert.match(url, /register\.html\?/);
   assert.match(url, /slug=my-slug/);
   assert.match(url, /price=3/);
+  assert.match(url, /paymentAsset=mon/);
+});
+
+test("buildFinishRegistrationUrl defaults paymentAsset to usdc", () => {
+  const url = buildFinishRegistrationUrl("my-slug");
+  assert.match(url, /paymentAsset=usdc/);
+  assert.match(url, /price=0\.50/);
 });
 
 test("buildFinishRegistrationUrl includes title author teaser meta", () => {
@@ -66,16 +125,19 @@ test("buildFinishRegistrationUrl includes title author teaser meta", () => {
     title: "Rain Walk",
     author: "Carlos",
     teaser: "A short preview",
+    paymentAsset: "usdc",
   });
   assert.match(url, /title=Rain\+Walk|title=Rain%20Walk/);
   assert.match(url, /author=Carlos/);
   assert.match(url, /teaser=A\+short\+preview|teaser=A%20short%20preview/);
+  assert.match(url, /paymentAsset=usdc/);
 });
 
 test("buildFinishRegistrationUrl omits very long teasers", () => {
   const url = buildFinishRegistrationUrl("my-slug", "1", {
     title: "T",
     teaser: "x".repeat(1600),
+    paymentAsset: "mon",
   });
   assert.match(url, /title=T/);
   assert.doesNotMatch(url, /teaser=/);

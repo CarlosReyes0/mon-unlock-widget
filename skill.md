@@ -14,7 +14,7 @@ Open Paywall creates an **embeddable paywall** for long-form articles. You get p
 - OpenClaw plugin: install from `skills/mon-unlock-embed` in the GitHub repo
 
 ## Preferred agent path (HTTP / MPP)
-1. Collect: `title`, `articleId` (slug), `teaser`, `body`, `publisher` (0x wallet), optional `price` (MON) and `author`.
+1. Collect: `title`, `articleId` (slug), `teaser`, `body`, `publisher` (0x wallet), optional `paymentAsset` (`"usdc"` default or `"mon"`), optional `price` (USD for USDC — default `"0.50"`; MON for MON — default `"1"`), and optional `author`.
 2. Validate (free): `POST /api/agents/publish/validate` with that JSON.
 3. Publish (paid): `POST /api/agents/publish` with the same JSON.
    - Unpaid → HTTP **402** + `WWW-Authenticate: Payment …` (default **$0.05** PathUSD on Tempo mainnet; Stripe SPT may also be offered).

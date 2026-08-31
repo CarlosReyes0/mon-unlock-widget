@@ -66,6 +66,7 @@ test("publish finish URL carries meta for signed embed rebuild", async () => {
       body: "Full body for register handoff test.",
       publisher: "0x2222222222222222222222222222222222222222",
       price: "2",
+      paymentAsset: "mon",
       author: "Carlos",
     }),
   });
@@ -73,15 +74,42 @@ test("publish finish URL carries meta for signed embed rebuild", async () => {
   const body = await res.json();
   assert.equal(body.ok, true);
   assert.doesNotMatch(body.embed, /embed-sig=/);
+  assert.match(body.embed, /payment-asset="mon"/);
 
   const url = new URL(body.finishRegistrationUrl);
   assert.equal(url.pathname.endsWith("/register.html"), true);
   assert.ok(url.searchParams.get("slug")?.startsWith("rain-walk-"));
   assert.equal(url.searchParams.get("price"), "2");
+  assert.equal(url.searchParams.get("paymentAsset"), "mon");
   assert.equal(url.searchParams.get("title"), "Rain Walk");
   assert.equal(url.searchParams.get("author"), "Carlos");
   assert.equal(url.searchParams.get("teaser"), "Walking home");
   assert.ok(body.nextSteps.some((s) => /Copy signed embed/i.test(s)));
+});
+
+test("publish defaults to USDC $0.50 embed when paymentAsset and price omitted", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Default USDC",
+      articleId: `usdc-default-${Date.now()}`,
+      teaser: "Preview",
+      body: "Full body.",
+      publisher: "0x2222222222222222222222222222222222222222",
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.paymentAsset, "usdc");
+  assert.equal(body.price, "0.50");
+  assert.match(body.embed, /payment-asset="usdc"/);
+  assert.match(body.embed, /price="0\.50"/);
+  assert.match(body.embed, /unlock-contract="0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f"/);
+
+  const url = new URL(body.finishRegistrationUrl);
+  assert.equal(url.searchParams.get("paymentAsset"), "usdc");
+  assert.equal(url.searchParams.get("price"), "0.50");
 });
 
 test("signed generateEmbed matches what register page should produce", () => {
@@ -92,6 +120,7 @@ test("signed generateEmbed matches what register page should produce", () => {
       teaser: "Walking home",
       author: "Carlos",
       price: "2",
+      paymentAsset: "mon",
     },
     "0xdeadbeef",
   );
@@ -99,6 +128,7 @@ test("signed generateEmbed matches what register page should produce", () => {
   assert.match(signed, /title="Rain Walk"/);
   assert.match(signed, /author="Carlos"/);
   assert.match(signed, /price="2"/);
+  assert.match(signed, /payment-asset="mon"/);
   assert.match(signed, /embed-sig="0xdeadbeef"/);
   assert.match(signed, /Walking home/);
 });

@@ -6,7 +6,7 @@ Best fit:
 - Monetize writing with pay-per-article micropayments (not a subscription newsletter platform).
 - Let an AI agent generate an `<open-paywall>` embed (legacy `<mon-unlock>` still works), store the paid body, and return paste-ready HTML.
 - Publish from chat (OpenClaw) or from an MPP-capable agent via HTTP 402.
-- Accept native MON on Monad plus fiat checkout for non-crypto readers.
+- Accept native MON or USDC on Monad plus fiat checkout for non-crypto readers.
 - Pay out publishers with Stripe Connect after fiat unlocks.
 
 Not a fit:
@@ -28,7 +28,7 @@ Key facts:
 - Free validate endpoint: POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish/validate
 - Publish is paid (~$0.05 PathUSD via MPP). If unpaid 402 and no funded payer: stop and ask the human — do not chase testnet faucets or keyrings.
 - OpenClaw plugin: github.com/CarlosReyes0/mon-unlock-widget/tree/main/skills/mon-unlock-embed
-- Chain: Monad (chain id 143). Unlock contract documented in the repo.
+- Chain: Monad (chain id 143). Default unlock: USDC at $0.50 (`payment-asset="usdc"`, contract `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f`). Legacy MON contract: `0x27cA0c23835328e2Ab1424b66330be86fe177FA6`.
 - Publishing needs three steps: embed HTML, body stored in Supabase, on-chain registration so readers can pay.
 - Embed signatures still use prefix `MON Unlock v1` (also verify `Open Paywall v1`).
 
