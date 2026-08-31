@@ -10,6 +10,7 @@ import {
   uniqueSlugFromTitle,
   uniqueSlugSuffix,
   parsePublishPaste,
+  formatPublishPaste,
   MAINNET_USDC_CONTRACT,
   MAINNET_MON_CONTRACT,
 } from "./publish.mjs";
@@ -176,19 +177,51 @@ Full article text. Keep going as long as you want.`,
   assert.equal(result.input.body.includes("Full article text"), true);
   assert.equal(result.input.price, "0.50");
   assert.equal(result.input.paymentAsset, "usdc");
+  assert.match(result.formattedPaste, /^Title: July rain walk/);
+  assert.match(result.formattedPaste, /Slug: july-rain-walk-[a-z0-9]+/);
 });
 
-test("parsePublishPaste defaults USDC price when Price omitted", () => {
+test("parsePublishPaste requires Title Price Teaser", () => {
   const result = parsePublishPaste(
-    `Title: Quick post
-Teaser: Preview
+    `Title: Only title
 ---
-Body text here.`,
+Body`,
+    { publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("Price")));
+  assert.ok(result.errors.some((e) => e.includes("Teaser")));
+});
+
+test("parsePublishPaste ignores human Slug and generates a new one", () => {
+  const result = parsePublishPaste(
+    `Title: July rain walk
+Price: 0.50
+Teaser: Preview
+Slug: human-picked-slug
+---
+Body text.`,
     { publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
   );
   assert.equal(result.ok, true);
-  assert.equal(result.input.price, "0.50");
-  assert.equal(result.input.paymentAsset, "usdc");
+  assert.notEqual(result.input.articleId, "human-picked-slug");
+  assert.match(result.input.articleId, /^july-rain-walk-[a-z0-9]+$/);
+});
+
+test("formatPublishPaste includes all header fields", () => {
+  const text = formatPublishPaste({
+    title: "July rain walk",
+    articleId: "july-rain-walk-k3m9x2",
+    teaser: "Walking home",
+    body: "Full text",
+    price: "0.50",
+    paymentAsset: "usdc",
+  });
+  assert.match(text, /Title: July rain walk/);
+  assert.match(text, /Price: 0.50/);
+  assert.match(text, /Teaser: Walking home/);
+  assert.match(text, /Slug: july-rain-walk-k3m9x2/);
+  assert.match(text, /---\nFull text/);
 });
 
 test("parsePublishPaste requires --- separator", () => {

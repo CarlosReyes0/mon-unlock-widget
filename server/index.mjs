@@ -555,6 +555,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, {
         ok: true,
         input: result.input,
+        formattedPaste: result.formattedPaste,
         parsedFrom: "paste",
         next: "POST /api/agents/publish/validate then /api/agents/publish with this input object.",
       });

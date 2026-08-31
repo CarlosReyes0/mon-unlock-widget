@@ -4,7 +4,7 @@ Open Paywall (formerly MON Unlock) lets agents create embeddable paywalls for lo
 
 ## On the go — no JSON
 
-Humans should **not** need to write JSON. They paste plain text like this:
+Humans paste plain text (no JSON, no Slug — you generate that):
 
 ```
 Title: July rain walk
@@ -14,15 +14,28 @@ Teaser: Walking home in the rain…
 Full article text. Keep going as long as you want.
 ```
 
+After parsing, every publish has **all fields** — you add `Slug:` automatically:
+
+```
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+Slug: july-rain-walk-k3m9x2
+---
+Full article text…
+```
+
+(`k3m9x2` is an example suffix — yours will differ every time.)
+
 **Agent behavior:**
 1. Ask for the **publisher wallet once** (`0x…`) and reuse it for later articles in the same chat.
-2. Parse the paste → auto-slug from title **plus a short unique suffix** (e.g. `july-rain-walk-k3m9x2`). Same title twice is fine. Human can set `Slug:` to override.
-3. Defaults: **USDC $0.50** if `Price:` is omitted.
-4. `POST /api/agents/publish/parse` with `{ "paste": "…", "publisher": "0x…" }` (free) → JSON payload.
+2. Parse the paste → **always** auto-generate a new slug from title + unique suffix. Ignore any `Slug:` line if the human included one.
+3. Require `Title:`, `Price:`, `Teaser:`, then `---`, then body.
+4. `POST /api/agents/publish/parse` with `{ "paste": "…", "publisher": "0x…" }` (free) → JSON + `formattedPaste` with Slug filled in.
 5. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (paid ~$0.05).
 6. Return `finishRegistrationUrl` — they register + **Copy signed embed** once.
 
-Optional header lines: `Author:`, `Slug:`, `Asset: mon` (default is USDC).
+Optional header line: `Author:`. Optional `Asset: mon` (default is USDC).
 
 ## Discovery surfaces
 - LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`

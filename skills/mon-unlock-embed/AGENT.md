@@ -18,7 +18,7 @@ Don't lecture every time — only on first use or when they ask.
 
 ## When publishing — accept casual paste
 
-Humans paste plain text (not JSON):
+Humans paste plain text (no Slug line — you generate it):
 
 ```
 Title: July rain walk
@@ -28,16 +28,16 @@ Teaser: Walking home in the rain…
 Full article body here…
 ```
 
-Ask for **publisher wallet once** and reuse. Auto-slug = title + unique suffix (e.g. `july-rain-walk-k3m9x2`). Set `Slug:` only if you want a specific id.
+Ask for **publisher wallet once** and reuse. **Always** auto-generate a new slug; show all fields back including `Slug:` before publish.
 
-| Field | Source |
-|-------|--------|
-| title | `Title:` line |
-| articleId (slug) | `Slug:` or auto `title-unique` (e.g. `july-rain-walk-k3m9x2`) |
-| teaser | `Teaser:` line |
-| body | everything after `---` |
-| price | `Price:` (optional; default 0.50 USDC) |
-| author | `Author:` (optional) |
+| Field | Who provides |
+|-------|----------------|
+| title | human (`Title:`) |
+| price | human (`Price:`) |
+| teaser | human (`Teaser:`) |
+| articleId (slug) | **you** — auto every time |
+| body | human (after `---`) |
+| author | optional human (`Author:`) |
 | publisher | ask once, store in config / memory |
 
 ## Always call the tool

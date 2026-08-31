@@ -105,15 +105,8 @@ export function uniqueSlugFromTitle(title) {
 /**
  * Parse casual human paste into a publish payload.
  *
- * Example:
- *   Title: July rain walk
- *   Price: 0.50
- *   Teaser: Walking home in the rain…
- *   ---
- *   Full article text…
- *
- * `publisher` is passed separately (ask once, reuse). Slug is derived from title
- * plus a short unique suffix (e.g. july-rain-walk-k3m9x2) unless the human sets `Slug:`.
+ * Human paste (Title, Price, Teaser, then --- and body). Slug is always
+ * auto-generated — never taken from the paste.
  */
 export function parsePublishPaste(raw, options = {}) {
   const text = String(raw ?? "").trim();
@@ -138,15 +131,17 @@ export function parsePublishPaste(raw, options = {}) {
     fields[m[1].trim().toLowerCase()] = m[2].trim();
   }
 
+  const errors = [];
   const title = fields.title || "";
   const teaser = fields.teaser || "";
   const price = fields.price || "";
   const author = fields.author || "";
-  const articleId =
-    fields.slug ||
-    fields["article id"] ||
-    fields.articleid ||
-    uniqueSlugFromTitle(title);
+  if (!title) errors.push("Title: is required");
+  if (!teaser) errors.push("Teaser: is required");
+  if (!price) errors.push("Price: is required");
+  if (errors.length) return { ok: false, errors };
+
+  const articleId = uniqueSlugFromTitle(title);
   const assetRaw =
     fields.asset || fields["payment asset"] || fields.paymentasset || fields.payment || "";
 
@@ -163,14 +158,33 @@ export function parsePublishPaste(raw, options = {}) {
     teaser,
     body,
     publisher,
+    price,
     ...(author ? { author } : {}),
-    ...(price ? { price } : {}),
     ...(paymentAsset ? { paymentAsset } : {}),
   };
 
   const validated = validatePublishInput(payload);
   if (!validated.ok) return validated;
-  return { ok: true, input: validated.input, parsedFrom: "paste" };
+  return {
+    ok: true,
+    input: validated.input,
+    formattedPaste: formatPublishPaste(validated.input),
+    parsedFrom: "paste",
+  };
+}
+
+/** Canonical paste with all fields (Slug always present — for agent confirmation). */
+export function formatPublishPaste(input) {
+  const paymentAsset = normalizePaymentAsset(input.paymentAsset ?? "usdc");
+  const price = input.price || defaultPriceForAsset(paymentAsset);
+  const lines = [
+    `Title: ${input.title}`,
+    `Price: ${price}`,
+    `Teaser: ${input.teaser}`,
+    `Slug: ${input.articleId}`,
+  ];
+  if (input.author) lines.push(`Author: ${input.author}`);
+  return `${lines.join("\n")}\n---\n${input.body}`;
 }
 
 /**

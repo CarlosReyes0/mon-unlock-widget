@@ -22,15 +22,18 @@ card / Apple Pay / Google Pay. Live site: https://mon-unlock-widget-production.u
 
 ### Human paste (no JSON)
 
+Human sends Title, Price, Teaser, `---`, body. **You** always add a new `Slug:` (auto-generated; never ask them to write it).
+
 ```
 Title: July rain walk
 Price: 0.50
 Teaser: Walking home in the rain…
+Slug: july-rain-walk-k3m9x2
 ---
 Full article text…
 ```
 
-Ask for publisher wallet once and reuse. Auto-slug = title + short unique suffix (same title twice is OK). Optional `Slug:` override.
+(Example slug — generate a fresh one every publish.)
 
 1. Read https://mon-unlock-widget-production.up.railway.app/llms.txt and /agents.md if you need details.
 2. Parse the paste (or `POST /api/agents/publish/parse` with `{ paste, publisher }`).

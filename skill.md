@@ -17,6 +17,8 @@ Open Paywall creates an **embeddable paywall** for long-form articles. You get p
 
 ### Human paste (recommended on mobile)
 
+Human sends (no Slug — you add it):
+
 ```
 Title: July rain walk
 Price: 0.50
@@ -25,7 +27,7 @@ Teaser: Walking home in the rain…
 Full article text…
 ```
 
-Ask for `publisher` wallet **once**, reuse it. Auto-slug = title + unique suffix (e.g. `july-rain-walk-k3m9x2`). Optional `Slug:` to pick your own.
+You **always** auto-generate a new `Slug:` (title + unique suffix). Show the full block back with all four header fields before publish. `POST /api/agents/publish/parse` returns `formattedPaste` with Slug filled in.
 
 ### API fields (after parsing)
 
