@@ -25,7 +25,7 @@ Teaser: Walking home in the rain…
 Full article text…
 ```
 
-Ask for `publisher` wallet **once**, reuse it. You slug from title, parse, validate, publish. Optional: `POST /api/agents/publish/parse` with `{ paste, publisher }`.
+Ask for `publisher` wallet **once**, reuse it. Auto-slug = title + unique suffix (e.g. `july-rain-walk-k3m9x2`). Optional `Slug:` to pick your own.
 
 ### API fields (after parsing)
 

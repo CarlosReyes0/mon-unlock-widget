@@ -91,6 +91,8 @@ export function buildOpenApiDocument() {
           "Title: July rain walk\\nPrice: 0.50\\nTeaser: Walking home in the rain…\\n---\\nFull article text.",
         optionalLines: ["Author:", "Slug:", "Asset: mon"],
         defaults: { paymentAsset: "usdc", price: "0.50" },
+        slugRule:
+          "Auto: kebab-title + short unique suffix (e.g. july-rain-walk-k3m9x2). Optional Slug: override.",
       },
       skill: `${origin}/skill.md`,
       cursorSkill: `${origin}/.well-known/skills/mon-unlock/SKILL.md`,

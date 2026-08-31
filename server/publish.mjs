@@ -82,6 +82,26 @@ export function slugFromTitle(title) {
   return slug.slice(0, 64);
 }
 
+/** Short random suffix so auto-slugs stay unique (e.g. july-rain-walk-k3m9x2). */
+export function uniqueSlugSuffix() {
+  const time = Date.now().toString(36);
+  const rand = Math.floor(Math.random() * 36 ** 2)
+    .toString(36)
+    .padStart(2, "0");
+  return `${time.slice(-4)}${rand}`.toLowerCase().replace(/[^a-z0-9]/g, "0");
+}
+
+/** Title-based slug with a unique suffix — default for casual paste. */
+export function uniqueSlugFromTitle(title) {
+  const base = slugFromTitle(title);
+  const suffix = uniqueSlugSuffix();
+  if (!base) return `post-${suffix}`.slice(0, 64);
+  const combined = `${base}-${suffix}`;
+  if (combined.length <= 64) return combined;
+  const trimBase = base.slice(0, 64 - suffix.length - 1).replace(/-+$/, "");
+  return `${trimBase}-${suffix}`;
+}
+
 /**
  * Parse casual human paste into a publish payload.
  *
@@ -93,7 +113,7 @@ export function slugFromTitle(title) {
  *   Full article text…
  *
  * `publisher` is passed separately (ask once, reuse). Slug is derived from title
- * unless the human sets `Slug:` in the header.
+ * plus a short unique suffix (e.g. july-rain-walk-k3m9x2) unless the human sets `Slug:`.
  */
 export function parsePublishPaste(raw, options = {}) {
   const text = String(raw ?? "").trim();
@@ -123,7 +143,10 @@ export function parsePublishPaste(raw, options = {}) {
   const price = fields.price || "";
   const author = fields.author || "";
   const articleId =
-    fields.slug || fields["article id"] || fields.articleid || slugFromTitle(title);
+    fields.slug ||
+    fields["article id"] ||
+    fields.articleid ||
+    uniqueSlugFromTitle(title);
   const assetRaw =
     fields.asset || fields["payment asset"] || fields.paymentasset || fields.payment || "";
 

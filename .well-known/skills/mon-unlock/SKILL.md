@@ -30,7 +30,7 @@ Teaser: Walking home in the rain…
 Full article text…
 ```
 
-Ask for publisher wallet once and reuse. Slug from title unless `Slug:` is set. Defaults: USDC $0.50.
+Ask for publisher wallet once and reuse. Auto-slug = title + short unique suffix (same title twice is OK). Optional `Slug:` override.
 
 1. Read https://mon-unlock-widget-production.up.railway.app/llms.txt and /agents.md if you need details.
 2. Parse the paste (or `POST /api/agents/publish/parse` with `{ paste, publisher }`).

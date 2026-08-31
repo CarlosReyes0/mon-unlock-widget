@@ -28,12 +28,12 @@ Teaser: Walking home in the rain…
 Full article body here…
 ```
 
-Ask for **publisher wallet once** and reuse. Derive slug from title unless they set `Slug:`. Default price: **$0.50 USDC**.
+Ask for **publisher wallet once** and reuse. Auto-slug = title + unique suffix (e.g. `july-rain-walk-k3m9x2`). Set `Slug:` only if you want a specific id.
 
 | Field | Source |
 |-------|--------|
 | title | `Title:` line |
-| articleId (slug) | `Slug:` or slug from title |
+| articleId (slug) | `Slug:` or auto `title-unique` (e.g. `july-rain-walk-k3m9x2`) |
 | teaser | `Teaser:` line |
 | body | everything after `---` |
 | price | `Price:` (optional; default 0.50 USDC) |

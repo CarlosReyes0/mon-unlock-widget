@@ -7,6 +7,8 @@ import {
   toArticleIdHash,
   toPriceWei,
   slugFromTitle,
+  uniqueSlugFromTitle,
+  uniqueSlugSuffix,
   parsePublishPaste,
   MAINNET_USDC_CONTRACT,
   MAINNET_MON_CONTRACT,
@@ -150,6 +152,14 @@ test("slugFromTitle kebab-cases titles", () => {
   assert.equal(slugFromTitle("  Hello, World!  "), "hello-world");
 });
 
+test("uniqueSlugFromTitle appends a unique suffix", () => {
+  const a = uniqueSlugFromTitle("July rain walk");
+  const b = uniqueSlugFromTitle("July rain walk");
+  assert.match(a, /^july-rain-walk-[a-z0-9]+$/);
+  assert.notEqual(a, b);
+  assert.match(a, /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/);
+});
+
 test("parsePublishPaste converts casual human paste", () => {
   const result = parsePublishPaste(
     `Title: July rain walk
@@ -161,7 +171,7 @@ Full article text. Keep going as long as you want.`,
   );
   assert.equal(result.ok, true);
   assert.equal(result.input.title, "July rain walk");
-  assert.equal(result.input.articleId, "july-rain-walk");
+  assert.match(result.input.articleId, /^july-rain-walk-[a-z0-9]+$/);
   assert.equal(result.input.teaser, "Walking home in the rain…");
   assert.equal(result.input.body.includes("Full article text"), true);
   assert.equal(result.input.price, "0.50");

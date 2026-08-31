@@ -16,7 +16,7 @@ Full article text. Keep going as long as you want.
 
 **Agent behavior:**
 1. Ask for the **publisher wallet once** (`0x…`) and reuse it for later articles in the same chat.
-2. Parse the paste → derive slug from title (`july-rain-walk`) unless they set `Slug:`.
+2. Parse the paste → auto-slug from title **plus a short unique suffix** (e.g. `july-rain-walk-k3m9x2`). Same title twice is fine. Human can set `Slug:` to override.
 3. Defaults: **USDC $0.50** if `Price:` is omitted.
 4. `POST /api/agents/publish/parse` with `{ "paste": "…", "publisher": "0x…" }` (free) → JSON payload.
 5. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (paid ~$0.05).
