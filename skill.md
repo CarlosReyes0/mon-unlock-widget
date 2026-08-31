@@ -17,7 +17,11 @@ Open Paywall creates an **embeddable paywall** for long-form articles. You get p
 
 ### Human paste (recommended on mobile)
 
-Human sends (no Slug — you add it):
+**Messy is OK** — labels, order, and `---` are optional. You interpret.
+
+**Always confirm first:** after they send the article, reply with Title / Price / Teaser / Slug (you'll generate) / body summary. Wait for **looks good** or edits. **Then** validate and publish.
+
+Ideal template if they ask:
 
 ```
 Title: July rain walk
@@ -27,7 +31,7 @@ Teaser: Walking home in the rain…
 Full article text…
 ```
 
-You **always** auto-generate a new `Slug:` (title + unique suffix). Show the full block back with all four header fields before publish. `POST /api/agents/publish/parse` returns `formattedPaste` with Slug filled in.
+You add a fresh `Slug:` on publish. `POST /api/agents/publish/parse` is optional — use it on the **confirmed** draft, not on first messy paste.
 
 ### API fields (after parsing)
 

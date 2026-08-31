@@ -22,7 +22,7 @@ card / Apple Pay / Google Pay. Live site: https://mon-unlock-widget-production.u
 
 ### Human paste (no JSON)
 
-Human sends Title, Price, Teaser, `---`, body. **You** always add a new `Slug:` (auto-generated; never ask them to write it).
+Messy input is fine — interpret loosely. **Before validate/publish:** echo back Title, Price, Teaser, Slug (you'll generate), and body preview; wait for confirmation.
 
 ```
 Title: July rain walk
@@ -33,12 +33,11 @@ Slug: july-rain-walk-k3m9x2
 Full article text…
 ```
 
-(Example slug — generate a fresh one every publish.)
+(Example slug — fresh one every publish.)
 
-1. Read https://mon-unlock-widget-production.up.railway.app/llms.txt and /agents.md if you need details.
-2. Parse the paste (or `POST /api/agents/publish/parse` with `{ paste, publisher }`).
-3. `POST /api/agents/publish/validate` (free) to confirm the payload and quote.
-4. `POST /api/agents/publish` with the same JSON.
+1. Interpret their message → **show interpretation → wait for OK**.
+2. Read /agents.md if needed.
+3. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish`.
    - Expect HTTP 402 + Payment challenge if unpaid (about **$0.05**).
    - If a funded payer is already available: show the price, get approval, pay, retry with `Authorization: Payment …` (or `npx mppx` with **mainnet** PathUSD).
    - **If not funded: STOP after this first 402.** Tell the human publish requires $0.05 and ask them to pay or provide a funded `MPPX_PRIVATE_KEY`. Do **not** install keyrings, use testnet faucets, or bypass via Supabase.

@@ -4,7 +4,7 @@
 Best fit:
 - Create an embeddable paywall for a long-form article or post.
 - Monetize writing with pay-per-article micropayments (not a subscription newsletter platform).
-- Let an AI agent generate an `<open-paywall>` embed from casual paste (Title/Teaser/`---`/body) or JSON; store the paid body; return paste-ready HTML.
+- Let an AI agent publish from casual paste (messy OK — agent confirms interpretation first) or JSON.
 - Publish from chat (OpenClaw) or from an MPP-capable agent via HTTP 402.
 - Accept native MON or USDC on Monad plus fiat checkout for non-crypto readers.
 - Pay out publishers with Stripe Connect after fiat unlocks.

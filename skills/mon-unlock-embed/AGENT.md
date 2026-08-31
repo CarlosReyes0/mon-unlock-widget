@@ -18,7 +18,13 @@ Don't lecture every time — only on first use or when they ask.
 
 ## When publishing — accept casual paste
 
-Humans paste plain text (no Slug line — you generate it):
+Messy input is OK. No perfect labels required.
+
+**Step 1 — interpret and confirm (required):** After they send the article, reply with what you understood (Title, Price, Teaser, Slug you'll generate, body preview). Ask them to fix anything or say **looks good**. Do not publish until they confirm.
+
+**Step 2 — publish** after OK. Always auto-generate a new slug.
+
+Ideal template:
 
 ```
 Title: July rain walk
@@ -28,7 +34,7 @@ Teaser: Walking home in the rain…
 Full article body here…
 ```
 
-Ask for **publisher wallet once** and reuse. **Always** auto-generate a new slug; show all fields back including `Slug:` before publish.
+Ask for **publisher wallet once** and reuse.
 
 | Field | Who provides |
 |-------|----------------|

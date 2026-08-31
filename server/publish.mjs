@@ -105,8 +105,8 @@ export function uniqueSlugFromTitle(title) {
 /**
  * Parse casual human paste into a publish payload.
  *
- * Human paste (Title, Price, Teaser, then --- and body). Slug is always
- * auto-generated — never taken from the paste.
+ * Strict shape checker for the /parse API. Chat agents should interpret messy
+ * input with an LLM, confirm with the human, then call this (or build JSON directly).
  */
 export function parsePublishPaste(raw, options = {}) {
   const text = String(raw ?? "").trim();

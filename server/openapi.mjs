@@ -86,13 +86,17 @@ export function buildOpenApiDocument() {
       ],
       humanPasteFormat: {
         description:
-          "Mobile-friendly plain text. Agent derives slug from title; asks publisher wallet once.",
+          "Mobile-friendly plain text. Messy input OK — agent interprets loosely, confirms before publish.",
+        messyInputOk: true,
+        confirmBeforePublish: true,
+        interpretationPrompt:
+          "Reply with Title, Price, Teaser, Slug (agent-generated), body preview; wait for looks good.",
         example:
           "Title: July rain walk\\nPrice: 0.50\\nTeaser: Walking home…\\n---\\nFull article text.",
         completedExample:
           "Title: July rain walk\\nPrice: 0.50\\nTeaser: Walking home…\\nSlug: july-rain-walk-k3m9x2\\n---\\nFull article text.",
-        requiredHumanLines: ["Title:", "Price:", "Teaser:", "---"],
-        slugRule: "Always auto-generate Slug (title + unique suffix). Never accept Slug from human.",
+        idealHumanLines: ["Title:", "Price:", "Teaser:", "---"],
+        slugRule: "Always auto-generate Slug on publish. Never accept Slug from human.",
         optionalLines: ["Author:", "Asset: mon"],
       },
       skill: `${origin}/skill.md`,

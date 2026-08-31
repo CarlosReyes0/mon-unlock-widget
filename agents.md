@@ -4,7 +4,9 @@ Open Paywall (formerly MON Unlock) lets agents create embeddable paywalls for lo
 
 ## On the go — no JSON
 
-Humans paste plain text (no JSON, no Slug — you generate that):
+**Messy input is fine.** Humans don't need perfect labels, order, or a `---` line. You interpret what they meant.
+
+**Ideal** paste (if they want a template):
 
 ```
 Title: July rain walk
@@ -14,7 +16,28 @@ Teaser: Walking home in the rain…
 Full article text. Keep going as long as you want.
 ```
 
-After parsing, every publish has **all fields** — you add `Slug:` automatically:
+**Also fine:** a rambling message, title on line 1, article below, no `Price:` (default **$0.50 USDC**), teaser mixed into the first paragraph, etc. Use judgment.
+
+### Confirm before you publish (required)
+
+After they send the article, **do not validate or publish yet.** Reply with your interpretation:
+
+```
+Here's what I'll publish:
+
+Title: July rain walk
+Price: 0.50
+Teaser: Walking home in the rain…
+Slug: july-rain-walk-k3m9x2   ← I'll generate a fresh one on publish
+---
+[first ~2 lines of body, or "Full article (N words)"]
+
+Reply with changes, or say "looks good" to publish.
+```
+
+Wait for **looks good** (or edits). Then validate → publish. Regenerate slug on the actual publish call.
+
+Completed block (all fields — you add `Slug:`):
 
 ```
 Title: July rain walk
@@ -25,17 +48,17 @@ Slug: july-rain-walk-k3m9x2
 Full article text…
 ```
 
-(`k3m9x2` is an example suffix — yours will differ every time.)
+(`k3m9x2` is an example — yours differs every time. Never ask them to write Slug.)
 
 **Agent behavior:**
-1. Ask for the **publisher wallet once** (`0x…`) and reuse it for later articles in the same chat.
-2. Parse the paste → **always** auto-generate a new slug from title + unique suffix. Ignore any `Slug:` line if the human included one.
-3. Require `Title:`, `Price:`, `Teaser:`, then `---`, then body.
-4. `POST /api/agents/publish/parse` with `{ "paste": "…", "publisher": "0x…" }` (free) → JSON + `formattedPaste` with Slug filled in.
+1. Ask for the **publisher wallet once** (`0x…`) and reuse it.
+2. Interpret messy paste → show interpretation → **wait for confirmation**.
+3. On publish: **always** auto-generate a new slug. Ignore any `Slug:` they included.
+4. Optional: `POST /api/agents/publish/parse` only after they confirm (strict checker for the final shape).
 5. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (paid ~$0.05).
-6. Return `finishRegistrationUrl` — they register + **Copy signed embed** once.
+6. Return `finishRegistrationUrl` — register + **Copy signed embed** once.
 
-Optional header line: `Author:`. Optional `Asset: mon` (default is USDC).
+Optional: `Author:`. `Asset: mon` (default USDC).
 
 ## Discovery surfaces
 - LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`
