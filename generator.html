@@ -1140,7 +1140,10 @@
         backdrop.hidden = false;
         document.body.style.overflow = "hidden";
         input.value = prefillUrl || "";
-        const kind = prefillUrl ? detectMediaKind(prefillUrl) : prefillKind;
+        const kind =
+          prefillUrl && detectMediaKind
+            ? detectMediaKind(prefillUrl)
+            : prefillKind;
         setSelectedMediaKind(kind === "embed" ? "embed" : kind === "video" ? "video" : "image");
         setMediaValidationUi({ status: "checking", message: prefillUrl ? "Checking link…" : "Paste a link to check it." });
         input.focus();
