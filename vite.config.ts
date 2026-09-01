@@ -5,6 +5,10 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const walletConnectProjectId =
+    env.VITE_WALLETCONNECT_PROJECT_ID ||
+    env.WALLETCONNECT_PROJECT_ID ||
+    "c2a289e11ad2998f8ea4633db536334c";
 
   if (mode === "lib") {
     return {
@@ -51,6 +55,7 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         "import.meta.env.VITE_PRIVY_APP_ID": JSON.stringify(env.VITE_PRIVY_APP_ID || ""),
+        "import.meta.env.VITE_WALLETCONNECT_PROJECT_ID": JSON.stringify(walletConnectProjectId),
       },
       build: {
         outDir: "dist-publisher",
@@ -98,6 +103,7 @@ export default defineConfig(({ mode }) => {
     ],
     define: {
       "import.meta.env.VITE_PRIVY_APP_ID": JSON.stringify(env.VITE_PRIVY_APP_ID || ""),
+      "import.meta.env.VITE_WALLETCONNECT_PROJECT_ID": JSON.stringify(walletConnectProjectId),
     },
   };
 });

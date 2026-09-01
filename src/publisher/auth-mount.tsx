@@ -1,8 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { PrivyProvider } from "@privy-io/react-auth";
-import { monad } from "viem/chains";
 import { PublisherAuth } from "./PublisherAuth.js";
+import { publisherPrivyConfig } from "./privy-config.js";
 import "./publisher-auth.css";
 
 const appId = (import.meta.env.VITE_PRIVY_APP_ID as string | undefined)?.trim() ?? "";
@@ -36,24 +36,7 @@ function mount() {
   const root = createRoot(el);
   root.render(
     <React.StrictMode>
-      <PrivyProvider
-        appId={appId}
-        config={{
-          loginMethods: ["email", "google", "wallet"],
-          appearance: {
-            theme: "light",
-            accentColor: "#7c3aed",
-            logo: undefined,
-          },
-          embeddedWallets: {
-            ethereum: {
-              createOnLogin: "users-without-wallets",
-            },
-          },
-          defaultChain: monad,
-          supportedChains: [monad],
-        }}
-      >
+      <PrivyProvider appId={appId} config={publisherPrivyConfig()}>
         <PublisherAuth variant="inline" />
       </PrivyProvider>
     </React.StrictMode>

@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import {
+  useCreateWallet,
+  useLoginWithOAuth,
+  useModalStatus,
+  usePrivy,
+  useWallets,
+} from "@privy-io/react-auth";
 
 export type PublisherAuthDetail = {
   address: string;
@@ -23,6 +29,11 @@ function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
+function isMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function pickWallet(wallets: ReturnType<typeof useWallets>["wallets"]) {
   if (!wallets.length) return null;
   return (
@@ -39,14 +50,19 @@ type Props = {
 };
 
 export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, login, logout, connectWallet, user } = usePrivy();
   const { wallets } = useWallets();
+  const { createWallet } = useCreateWallet();
+  const { initOAuth } = useLoginWithOAuth();
+  const { isOpen: modalOpen } = useModalStatus();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [address, setAddress] = useState<string | null>(null);
+  const [walletSetup, setWalletSetup] = useState(false);
 
   const activeWallet = useMemo(() => pickWallet(wallets), [wallets]);
   const email = user?.email?.address || user?.google?.email || null;
+  const actionBusy = busy || modalOpen || walletSetup;
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +105,31 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     };
   }, [authenticated, activeWallet, onReadyChange]);
 
+  // Email/Google sign-in can finish before the embedded wallet is ready — create it explicitly.
+  useEffect(() => {
+    if (!ready || !authenticated || activeWallet) return;
+
+    let cancelled = false;
+    setWalletSetup(true);
+    setError("");
+
+    void (async () => {
+      try {
+        await createWallet();
+      } catch (e) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : "Failed to create wallet";
+        if (!/already has|already exists/i.test(msg)) setError(msg);
+      } finally {
+        if (!cancelled) setWalletSetup(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, authenticated, activeWallet, createWallet]);
+
   useEffect(() => {
     window.MonPublisherAuth = {
       getAddress: () => window.__monPublisherAddress || null,
@@ -99,22 +140,48 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     };
   }, [logout]);
 
-  async function startLogin(method?: "email" | "google" | "wallet") {
+  async function startEmailLogin() {
     setError("");
     setBusy(true);
     try {
-      if (method === "email") {
-        await login({ loginMethods: ["email"] });
-      } else if (method === "google") {
-        await login({ loginMethods: ["google"] });
-      } else if (method === "wallet") {
-        await login({ loginMethods: ["wallet"] });
-      } else {
-        await login();
-      }
+      login({ loginMethods: ["email"] });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Sign-in failed";
-      // User closed modal — not an error worth shouting.
+      if (!/exited|closed|cancelled|canceled/i.test(msg)) setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startGoogleLogin() {
+    setError("");
+    setBusy(true);
+    try {
+      // Redirect-based OAuth works reliably on iOS Safari; the modal popup often does not.
+      if (isMobileDevice()) {
+        await initOAuth({ provider: "google" });
+      } else {
+        login({ loginMethods: ["google"] });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Google sign-in failed";
+      if (!/exited|closed|cancelled|canceled/i.test(msg)) setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startWalletLogin() {
+    setError("");
+    setBusy(true);
+    try {
+      if (authenticated) {
+        connectWallet();
+      } else {
+        login({ loginMethods: ["wallet"] });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Wallet connection failed";
       if (!/exited|closed|cancelled|canceled/i.test(msg)) setError(msg);
     } finally {
       setBusy(false);
@@ -139,6 +206,23 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     );
   }
 
+  if (authenticated && !address) {
+    return (
+      <div className="mon-pub-auth">
+        <p className="mon-pub-auth__status">
+          {walletSetup ? "Setting up your publisher wallet…" : "Finishing sign-in…"}
+        </p>
+        {email ? <p className="mon-pub-auth__hint">Signed in as {email}</p> : null}
+        {error ? <p className="mon-pub-auth__error">{error}</p> : null}
+        <div className="mon-pub-auth__row" style={{ marginTop: "0.75rem" }}>
+          <button type="button" className="mon-pub-auth__btn" disabled={actionBusy} onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (authenticated && address) {
     return (
       <div className="mon-pub-auth">
@@ -146,7 +230,7 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
           <p className="mon-pub-auth__status">
             Signed in{email ? ` as ${email}` : ""} · <strong>{shortAddr(address)}</strong>
           </p>
-          <button type="button" className="mon-pub-auth__btn" disabled={busy} onClick={() => void signOut()}>
+          <button type="button" className="mon-pub-auth__btn" disabled={actionBusy} onClick={() => void signOut()}>
             Sign out
           </button>
         </div>
@@ -169,15 +253,20 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
         <button
           type="button"
           className="mon-pub-auth__btn mon-pub-auth__btn--primary"
-          disabled={busy}
-          onClick={() => void startLogin("email")}
+          disabled={actionBusy}
+          onClick={() => void startEmailLogin()}
         >
           Continue with email
         </button>
-        <button type="button" className="mon-pub-auth__btn" disabled={busy} onClick={() => void startLogin("google")}>
+        <button
+          type="button"
+          className="mon-pub-auth__btn"
+          disabled={actionBusy}
+          onClick={() => void startGoogleLogin()}
+        >
           Continue with Google
         </button>
-        <button type="button" className="mon-pub-auth__btn" disabled={busy} onClick={() => void startLogin("wallet")}>
+        <button type="button" className="mon-pub-auth__btn" disabled={actionBusy} onClick={startWalletLogin}>
           Connect wallet
         </button>
       </div>
