@@ -282,7 +282,7 @@
       }
     </style>
   </head>
-  <body>
+  <body data-mobile-panel="edit">
     <div id="site-nav"></div>
 
     <div class="header">
@@ -454,12 +454,28 @@
     <script type="module" src="/publisher-auth.js"></script>
     <script src="/site-nav.js"></script>
     <script type="module">
-      import {
-        buildMediaSnippet,
-        detectMediaKind,
-        extractMediaUrls,
-        validateMediaUrl,
-      } from "/generator-media.js";
+      let buildMediaSnippet;
+      let detectMediaKind;
+      let extractMediaUrls;
+      let validateMediaUrl;
+      let mediaModuleReady = false;
+
+      async function ensureMediaModule() {
+        if (mediaModuleReady) return true;
+        try {
+          const mod = await import("/generator-media.js");
+          buildMediaSnippet = mod.buildMediaSnippet;
+          detectMediaKind = mod.detectMediaKind;
+          extractMediaUrls = mod.extractMediaUrls;
+          validateMediaUrl = mod.validateMediaUrl;
+          mediaModuleReady = true;
+          return true;
+        } catch (err) {
+          console.warn("[generator] Media validation module failed to load:", err);
+          return false;
+        }
+      }
+
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
       // ArticleUnlockUsdc on Monad mainnet (override via window / localStorage for forks)
@@ -925,13 +941,16 @@
 
       async function updateSaveContentUi() {
         const btn = document.getElementById("saveContentBtn");
-        if (!btn) return;
+        const btnMobile = document.getElementById("saveContentBtnMobile");
         const v = getValues();
         const show = Boolean(connectedWallet && v.articleId && v.teaser && v.body);
-        btn.style.display = show ? "inline-flex" : "none";
+        if (btn) btn.style.display = show ? "inline-flex" : "none";
+        if (btnMobile) btnMobile.style.display = show ? "inline-flex" : "none";
         if (!show) return;
         const registered = await isArticleRegisteredByWallet(v.articleId);
-        btn.textContent = registered ? "Save content (no re-register)" : "Save draft to cloud";
+        const label = registered ? "Save content (no re-register)" : "Save draft to cloud";
+        if (btn) btn.textContent = label;
+        if (btnMobile) btnMobile.textContent = registered ? "Save content" : "Save draft";
       }
 
       async function saveContentOnly() {
@@ -978,6 +997,7 @@
       async function renderMediaHealth(body) {
         const strip = document.getElementById("mediaHealthStrip");
         if (!strip) return;
+        if (!(await ensureMediaModule())) return;
 
         const items = extractMediaUrls(body);
         if (!items.length) {
@@ -1096,6 +1116,14 @@
           return;
         }
 
+        if (!(await ensureMediaModule())) {
+          setMediaValidationUi({
+            status: "error",
+            message: "Media checker failed to load. Refresh the page and try again.",
+          });
+          return;
+        }
+
         setMediaValidationUi({ status: "checking", message: "Checking link…" });
         const result = await validateMediaUrl(raw, kind);
         if (token !== mediaSheetValidationToken) return;
@@ -1104,10 +1132,11 @@
 
       const debouncedMediaSheetValidation = debounce(runMediaSheetValidation, 500);
 
-      function openMediaSheet(prefillUrl = "", prefillKind = "image") {
+      async function openMediaSheet(prefillUrl = "", prefillKind = "image") {
         const backdrop = document.getElementById("mediaSheetBackdrop");
         const input = document.getElementById("mediaUrlInput");
         if (!backdrop || !input) return;
+        void ensureMediaModule();
         backdrop.hidden = false;
         document.body.style.overflow = "hidden";
         input.value = prefillUrl || "";
@@ -1748,6 +1777,9 @@ ${teaserEsc}
         document.getElementById("saveContentBtn")?.addEventListener("click", () => {
           void saveContentOnly();
         });
+        document.getElementById("saveContentBtnMobile")?.addEventListener("click", () => {
+          void saveContentOnly();
+        });
 
         document.getElementById("openMediaSheet")?.addEventListener("click", () => openMediaSheet());
         document.getElementById("mediaSheetCancel")?.addEventListener("click", closeMediaSheet);
@@ -1799,12 +1831,15 @@ ${teaserEsc}
         setMobilePanel(initialPanel);
         loadDraft();
         wireEvents();
+        void ensureMediaModule();
         await restoreWallet();
         updateWalletUI();
         syncMobileStatusMirror();
       }
 
-      init();
+      init().catch((err) => {
+        console.error("[generator] init failed:", err);
+      });
     </script>
   </body>
 </html>
