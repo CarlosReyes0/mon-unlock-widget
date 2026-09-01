@@ -54,6 +54,138 @@
       .status-stack { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem; margin-top: 0.5rem; }
       .status-stack > span { margin-left: 0 !important; }
 
+      .media-add-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+      .media-health-strip {
+        display: none;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+        margin-bottom: 0.85rem;
+        padding: 0.55rem 0.75rem;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        font-size: 0.75rem;
+      }
+      .media-health-strip.has-items { display: flex; }
+      .media-health-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 9999px;
+        border: 1px solid transparent;
+        background: #fff;
+        color: #374151;
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.72rem;
+        max-width: 100%;
+      }
+      .media-health-pill.ok { border-color: #bbf7d0; color: #166534; }
+      .media-health-pill.error { border-color: #fecaca; color: #b91c1c; }
+      .media-health-pill.fixable { border-color: #fde68a; color: #b45309; }
+      .media-health-pill.checking { border-color: #e5e7eb; color: #6b7280; }
+      .media-sheet-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: rgba(15, 23, 42, 0.45);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0;
+      }
+      .media-sheet-backdrop[hidden] { display: none !important; }
+      .media-sheet {
+        width: 100%;
+        max-width: 520px;
+        max-height: min(92vh, 720px);
+        overflow: auto;
+        background: #fff;
+        border-radius: 16px 16px 0 0;
+        padding: 0.85rem 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
+      }
+      @media (min-width: 721px) {
+        .media-sheet-backdrop { align-items: center; padding: 1.5rem; }
+        .media-sheet { border-radius: 16px; max-height: min(88vh, 720px); }
+      }
+      .media-sheet-handle {
+        width: 2.5rem;
+        height: 0.25rem;
+        border-radius: 9999px;
+        background: #d1d5db;
+        margin: 0 auto 0.75rem;
+      }
+      @media (min-width: 721px) { .media-sheet-handle { display: none; } }
+      .media-sheet h3 { margin: 0 0 0.85rem; font-size: 1.05rem; }
+      .media-type-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.35rem;
+        margin-bottom: 0.85rem;
+        padding: 0.25rem;
+        background: #f3f4f6;
+        border-radius: 10px;
+      }
+      .media-type-tabs button {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: #4b5563;
+        font: inherit;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 0.55rem 0.35rem;
+        border-radius: 8px;
+        cursor: pointer;
+        min-height: 2.35rem;
+      }
+      .media-type-tabs button[aria-selected="true"] {
+        background: #fff;
+        color: #111827;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      }
+      .media-validation {
+        margin-top: 0.65rem;
+        font-size: 0.8rem;
+        line-height: 1.45;
+        min-height: 1.2rem;
+      }
+      .media-validation.ok { color: #166534; }
+      .media-validation.error { color: #b91c1c; }
+      .media-validation.fixable { color: #b45309; }
+      .media-validation.checking { color: #6b7280; }
+      .media-preview-box {
+        margin-top: 0.75rem;
+        min-height: 120px;
+        border: 1px dashed #d1d5db;
+        border-radius: 10px;
+        background: #f8fafc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 0.5rem;
+      }
+      .media-preview-box img,
+      .media-preview-box video,
+      .media-preview-box iframe {
+        max-width: 100%;
+        max-height: 200px;
+        border-radius: 6px;
+      }
+      .media-preview-placeholder { color: #9ca3af; font-size: 0.8rem; text-align: center; padding: 1rem; }
+      .media-sheet-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+      }
+      .media-sheet-actions .btn { flex: 1 1 auto; min-width: 7rem; }
+      #saveContentBtn { margin-top: 0.65rem; width: 100%; }
+
       @media (max-width: 720px) {
         body {
           padding: 1rem 1rem calc(5.5rem + env(safe-area-inset-bottom, 0px));
@@ -210,10 +342,9 @@
           <div class="field">
             <label for="body">Body (full article)</label>
             <textarea id="body" placeholder="Write your article, or paste HTML with images and video embeds..."></textarea>
-            <div class="btn-group" style="margin-top:0.5rem;">
-              <button type="button" class="btn btn-secondary" id="insertImageTemplate">Image</button>
-              <button type="button" class="btn btn-secondary" id="insertYoutubeTemplate">YouTube</button>
-              <button type="button" class="btn btn-secondary" id="insertVideoTemplate">MP4</button>
+            <div class="media-add-row">
+              <button type="button" class="btn btn-secondary" id="openMediaSheet">Add media from URL</button>
+              <span class="hint" style="margin:0;">Checks the link loads before inserting.</span>
             </div>
             <details class="media-tips">
               <summary>Media URL tips</summary>
@@ -254,10 +385,12 @@
 
         <div class="actions-inline">
           <button type="button" class="btn btn-primary" id="copyFull">Copy full embed block</button>
+          <button type="button" class="btn btn-secondary" id="saveContentBtn" style="display:none;">Save content</button>
           <div class="status-stack">
             <span id="copyStatus" class="copy-success" style="display:none;">Copied!</span>
             <span id="registerStatus" style="display:none; font-size:0.75rem; color:#6b7280;"></span>
             <span id="metadataStatus" style="display:none; font-size:0.75rem;"></span>
+            <span id="contentSaveStatus" style="display:none; font-size:0.75rem;"></span>
           </div>
         </div>
       </div>
@@ -269,6 +402,7 @@
             <h2 class="section-title" style="margin:0;">Live preview</h2>
             <button type="button" class="btn btn-secondary" id="resetDraft" style="padding:0.5rem 1rem; font-size:0.75rem;">Reset draft</button>
           </div>
+          <div id="mediaHealthStrip" class="media-health-strip" aria-live="polite"></div>
           <div class="preview-pane" id="previewPane">
             <p style="color:#6b7280; font-size:0.875rem;">Fill out the form to see a live preview here.</p>
           </div>
@@ -283,6 +417,7 @@
     </div>
 
     <div class="mobile-sticky-actions" aria-label="Copy actions">
+      <button type="button" class="btn btn-secondary" id="saveContentBtnMobile" style="display:none;">Save content</button>
       <button type="button" class="btn btn-primary" id="copyFullMobile">Copy full embed block</button>
       <div class="status-stack" id="mobileStatusStack" aria-live="polite"></div>
     </div>
@@ -292,10 +427,39 @@
     </footer>
     <div id="site-footer"></div>
 
+    <div id="mediaSheetBackdrop" class="media-sheet-backdrop" hidden>
+      <div class="media-sheet" role="dialog" aria-modal="true" aria-labelledby="mediaSheetTitle">
+        <div class="media-sheet-handle" aria-hidden="true"></div>
+        <h3 id="mediaSheetTitle">Add media from URL</h3>
+        <div class="media-type-tabs" role="tablist" aria-label="Media type">
+          <button type="button" role="tab" data-media-kind="image" aria-selected="true">Image</button>
+          <button type="button" role="tab" data-media-kind="video" aria-selected="false">Video</button>
+          <button type="button" role="tab" data-media-kind="embed" aria-selected="false">Embed</button>
+        </div>
+        <label for="mediaUrlInput" style="font-size:0.875rem; font-weight:600; color:#374151;">URL</label>
+        <input id="mediaUrlInput" type="url" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…" />
+        <div id="mediaValidation" class="media-validation checking">Paste a link to check it.</div>
+        <div id="mediaPreviewBox" class="media-preview-box">
+          <div class="media-preview-placeholder">Preview appears when the link works.</div>
+        </div>
+        <div class="media-sheet-actions">
+          <button type="button" class="btn btn-secondary" id="mediaSheetCancel">Cancel</button>
+          <button type="button" class="btn btn-secondary" id="mediaSheetFix" style="display:none;">Fix</button>
+          <button type="button" class="btn btn-primary" id="mediaSheetInsert" disabled>Insert into article</button>
+        </div>
+      </div>
+    </div>
+
     <link rel="stylesheet" href="/publisher-auth.css" />
     <script type="module" src="/publisher-auth.js"></script>
     <script src="/site-nav.js"></script>
-    <script>
+    <script type="module">
+      import {
+        buildMediaSnippet,
+        detectMediaKind,
+        extractMediaUrls,
+        validateMediaUrl,
+      } from "/generator-media.js";
       const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
       const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
       // ArticleUnlockUsdc on Monad mainnet (override via window / localStorage for forks)
@@ -480,7 +644,7 @@
         const stack = document.getElementById("mobileStatusStack");
         if (!stack) return;
         stack.replaceChildren();
-        for (const id of ["copyStatus", "registerStatus", "metadataStatus"]) {
+        for (const id of ["copyStatus", "registerStatus", "metadataStatus", "contentSaveStatus"]) {
           const el = document.getElementById(id);
           if (!el) continue;
           const visible = el.style.display !== "none" && el.textContent.trim();
@@ -529,6 +693,7 @@
           status.textContent = "";
         }
         syncCopyButtonLabels();
+        void updateSaveContentUi();
       }
 
       async function connectWallet() {
@@ -698,6 +863,291 @@
         };
       }
 
+      let mediaHealthScanToken = 0;
+      let mediaSheetValidationToken = 0;
+      let pendingMediaValidation = null;
+
+      function debounce(fn, ms) {
+        let timer;
+        return (...args) => {
+          clearTimeout(timer);
+          timer = setTimeout(() => fn(...args), ms);
+        };
+      }
+
+      async function buildMetaPayload(v) {
+        const { keccak256, toBytes } = await import("https://esm.sh/viem@2");
+        const priceWei = await parsePriceUnits(v.price || "0.50", selectedAsset(), await import("https://esm.sh/viem@2"));
+        return {
+          slug: v.articleId,
+          articleIdHash: keccak256(toBytes(v.articleId)),
+          priceWei: priceWei.toString(),
+          publisher: connectedWallet,
+          teaser: v.teaser,
+          body: v.body,
+        };
+      }
+
+      async function isArticleRegisteredByWallet(articleId) {
+        if (!connectedWallet || !articleId) return false;
+        try {
+          const { keccak256, toBytes, createPublicClient, http } = await import("https://esm.sh/viem@2");
+          const articleIdBytes = keccak256(toBytes(articleId));
+          const publicClient = createPublicClient({
+            chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+            transport: http("https://rpc.monad.xyz"),
+          });
+          const existing = await publicClient.readContract({
+            address: activeContract(),
+            abi: [
+              {
+                name: "getArticle",
+                type: "function",
+                stateMutability: "view",
+                inputs: [{ name: "articleId", type: "bytes32" }],
+                outputs: [
+                  { name: "priceWei", type: "uint256" },
+                  { name: "publisher", type: "address" },
+                  { name: "active", type: "bool" },
+                ],
+              },
+            ],
+            functionName: "getArticle",
+            args: [articleIdBytes],
+          });
+          const publisher = existing?.[1] ? String(existing[1]) : "";
+          const zero = "0x0000000000000000000000000000000000000000";
+          return Boolean(publisher && publisher.toLowerCase() !== zero && publisher.toLowerCase() === connectedWallet.toLowerCase());
+        } catch {
+          return false;
+        }
+      }
+
+      async function updateSaveContentUi() {
+        const btn = document.getElementById("saveContentBtn");
+        if (!btn) return;
+        const v = getValues();
+        const show = Boolean(connectedWallet && v.articleId && v.teaser && v.body);
+        btn.style.display = show ? "inline-flex" : "none";
+        if (!show) return;
+        const registered = await isArticleRegisteredByWallet(v.articleId);
+        btn.textContent = registered ? "Save content (no re-register)" : "Save draft to cloud";
+      }
+
+      async function saveContentOnly() {
+        const v = getValues();
+        const status = document.getElementById("contentSaveStatus");
+        if (!connectedWallet) {
+          alert("Sign in or connect a wallet to save content.");
+          return;
+        }
+        if (!v.articleId || !v.teaser || !v.body) {
+          alert("Fill in article id, teaser, and body first.");
+          return;
+        }
+        status.style.display = "inline";
+        status.textContent = "Saving content…";
+        status.style.color = "#6b7280";
+        syncMobileStatusMirror();
+
+        const payload = await buildMetaPayload(v);
+        const registered = await isArticleRegisteredByWallet(v.articleId);
+        if (registered) payload.confirmRegistered = true;
+
+        const result = await syncMetadataToSupabase(payload);
+        if (result.ok) {
+          status.textContent = "Content saved ✓";
+          status.style.color = "#16a34a";
+        } else if (result.error === "slug_taken") {
+          status.textContent = slugTakenMessage(result, v.articleId);
+          status.style.color = "#ef4444";
+        } else {
+          status.textContent = `Save failed: ${result.error}`;
+          status.style.color = "#b45309";
+        }
+        syncMobileStatusMirror();
+        setTimeout(() => {
+          if (status.textContent.includes("✓")) {
+            status.style.display = "none";
+            syncMobileStatusMirror();
+          }
+        }, 3500);
+      }
+
+
+      async function renderMediaHealth(body) {
+        const strip = document.getElementById("mediaHealthStrip");
+        if (!strip) return;
+
+        const items = extractMediaUrls(body);
+        if (!items.length) {
+          strip.classList.remove("has-items");
+          strip.replaceChildren();
+          return;
+        }
+
+        strip.classList.add("has-items");
+        strip.replaceChildren();
+        const label = document.createElement("span");
+        label.textContent = "Media:";
+        label.style.fontWeight = "600";
+        label.style.color = "#374151";
+        strip.appendChild(label);
+
+        const token = ++mediaHealthScanToken;
+        for (const item of items) {
+          const pill = document.createElement("button");
+          pill.type = "button";
+          pill.className = "media-health-pill checking";
+          pill.textContent = `${item.type}: checking…`;
+          pill.title = item.url;
+          pill.addEventListener("click", () => openMediaSheet(item.url, item.type));
+          strip.appendChild(pill);
+
+          validateMediaUrl(item.url, item.type).then((result) => {
+            if (token !== mediaHealthScanToken) return;
+            pill.className = `media-health-pill ${result.status}`;
+            const icon = result.status === "ok" ? "✓" : result.status === "fixable" ? "!" : "✗";
+            pill.textContent = `${icon} ${item.type}`;
+            pill.title = `${item.url}\n${result.message}`;
+          });
+        }
+      }
+
+      const scheduleMediaHealth = debounce(() => {
+        renderMediaHealth(getValues().body);
+      }, 600);
+
+      function getSelectedMediaKind() {
+        const selected = document.querySelector(".media-type-tabs button[aria-selected='true']");
+        return selected?.getAttribute("data-media-kind") || "image";
+      }
+
+      function setSelectedMediaKind(kind) {
+        document.querySelectorAll(".media-type-tabs button").forEach((btn) => {
+          const selected = btn.getAttribute("data-media-kind") === kind;
+          btn.setAttribute("aria-selected", selected ? "true" : "false");
+        });
+      }
+
+      function setMediaValidationUi(result) {
+        const el = document.getElementById("mediaValidation");
+        const insertBtn = document.getElementById("mediaSheetInsert");
+        const fixBtn = document.getElementById("mediaSheetFix");
+        const preview = document.getElementById("mediaPreviewBox");
+        if (!el || !insertBtn || !fixBtn || !preview) return;
+
+        pendingMediaValidation = result;
+        el.className = `media-validation ${result?.status || "checking"}`;
+        el.textContent = result?.message || "Checking link…";
+        insertBtn.disabled = result?.status !== "ok";
+        fixBtn.style.display = result?.status === "fixable" ? "inline-flex" : "none";
+
+        preview.replaceChildren();
+        if (!result || result.status === "error" || result.status === "checking") {
+          const placeholder = document.createElement("div");
+          placeholder.className = "media-preview-placeholder";
+          placeholder.textContent =
+            result?.status === "error"
+              ? "Fix the URL above to see a preview."
+              : "Preview appears when the link works.";
+          preview.appendChild(placeholder);
+          return;
+        }
+
+        const url = result.fixedUrl || document.getElementById("mediaUrlInput")?.value.trim();
+        if (!url) return;
+
+        if (result.kind === "embed") {
+          const iframe = document.createElement("iframe");
+          iframe.src = url;
+          iframe.loading = "lazy";
+          iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+          iframe.allowFullscreen = true;
+          iframe.style.width = "100%";
+          iframe.style.minHeight = "160px";
+          preview.appendChild(iframe);
+          return;
+        }
+
+        if (result.kind === "video") {
+          const video = document.createElement("video");
+          video.src = url;
+          video.controls = true;
+          video.preload = "metadata";
+          preview.appendChild(video);
+          return;
+        }
+
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "Preview";
+        preview.appendChild(img);
+      }
+
+      async function runMediaSheetValidation() {
+        const input = document.getElementById("mediaUrlInput");
+        const raw = input?.value.trim() || "";
+        const kind = getSelectedMediaKind();
+        const token = ++mediaSheetValidationToken;
+
+        if (!raw) {
+          setMediaValidationUi({ status: "checking", message: "Paste a link to check it." });
+          return;
+        }
+
+        setMediaValidationUi({ status: "checking", message: "Checking link…" });
+        const result = await validateMediaUrl(raw, kind);
+        if (token !== mediaSheetValidationToken) return;
+        setMediaValidationUi(result);
+      }
+
+      const debouncedMediaSheetValidation = debounce(runMediaSheetValidation, 500);
+
+      function openMediaSheet(prefillUrl = "", prefillKind = "image") {
+        const backdrop = document.getElementById("mediaSheetBackdrop");
+        const input = document.getElementById("mediaUrlInput");
+        if (!backdrop || !input) return;
+        backdrop.hidden = false;
+        document.body.style.overflow = "hidden";
+        input.value = prefillUrl || "";
+        const kind = prefillUrl ? detectMediaKind(prefillUrl) : prefillKind;
+        setSelectedMediaKind(kind === "embed" ? "embed" : kind === "video" ? "video" : "image");
+        setMediaValidationUi({ status: "checking", message: prefillUrl ? "Checking link…" : "Paste a link to check it." });
+        input.focus();
+        if (prefillUrl) void runMediaSheetValidation();
+      }
+
+      function closeMediaSheet() {
+        const backdrop = document.getElementById("mediaSheetBackdrop");
+        if (!backdrop) return;
+        backdrop.hidden = true;
+        document.body.style.overflow = "";
+        mediaSheetValidationToken++;
+        pendingMediaValidation = null;
+      }
+
+      function insertValidatedMedia() {
+        if (!pendingMediaValidation || pendingMediaValidation.status !== "ok") return;
+        const snippet = pendingMediaValidation.snippet || buildMediaSnippet(
+          pendingMediaValidation.fixedUrl || document.getElementById("mediaUrlInput")?.value.trim(),
+          pendingMediaValidation.kind || getSelectedMediaKind()
+        );
+        const bodyEl = document.getElementById("body");
+        insertAtCursor(bodyEl, snippet);
+        closeMediaSheet();
+        scheduleMediaHealth();
+      }
+
+      function applyMediaFix() {
+        if (!pendingMediaValidation || pendingMediaValidation.status !== "fixable") return;
+        if (pendingMediaValidation.kind) setSelectedMediaKind(pendingMediaValidation.kind);
+        if (pendingMediaValidation.fixedUrl) {
+          document.getElementById("mediaUrlInput").value = pendingMediaValidation.fixedUrl;
+        }
+        setMediaValidationUi({ ...pendingMediaValidation, status: "ok", message: "Fixed — ready to insert." });
+      }
+
       function renderPreview() {
         const v = getValues();
         const pane = document.getElementById("previewPane");
@@ -763,6 +1213,7 @@
           }
         `;
         pane.appendChild(override);
+        void renderMediaHealth(v.body);
       }
 
       const SUPABASE_REGISTER_URL = 'https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article';
@@ -911,6 +1362,8 @@ ${teaserEsc}
             saveDraft();
             renderPreview();
             renderCode();
+            scheduleMediaHealth();
+            void updateSaveContentUi();
           });
         });
 
@@ -1292,8 +1745,32 @@ ${teaserEsc}
         document.getElementById("copyFull")?.addEventListener("click", onCopyFull);
         document.getElementById("copyFullMobile")?.addEventListener("click", onCopyFull);
 
+        document.getElementById("saveContentBtn")?.addEventListener("click", () => {
+          void saveContentOnly();
+        });
+
+        document.getElementById("openMediaSheet")?.addEventListener("click", () => openMediaSheet());
+        document.getElementById("mediaSheetCancel")?.addEventListener("click", closeMediaSheet);
+        document.getElementById("mediaSheetInsert")?.addEventListener("click", insertValidatedMedia);
+        document.getElementById("mediaSheetFix")?.addEventListener("click", applyMediaFix);
+        document.getElementById("mediaUrlInput")?.addEventListener("input", debouncedMediaSheetValidation);
+        document.querySelectorAll(".media-type-tabs button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            setSelectedMediaKind(btn.getAttribute("data-media-kind"));
+            void runMediaSheetValidation();
+          });
+        });
+        document.getElementById("mediaSheetBackdrop")?.addEventListener("click", (ev) => {
+          if (ev.target?.id === "mediaSheetBackdrop") closeMediaSheet();
+        });
+        document.addEventListener("keydown", (ev) => {
+          if (ev.key === "Escape" && !document.getElementById("mediaSheetBackdrop")?.hidden) {
+            closeMediaSheet();
+          }
+        });
+
         const statusObserver = new MutationObserver(() => syncMobileStatusMirror());
-        ["copyStatus", "registerStatus", "metadataStatus"].forEach((id) => {
+        ["copyStatus", "registerStatus", "metadataStatus", "contentSaveStatus"].forEach((id) => {
           const el = document.getElementById(id);
           if (el) statusObserver.observe(el, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["style"] });
         });
@@ -1302,30 +1779,12 @@ ${teaserEsc}
           if (confirm("Clear the current draft?")) clearDraft();
         });
 
-        const bodyEl = document.getElementById("body");
-        document.getElementById("insertImageTemplate").addEventListener("click", () => {
-          insertAtCursor(
-            bodyEl,
-            '\n<img src="https://picsum.photos/id/1016/800/600" alt="Describe image" loading="lazy" />\n'
-          );
-        });
-        document.getElementById("insertYoutubeTemplate").addEventListener("click", () => {
-          insertAtCursor(
-            bodyEl,
-            '\n<iframe src="https://www.youtube.com/embed/VIDEO_ID" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>\n'
-          );
-        });
-        document.getElementById("insertVideoTemplate").addEventListener("click", () => {
-          insertAtCursor(
-            bodyEl,
-            '\n<video controls preload="metadata" src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"></video>\n'
-          );
-        });
-
         // Auto-render on load after draft restore
         setTimeout(() => {
           renderPreview();
           renderCode();
+          scheduleMediaHealth();
+          void updateSaveContentUi();
         }, 0);
       }
 
