@@ -97,19 +97,38 @@
         padding: 0;
       }
       .media-sheet-backdrop[hidden] { display: none !important; }
+      .media-sheet-backdrop.keyboard-open {
+        align-items: flex-start;
+        padding: max(0.5rem, env(safe-area-inset-top, 0px)) 0 0;
+      }
       .media-sheet {
         width: 100%;
         max-width: 520px;
-        max-height: min(92vh, 720px);
-        overflow: auto;
+        max-height: min(92dvh, 92vh, 720px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
         background: #fff;
         border-radius: 16px 16px 0 0;
         padding: 0.85rem 1.1rem calc(1rem + env(safe-area-inset-bottom, 0px));
         box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12);
       }
+      .media-sheet-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+      .media-sheet-handle,
+      .media-sheet > h3,
+      .media-sheet-actions {
+        flex-shrink: 0;
+      }
       @media (min-width: 721px) {
         .media-sheet-backdrop { align-items: center; padding: 1.5rem; }
-        .media-sheet { border-radius: 16px; max-height: min(88vh, 720px); }
+        .media-sheet-backdrop.keyboard-open { align-items: center; padding: 1.5rem; }
+        .media-sheet { border-radius: 16px; max-height: min(88dvh, 88vh, 720px); }
       }
       .media-sheet-handle {
         width: 2.5rem;
@@ -180,10 +199,18 @@
       .media-sheet-actions {
         display: flex;
         gap: 0.5rem;
-        margin-top: 1rem;
+        margin-top: 0.85rem;
+        padding-top: 0.65rem;
+        border-top: 1px solid #f3f4f6;
         flex-wrap: wrap;
       }
       .media-sheet-actions .btn { flex: 1 1 auto; min-width: 7rem; }
+      @media (max-width: 720px) {
+        .media-preview-box { min-height: 72px; }
+        .media-preview-box img,
+        .media-preview-box video,
+        .media-preview-box iframe { max-height: 100px; }
+      }
       #saveContentBtn { margin-top: 0.65rem; width: 100%; }
 
       @media (max-width: 720px) {
@@ -431,16 +458,18 @@
       <div class="media-sheet" role="dialog" aria-modal="true" aria-labelledby="mediaSheetTitle">
         <div class="media-sheet-handle" aria-hidden="true"></div>
         <h3 id="mediaSheetTitle">Add media from URL</h3>
-        <div class="media-type-tabs" role="tablist" aria-label="Media type">
-          <button type="button" role="tab" data-media-kind="image" aria-selected="true">Image</button>
-          <button type="button" role="tab" data-media-kind="video" aria-selected="false">Video</button>
-          <button type="button" role="tab" data-media-kind="embed" aria-selected="false">Embed</button>
-        </div>
-        <label for="mediaUrlInput" style="font-size:0.875rem; font-weight:600; color:#374151;">URL</label>
-        <input id="mediaUrlInput" type="url" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…" />
-        <div id="mediaValidation" class="media-validation checking">Paste a link to check it.</div>
-        <div id="mediaPreviewBox" class="media-preview-box">
-          <div class="media-preview-placeholder">Preview appears when the link works.</div>
+        <div class="media-sheet-body">
+          <div class="media-type-tabs" role="tablist" aria-label="Media type">
+            <button type="button" role="tab" data-media-kind="image" aria-selected="true">Image</button>
+            <button type="button" role="tab" data-media-kind="video" aria-selected="false">Video</button>
+            <button type="button" role="tab" data-media-kind="embed" aria-selected="false">Embed</button>
+          </div>
+          <label for="mediaUrlInput" style="font-size:0.875rem; font-weight:600; color:#374151;">URL</label>
+          <input id="mediaUrlInput" type="url" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…" />
+          <div id="mediaValidation" class="media-validation checking">Paste a link to check it.</div>
+          <div id="mediaPreviewBox" class="media-preview-box">
+            <div class="media-preview-placeholder">Preview appears when the link works.</div>
+          </div>
         </div>
         <div class="media-sheet-actions">
           <button type="button" class="btn btn-secondary" id="mediaSheetCancel">Cancel</button>
@@ -1132,11 +1161,43 @@
 
       const debouncedMediaSheetValidation = debounce(runMediaSheetValidation, 500);
 
+      let mediaSheetViewportBound = false;
+
+      function syncMediaSheetLayout() {
+        const backdrop = document.getElementById("mediaSheetBackdrop");
+        const sheet = backdrop?.querySelector(".media-sheet");
+        if (!backdrop || backdrop.hidden || !sheet) return;
+
+        const vv = window.visualViewport;
+        if (!vv) return;
+
+        const keyboardGap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        const isKeyboardOpen = keyboardGap > 60;
+        backdrop.classList.toggle("keyboard-open", isKeyboardOpen);
+
+        if (isKeyboardOpen) {
+          const topInset = Math.max(0, vv.offsetTop);
+          backdrop.style.paddingTop = `${topInset + 8}px`;
+          sheet.style.maxHeight = `${Math.max(260, vv.height - 16)}px`;
+        } else {
+          backdrop.style.paddingTop = "";
+          sheet.style.maxHeight = "";
+        }
+      }
+
+      function bindMediaSheetViewport() {
+        if (mediaSheetViewportBound || !window.visualViewport) return;
+        mediaSheetViewportBound = true;
+        window.visualViewport.addEventListener("resize", syncMediaSheetLayout);
+        window.visualViewport.addEventListener("scroll", syncMediaSheetLayout);
+      }
+
       async function openMediaSheet(prefillUrl = "", prefillKind = "image") {
         const backdrop = document.getElementById("mediaSheetBackdrop");
         const input = document.getElementById("mediaUrlInput");
         if (!backdrop || !input) return;
         void ensureMediaModule();
+        bindMediaSheetViewport();
         backdrop.hidden = false;
         document.body.style.overflow = "hidden";
         input.value = prefillUrl || "";
@@ -1146,14 +1207,21 @@
             : prefillKind;
         setSelectedMediaKind(kind === "embed" ? "embed" : kind === "video" ? "video" : "image");
         setMediaValidationUi({ status: "checking", message: prefillUrl ? "Checking link…" : "Paste a link to check it." });
+        syncMediaSheetLayout();
         input.focus();
+        requestAnimationFrame(syncMediaSheetLayout);
+        setTimeout(syncMediaSheetLayout, 300);
         if (prefillUrl) void runMediaSheetValidation();
       }
 
       function closeMediaSheet() {
         const backdrop = document.getElementById("mediaSheetBackdrop");
+        const sheet = backdrop?.querySelector(".media-sheet");
         if (!backdrop) return;
         backdrop.hidden = true;
+        backdrop.classList.remove("keyboard-open");
+        backdrop.style.paddingTop = "";
+        if (sheet) sheet.style.maxHeight = "";
         document.body.style.overflow = "";
         mediaSheetValidationToken++;
         pendingMediaValidation = null;
@@ -1789,6 +1857,11 @@ ${teaserEsc}
         document.getElementById("mediaSheetInsert")?.addEventListener("click", insertValidatedMedia);
         document.getElementById("mediaSheetFix")?.addEventListener("click", applyMediaFix);
         document.getElementById("mediaUrlInput")?.addEventListener("input", debouncedMediaSheetValidation);
+        document.getElementById("mediaUrlInput")?.addEventListener("focus", () => {
+          syncMediaSheetLayout();
+          setTimeout(syncMediaSheetLayout, 150);
+          setTimeout(syncMediaSheetLayout, 350);
+        });
         document.querySelectorAll(".media-type-tabs button").forEach((btn) => {
           btn.addEventListener("click", () => {
             setSelectedMediaKind(btn.getAttribute("data-media-kind"));
