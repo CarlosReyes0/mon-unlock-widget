@@ -1,0 +1,61 @@
+/**
+ * Guard: root HTML pages must be copied into the Docker runtime image.
+ *
+ * Production 404s for /articles happened because Dockerfile uses an explicit
+ * HTML allowlist and new pages were added without updating it. Fail CI if
+ * that happens again.
+ */
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * Built by Vite into dist-checkout / dist-publisher — do NOT copy source HTML.
+ * Demo pages are intentionally omitted from production images.
+ */
+const EXCLUDE_FROM_DOCKERFILE = new Set([
+  "account.html",
+  "unlock.html",
+  "publisher-auth.html",
+  "demo-checkout-mock.html",
+  "demo-unlock-recording.html",
+]);
+
+function rootHtmlFiles() {
+  return fs
+    .readdirSync(ROOT)
+    .filter((name) => name.endsWith(".html"))
+    .sort();
+}
+
+function dockerfileCopies(htmlName) {
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  return dockerfile.includes(`/app/${htmlName}`);
+}
+
+test("Dockerfile copies every production root HTML page", () => {
+  const missing = [];
+  for (const name of rootHtmlFiles()) {
+    if (EXCLUDE_FROM_DOCKERFILE.has(name)) continue;
+    if (!dockerfileCopies(name)) missing.push(name);
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    `Add these to the Dockerfile runtime COPY allowlist (or EXCLUDE_FROM_DOCKERFILE if intentional):\n${missing.join("\n")}`
+  );
+});
+
+test("Dockerfile still excludes Vite-built publisher/checkout source HTML", () => {
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  // Source account.html must not overwrite dist-publisher output.
+  assert.equal(
+    /COPY\s+--from=builder\s+\/app\/account\.html/.test(dockerfile),
+    false,
+    "Do not COPY source account.html — dist-publisher provides the built page"
+  );
+});
