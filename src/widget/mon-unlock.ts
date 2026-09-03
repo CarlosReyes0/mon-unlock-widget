@@ -8,7 +8,6 @@ import {
   WalletManager,
   monadMainnet,
   formatMon,
-  formatUsd,
   parseMonAmount,
   parseUsdAmount,
   truncateAddress,
@@ -626,9 +625,24 @@ export class MonUnlock extends LitElement {
     void this.connect();
   }
 
+  private priceDisplay(): { amount: string; unit: string; label: string } {
+    const asset = resolvePaymentAsset({
+      explicit: this.paymentAsset,
+      contract: this.unlockContract.trim(),
+    });
+    const amount =
+      asset === "usdc"
+        ? this.price
+        : this.article
+          ? formatMon(this.article.priceMon)
+          : this.price;
+    const unit = asset === "usdc" ? "USDC" : "MON";
+    return { amount, unit, label: `${amount} ${unit}` };
+  }
+
   private renderUnlockActions() {
-    const inWalletBrowser = hasReliableInjectedProvider();
     const onchain = this.isOnchain;
+    const { label: priceLabel } = this.priceDisplay();
 
     // Demo mode: single connect button (simulated unlock).
     if (!onchain) {
@@ -651,9 +665,15 @@ export class MonUnlock extends LitElement {
           ?disabled=${this.loading || this.checkoutOpen}
           @click=${() => this.openPrivyCheckout()}
         >
-          ${this.checkoutOpen ? "Checkout open…" : this.loading ? "Unlocking…" : "Continue"}
+          ${this.checkoutOpen
+            ? "Checkout open…"
+            : this.loading
+              ? "Unlocking…"
+              : `Pay ${priceLabel}`}
         </button>
-        <p class="mon-unlock-hint">Pay with card, Apple Pay, or crypto. No MetaMask needed.</p>
+        <p class="mon-unlock-hint">
+          Real charge of ${priceLabel}. Card, Apple Pay, or crypto — not a demo.
+        </p>
 
         <button
           type="button"
@@ -828,14 +848,18 @@ export class MonUnlock extends LitElement {
       explicit: this.paymentAsset,
       contract: this.unlockContract.trim(),
     });
-    const price =
-      asset === "usdc" ? this.price : formatMon(a.priceMon);
-    const priceUnit = asset === "usdc" ? "USDC" : "MON";
+    const { label: priceLabel } = this.priceDisplay();
+    const paidLine = this.txHash
+      ? html`· <a href="https://monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${priceLabel} ↗</a>`
+      : html`· Paid ${priceLabel}`;
 
     return html`
       <article class="mon-card ${classMap({ dark: this.theme === "dark" })}">
         <header class="border-b border-stone-100 px-6 py-5 dark:border-zinc-800">
-          <p class="mon-badge mb-2">${asset === "usdc" ? "Unlock with USDC or card" : "Unlock with MON or card"}</p>
+          <div class="mon-price-row mb-2">
+            <p class="mon-badge">${asset === "usdc" ? "Unlock with USDC or card" : "Unlock with MON or card"}</p>
+            <p class="mon-price-tag" aria-label="Article price">${priceLabel}</p>
+          </div>
           <h1 class="font-serif text-2xl font-semibold leading-tight" style="color:#000">${a.title}</h1>
           <p class="mt-2 text-sm text-black dark:text-zinc-400">
             ${a.author} · ${new Date(a.publishedAt).toLocaleDateString()}
@@ -853,22 +877,19 @@ export class MonUnlock extends LitElement {
                 ${this.renderBody(this.fetchedBody || a.body)}
                 <p class="mt-6 text-xs text-black">
                   Unlocked · ${this.unlockedStatusLabel()}
-                  ${this.txHash
-                    ? html`· <a href="https://monadvision.com/tx/${this.txHash}" target="_blank" class="underline">Paid ${price} ${priceUnit} ↗</a>`
-                    : nothing}
+                  ${paidLine}
                 </p>
               `
             : html`
                 <div class="mon-title-box whitespace-pre-wrap">${a.teaser}</div>
                 <div class="mt-6 rounded-xl border border-violet-100 bg-violet-50/80 p-5 dark:border-violet-900/40 dark:bg-violet-950/30">
-                  <p class="text-sm font-medium">
-                    Unlock for <span class="text-violet-700 dark:text-violet-300">${price} ${priceUnit}</span>
+                  <p class="text-base font-semibold text-stone-900 dark:text-stone-100">
+                    ${priceLabel}
+                    <span class="font-medium text-stone-600 dark:text-stone-300"> to unlock</span>
                   </p>
                   <p class="mt-1 text-xs text-stone-500">
                     ${this.isOnchain
-                      ? asset === "usdc"
-                        ? "Pay with card, Apple Pay, or USDC. Continue opens checkout."
-                        : "Pay with card, Apple Pay, or MON. Continue opens checkout."
+                      ? "Live micropayment — you will be charged this amount at checkout (card, Apple Pay, or crypto)."
                       : "Demo: connect wallet to read the rest (payment simulated)."}
                   </p>
                   <div class="mt-4">${this.renderUnlockActions()}</div>

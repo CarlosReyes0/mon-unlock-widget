@@ -59,6 +59,11 @@
         color: var(--muted);
       }
       .also a { color: var(--accent); }
+      .charge-note {
+        margin: 0 0 1rem;
+        font-size: 0.8rem;
+        color: var(--soft);
+      }
       .status {
         margin: 2rem 0;
         color: var(--muted);
@@ -75,6 +80,9 @@
       <a class="back" href="/articles">← All articles</a>
       <p class="meta" id="meta" hidden></p>
       <p class="also" id="also" hidden></p>
+      <p class="charge-note" id="chargeNote" hidden>
+        Listed articles charge a real micropayment. The price is shown on the paywall before you pay.
+      </p>
       <div id="paywallHost"></div>
       <p class="status" id="status">Loading article…</p>
       <div id="site-footer"></div>
@@ -229,6 +237,8 @@
               )}</a>`;
             }
 
+            const chargeNote = document.getElementById("chargeNote");
+            if (chargeNote) chargeNote.hidden = false;
             mountPaywall(article);
             status.hidden = true;
           } catch (e) {
