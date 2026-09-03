@@ -671,9 +671,6 @@ export class MonUnlock extends LitElement {
               ? "Unlocking…"
               : `Pay ${priceLabel}`}
         </button>
-        <p class="mon-unlock-hint">
-          Real charge of ${priceLabel}. Card, Apple Pay, or crypto — not a demo.
-        </p>
 
         <button
           type="button"
