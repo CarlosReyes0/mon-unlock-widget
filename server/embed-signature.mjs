@@ -12,6 +12,13 @@ export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
 export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL];
 export const MAINNET_UNLOCK_CONTRACT =
   "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+/** USDC ArticleUnlockUsdc — same allowlist as widget payment-asset helpers. */
+export const MAINNET_USDC_UNLOCK_CONTRACT =
+  "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+export const ALLOWED_FIAT_UNLOCK_CONTRACTS = [
+  MAINNET_UNLOCK_CONTRACT,
+  MAINNET_USDC_UNLOCK_CONTRACT,
+];
 export const MONAD_CHAIN_ID = 143;
 
 export function buildEmbedSignMessage(
@@ -51,7 +58,10 @@ export async function assertFiatEmbedAuthorized(input) {
   if (!contract.startsWith("0x") || contract.length !== 42) {
     return { ok: false, status: 400, error: "invalid_contract" };
   }
-  if (contract.toLowerCase() !== MAINNET_UNLOCK_CONTRACT.toLowerCase()) {
+  const contractOk = ALLOWED_FIAT_UNLOCK_CONTRACTS.some(
+    (c) => c.toLowerCase() === contract.toLowerCase()
+  );
+  if (!contractOk) {
     return { ok: false, status: 400, error: "unsupported_contract" };
   }
   if (!publisher.startsWith("0x") || publisher.length !== 42) {
@@ -96,4 +106,32 @@ export async function assertFiatEmbedAuthorized(input) {
   }
 
   return { ok: true };
+}
+
+/**
+ * Fiat unlock auth for create-intent.
+ * - Valid publisher embed-sig → allow (third-party embeds)
+ * - Open Paywall listed article → allow without sig (hosted /articles pages)
+ */
+export async function authorizeFiatUnlock(input) {
+  const listingStatus = String(input.listingStatus || "").trim();
+  if (listingStatus === "listed") {
+    const publisher = String(input.publisher || "").trim();
+    if (!publisher.startsWith("0x") || publisher.length !== 42) {
+      return { ok: false, status: 400, error: "invalid_publisher" };
+    }
+    let priceWei;
+    try {
+      priceWei = BigInt(input.priceWei);
+    } catch {
+      return { ok: false, status: 400, error: "invalid_price" };
+    }
+    if (priceWei <= 0n) {
+      return { ok: false, status: 400, error: "invalid_price" };
+    }
+    return { ok: true, via: "listed" };
+  }
+  const signed = await assertFiatEmbedAuthorized(input);
+  if (signed.ok) return { ok: true, via: "embed_sig" };
+  return signed;
 }

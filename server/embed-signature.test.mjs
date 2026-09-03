@@ -4,7 +4,9 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   EMBED_SIG_PREFIX_OPENPAYWALL,
   MAINNET_UNLOCK_CONTRACT,
+  MAINNET_USDC_UNLOCK_CONTRACT,
   assertFiatEmbedAuthorized,
+  authorizeFiatUnlock,
   buildEmbedSignMessage,
 } from "./embed-signature.mjs";
 
@@ -83,4 +85,48 @@ test("assertFiatEmbedAuthorized accepts Open Paywall v1 signatures", async () =>
     publisher: account.address,
   });
   assert.equal(result.ok, true);
+});
+
+test("assertFiatEmbedAuthorized accepts USDC unlock contract", async () => {
+  const usdc = {
+    ...GOLDEN,
+    contract: MAINNET_USDC_UNLOCK_CONTRACT,
+    priceWei: 500_000n,
+  };
+  const message = buildEmbedSignMessage(usdc);
+  const embedSig = await account.signMessage({ message });
+  const result = await assertFiatEmbedAuthorized({
+    embedSig,
+    contract: usdc.contract,
+    articleId: usdc.articleId,
+    priceWei: usdc.priceWei,
+    publisher: account.address,
+  });
+  assert.equal(result.ok, true);
+});
+
+test("authorizeFiatUnlock allows listed articles without embed-sig", async () => {
+  const result = await authorizeFiatUnlock({
+    embedSig: "",
+    contract: MAINNET_UNLOCK_CONTRACT,
+    articleId: "hosted-article",
+    priceWei: GOLDEN.priceWei,
+    publisher: account.address,
+    listingStatus: "listed",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.via, "listed");
+});
+
+test("authorizeFiatUnlock still requires embed-sig when not listed", async () => {
+  const result = await authorizeFiatUnlock({
+    embedSig: "",
+    contract: MAINNET_UNLOCK_CONTRACT,
+    articleId: "unlisted-article",
+    priceWei: GOLDEN.priceWei,
+    publisher: account.address,
+    listingStatus: "unlisted",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "missing_embed_sig");
 });

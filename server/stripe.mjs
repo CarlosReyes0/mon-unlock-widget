@@ -16,7 +16,7 @@
 import Stripe from "stripe";
 import { createHash, randomUUID } from "node:crypto";
 import { keccak256, toBytes } from "viem";
-import { assertFiatEmbedAuthorized } from "./embed-signature.mjs";
+import { authorizeFiatUnlock } from "./embed-signature.mjs";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
@@ -99,13 +99,15 @@ export function articleIdHash(articleId) {
  */
 export async function lookupArticle(articleId) {
   const hash = articleIdHash(articleId);
+  const cols =
+    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset";
   const bySlug = await supabase(
-    `articles?select=article_id,article_id_hash,publisher,price_wei&article_id=eq.${encodeURIComponent(articleId)}&limit=1`
+    `articles?select=${cols}&article_id=eq.${encodeURIComponent(articleId)}&limit=1`
   );
   if (Array.isArray(bySlug) && bySlug[0]) return bySlug[0];
 
   const byHash = await supabase(
-    `articles?select=article_id,article_id_hash,publisher,price_wei&article_id_hash=eq.${encodeURIComponent(hash)}&limit=1`
+    `articles?select=${cols}&article_id_hash=eq.${encodeURIComponent(hash)}&limit=1`
   );
   if (Array.isArray(byHash) && byHash[0]) return byHash[0];
   return null;
@@ -155,12 +157,13 @@ export async function createPaymentIntent(input) {
     throw err;
   }
 
-  const auth = await assertFiatEmbedAuthorized({
+  const auth = await authorizeFiatUnlock({
     embedSig,
     contract,
     articleId,
     priceWei: article.price_wei,
     publisher: article.publisher,
+    listingStatus: article.listing_status,
   });
   if (!auth.ok) {
     const err = new Error(auth.error);
