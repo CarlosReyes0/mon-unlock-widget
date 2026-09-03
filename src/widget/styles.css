@@ -188,27 +188,6 @@ mon-unlock {
   color: #7c3aed;
 }
 
-.mon-price-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-}
-
-.mon-price-tag {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #5b21b6;
-  font-variant-numeric: tabular-nums;
-}
-
-.mon-card.dark .mon-price-tag {
-  color: #c4b5fd;
-}
-
 /* Force pure black text on all primary content in the unlocked card (light theme) */
 .mon-card {
   color: #000;

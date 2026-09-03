@@ -856,10 +856,7 @@ export class MonUnlock extends LitElement {
     return html`
       <article class="mon-card ${classMap({ dark: this.theme === "dark" })}">
         <header class="border-b border-stone-100 px-6 py-5 dark:border-zinc-800">
-          <div class="mon-price-row mb-2">
-            <p class="mon-badge">${asset === "usdc" ? "Unlock with USDC or card" : "Unlock with MON or card"}</p>
-            <p class="mon-price-tag" aria-label="Article price">${priceLabel}</p>
-          </div>
+          <p class="mon-badge mb-2">${asset === "usdc" ? "Unlock with USDC or card" : "Unlock with MON or card"}</p>
           <h1 class="font-serif text-2xl font-semibold leading-tight" style="color:#000">${a.title}</h1>
           <p class="mt-2 text-sm text-black dark:text-zinc-400">
             ${a.author} · ${new Date(a.publishedAt).toLocaleDateString()}
@@ -883,16 +880,10 @@ export class MonUnlock extends LitElement {
             : html`
                 <div class="mon-title-box whitespace-pre-wrap">${a.teaser}</div>
                 <div class="mt-6 rounded-xl border border-violet-100 bg-violet-50/80 p-5 dark:border-violet-900/40 dark:bg-violet-950/30">
-                  <p class="text-base font-semibold text-stone-900 dark:text-stone-100">
-                    ${priceLabel}
-                    <span class="font-medium text-stone-600 dark:text-stone-300"> to unlock</span>
-                  </p>
-                  <p class="mt-1 text-xs text-stone-500">
-                    ${this.isOnchain
-                      ? "Live micropayment — you will be charged this amount at checkout (card, Apple Pay, or crypto)."
-                      : "Demo: connect wallet to read the rest (payment simulated)."}
-                  </p>
-                  <div class="mt-4">${this.renderUnlockActions()}</div>
+                  ${this.isOnchain
+                    ? nothing
+                    : html`<p class="mb-3 text-xs text-stone-500">Demo: connect wallet to read the rest (payment simulated).</p>`}
+                  <div>${this.renderUnlockActions()}</div>
                 </div>
               `}
         </div>
