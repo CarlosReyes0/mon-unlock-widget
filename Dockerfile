@@ -42,6 +42,9 @@ COPY --from=builder /app/dist-checkout/ ./
 # Built publisher pages (account.html → /account.js). Do not copy source
 # account.html afterward — it still points at /src/publisher/main.tsx.
 COPY --from=builder /app/dist-publisher/ ./
+# Static HTML allowlist — keep in sync with server/dockerfile-static.test.mjs.
+# When you add a new root *.html page that should ship to Railway, COPY it here
+# (or the production URL will 404 even though local vite serves it).
 COPY --from=builder /app/index.html ./index.html
 COPY --from=builder /app/generator.html ./generator.html
 COPY --from=builder /app/dashboard.html ./dashboard.html
