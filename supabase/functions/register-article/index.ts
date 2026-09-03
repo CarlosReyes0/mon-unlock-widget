@@ -1,6 +1,7 @@
 // Edge Function: register-article
 // Reserves a globally unique article slug for a publisher (reserve-on-create),
 // and upserts teaser/body for dashboard + article-body fetch.
+// Optional listing fields: title, author, listOnOpenPaywall, externalUrl, embedSig.
 // Same publisher may update their row; a different publisher gets 409 slug_taken.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -18,6 +19,23 @@ function evaluateReserve(existing: { publisher?: string | null } | null, publish
     return { ok: false as const, error: 'slug_taken' as const, publisher: owner };
   }
   return { ok: true as const, action: 'update' as const };
+}
+
+function normalizeExternalUrl(raw: unknown): { ok: true; url: string | null } | { ok: false; error: string } {
+  if (raw == null || raw === '') return { ok: true, url: null };
+  if (typeof raw !== 'string') return { ok: false, error: 'invalid_external_url' };
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, url: null };
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { ok: false, error: 'invalid_external_url' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, error: 'invalid_external_url' };
+  }
+  return { ok: true, url: parsed.toString() };
 }
 
 Deno.serve(async (req) => {
@@ -46,6 +64,12 @@ Deno.serve(async (req) => {
       teaser,
       body: articleBody,
       confirmRegistered,
+      title,
+      author,
+      listOnOpenPaywall,
+      externalUrl,
+      embedSig,
+      paymentAsset,
     } = body;
 
     if (!slug || !articleIdHash || priceWei == null || !publisher) {
@@ -64,7 +88,7 @@ Deno.serve(async (req) => {
     // Prefer hash lookup; also reject if another row already owns this slug string.
     const { data: byHash, error: hashLookupError } = await supabase
       .from('articles')
-      .select('article_id, article_id_hash, publisher, registration_status')
+      .select('article_id, article_id_hash, publisher, registration_status, listing_status')
       .eq('article_id_hash', hashNorm)
       .maybeSingle();
 
@@ -75,7 +99,7 @@ Deno.serve(async (req) => {
 
     const { data: bySlug, error: slugLookupError } = await supabase
       .from('articles')
-      .select('article_id, article_id_hash, publisher, registration_status')
+      .select('article_id, article_id_hash, publisher, registration_status, listing_status')
       .eq('article_id', slugNorm)
       .maybeSingle();
 
@@ -121,7 +145,7 @@ Deno.serve(async (req) => {
         ? 'registered'
         : 'reserved';
 
-    const row = {
+    const row: Record<string, unknown> = {
       article_id: slugNorm,
       article_id_hash: hashNorm,
       publisher: publisherNorm,
@@ -133,12 +157,40 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
+    if (typeof title === 'string') row.title = title.trim() || null;
+    if (typeof author === 'string') row.author = author.trim() || null;
+    if (paymentAsset === 'usdc' || paymentAsset === 'mon') row.payment_asset = paymentAsset;
+
+    if (typeof embedSig === 'string' && embedSig.trim()) {
+      row.embed_sig = embedSig.trim();
+    }
+
+    if (listOnOpenPaywall !== undefined || externalUrl !== undefined) {
+      const urlResult = normalizeExternalUrl(externalUrl);
+      if (!urlResult.ok) {
+        return new Response(JSON.stringify({ error: urlResult.error }), { status: 400, headers });
+      }
+      if (externalUrl !== undefined) {
+        row.external_url = urlResult.url;
+      }
+
+      if (listOnOpenPaywall === true) {
+        row.listing_status = 'listed';
+        if (existing?.listing_status !== 'listed') {
+          row.listed_at = new Date().toISOString();
+        }
+      } else if (listOnOpenPaywall === false) {
+        row.listing_status = 'unlisted';
+      }
+    }
+
     // Keep original registered_at on update; set on insert via default / explicit.
     const { error } = existing
       ? await supabase.from('articles').update(row).eq('article_id_hash', existing.article_id_hash || hashNorm)
       : await supabase.from('articles').insert({
           ...row,
           registered_at: new Date().toISOString(),
+          listing_status: row.listing_status || 'unlisted',
         });
 
     if (error) {
@@ -162,6 +214,7 @@ Deno.serve(async (req) => {
         reserved: registration_status === 'reserved',
         registration_status,
         action: decision.action,
+        listing_status: row.listing_status ?? existing?.listing_status ?? 'unlisted',
       }),
       { status: 200, headers }
     );

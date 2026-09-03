@@ -90,13 +90,32 @@
                 <th>Article ID</th>
                 <th>Price</th>
                 <th>Unlocks</th>
-                <th>Revenue</th>
+                <th>Listed</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="articlesBody"></tbody>
           </table>
           <div id="articlesEmpty" class="empty">No articles yet. Register one on the left.</div>
+        </div>
+
+        <div class="card" id="listingEditorCard" style="margin-top: 1.5rem; display: none;">
+          <h2 class="section-title">Open Paywall listing</h2>
+          <p style="margin:0 0 0.75rem;font-size:0.875rem;color:#6b7280;line-height:1.45;">
+            Opt in to list on the public <a href="/articles">Articles</a> feed. External URL is optional and can be added later.
+          </p>
+          <p id="listingEditorSlug" class="mono" style="margin:0 0 0.75rem;font-size:0.8rem;color:#57534e;"></p>
+          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:600;margin-bottom:0.75rem;">
+            <input type="checkbox" id="listingListOn" style="width:auto;" />
+            List on Open Paywall
+          </label>
+          <label for="listingExternalUrl">Your site URL (optional)</label>
+          <input id="listingExternalUrl" type="url" placeholder="https://yoursite.com/this-post" style="margin-bottom:0.75rem;" />
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="listingSaveBtn" type="button">Save listing</button>
+            <a class="btn btn-secondary" id="listingViewLink" href="/articles" style="text-decoration:none;">View feed</a>
+          </div>
+          <p id="listingSaveStatus" style="margin:0.55rem 0 0;font-size:0.75rem;color:#6b7280;"></p>
         </div>
 
         <div class="card" style="margin-top: 1.5rem;">
@@ -322,12 +341,15 @@
             active: a.active,
             unlockCount: stats[a.article_id_hash]?.count || 0,
             revenueMon: stats[a.article_id_hash]?.revenue || 0n,
-            paymentAsset: a.payment_asset || "mon",
-            title: a.article_id || a.article_id_hash,
+            title: a.title || a.article_id || a.article_id_hash,
+            author: a.author || "",
             teaser: a.teaser,
             body: a.body,
             hasSlug: Boolean(a.article_id),
             displayId: formatArticleIdForDisplay(a.article_id, a.article_id_hash),
+            listingStatus: a.listing_status || "unlisted",
+            externalUrl: a.external_url || "",
+            embedSig: a.embed_sig || "",
           }));
 
           renderArticles();
@@ -355,23 +377,34 @@
 
         myArticles.forEach((a, idx) => {
           const row = document.createElement("tr");
+          const listedLabel =
+            a.listingStatus === "listed"
+              ? "Yes"
+              : a.listingStatus === "hidden"
+                ? "Hidden"
+                : "No";
           row.innerHTML = `
             <td class="mono">${a.displayId}</td>
             <td>${a.paymentAsset === "usdc" ? `$${formatUsdAmount(a.priceMon)} USDC` : `${formatMon(a.priceMon)} MON`}</td>
             <td>${a.unlockCount ?? 0}</td>
-            <td>${a.paymentAsset === "usdc" ? `$${formatUsdAmount(a.revenueMon ?? 0n)} USDC` : `${formatMon(a.revenueMon ?? 0n)} MON`}</td>
-            <td>
-              <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-idx="${idx}" ${a.hasSlug ? "" : "disabled title=\"Set slug via generator before copying embed\""}>${a.hasSlug ? "Copy embed" : "Slug required"}</button>
+            <td>${listedLabel}</td>
+            <td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+              <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-action="embed" data-idx="${idx}" ${a.hasSlug ? "" : "disabled title=\"Set slug via generator before copying embed\""}>${a.hasSlug ? "Copy embed" : "Slug required"}</button>
+              <button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.75rem;" data-action="listing" data-idx="${idx}" ${a.hasSlug ? "" : "disabled"}>Listing</button>
             </td>
           `;
           body.appendChild(row);
         });
 
-        // Wire copy buttons
+        // Wire copy + listing buttons
         body.querySelectorAll("button").forEach((btn) => {
           btn.addEventListener("click", async () => {
-            const idx = parseInt(btn.dataset.idx);
+            const idx = parseInt(btn.dataset.idx, 10);
             const art = myArticles[idx];
+            if (btn.dataset.action === "listing") {
+              openListingEditor(art);
+              return;
+            }
             const orig = btn.textContent;
             btn.disabled = true;
             btn.textContent = "Signing…";
@@ -402,6 +435,64 @@
             }
           });
         });
+      }
+
+      let listingEditorArticle = null;
+      const UPDATE_LISTING_URL = "https://flczjqljgntmkanipugo.supabase.co/functions/v1/update-listing";
+
+      function openListingEditor(article) {
+        listingEditorArticle = article;
+        const card = document.getElementById("listingEditorCard");
+        if (!card) return;
+        card.style.display = "block";
+        document.getElementById("listingEditorSlug").textContent =
+          article.articleId +
+          (article.listingStatus === "hidden" ? " (currently hidden by moderator)" : "");
+        document.getElementById("listingListOn").checked = article.listingStatus === "listed";
+        document.getElementById("listingExternalUrl").value = article.externalUrl || "";
+        const view = document.getElementById("listingViewLink");
+        if (view) {
+          view.href =
+            article.listingStatus === "listed"
+              ? `/articles/${encodeURIComponent(article.articleId)}`
+              : "/articles";
+          view.textContent =
+            article.listingStatus === "listed" ? "Open hosted page" : "View feed";
+        }
+        document.getElementById("listingSaveStatus").textContent = "";
+        card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      async function saveListingFromDashboard() {
+        const status = document.getElementById("listingSaveStatus");
+        if (!listingEditorArticle || !currentWallet) {
+          status.textContent = "Sign in first.";
+          return;
+        }
+        status.textContent = "Saving…";
+        status.style.color = "#6b7280";
+        try {
+          const res = await fetch(UPDATE_LISTING_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              slug: listingEditorArticle.articleId,
+              publisher: currentWallet,
+              listOnOpenPaywall: Boolean(document.getElementById("listingListOn").checked),
+              externalUrl: document.getElementById("listingExternalUrl").value.trim() || null,
+            }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.error || `http_${res.status}`);
+          status.textContent = "Listing saved ✓";
+          status.style.color = "#16a34a";
+          await loadFromSupabase(currentWallet);
+          const refreshed = myArticles.find((a) => a.articleId === listingEditorArticle.articleId);
+          if (refreshed) openListingEditor(refreshed);
+        } catch (e) {
+          status.textContent = e.message || "Save failed";
+          status.style.color = "#b91c1c";
+        }
       }
 
       function shortHash(h) {
@@ -810,6 +901,7 @@ ${teaser}
         document.getElementById("disconnectBtn")?.addEventListener("click", disconnectWallet);
         document.getElementById("switchBtn")?.addEventListener("click", switchWallet);
         document.getElementById("stripeOnboardBtn")?.addEventListener("click", () => void startStripeOnboarding());
+        document.getElementById("listingSaveBtn")?.addEventListener("click", () => void saveListingFromDashboard());
 
         // Keep dashboard in sync when the user switches account/network in the extension.
         const eth = getInjectedProvider();

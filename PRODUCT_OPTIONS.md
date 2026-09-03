@@ -45,6 +45,7 @@ Check off or delete items as you decide.
 
 ## Other product options
 
+- [x] **Article aggregator** — opt-in list on Open Paywall (`/articles`) + hosted page + optional external URL; auto-list + hide later; one unlock everywhere
 - [ ] **Clearer reader pay errors** (wrong network, no funds, bad/missing sig)
 - [ ] **Richer writer dashboard** (revenue, unlock counts, recent payments)
 - [ ] **Faster reader unlock** (fewer steps to pay)

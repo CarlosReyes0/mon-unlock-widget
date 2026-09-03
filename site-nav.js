@@ -9,6 +9,7 @@
 (function () {
   const PRODUCT_LINKS = [
     { href: "/", nav: "home", label: "Home" },
+    { href: "/articles", nav: "articles", label: "Articles" },
     { href: "/generator.html", nav: "embed", label: "Create embed" },
     { href: "/account.html", nav: "account", label: "Account" },
     { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
@@ -17,6 +18,13 @@
 
   function isActive(nav, path) {
     if (nav === "home") return path === "/" || path.endsWith("/index.html");
+    if (nav === "articles")
+      return (
+        path === "/articles" ||
+        path.startsWith("/articles/") ||
+        path.endsWith("/articles.html") ||
+        path.endsWith("/article.html")
+      );
     if (nav === "embed") return path.includes("generator");
     if (nav === "account") return path.includes("account");
     if (nav === "dashboard") return path.includes("dashboard");

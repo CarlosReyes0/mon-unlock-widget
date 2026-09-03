@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Moderate listings — Open Paywall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "DM Sans", system-ui, sans-serif;
+        max-width: 36rem;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+        color: #111827;
+        background: #fff;
+      }
+      h1 { font-family: Literata, Georgia, serif; font-weight: 600; }
+      label { display: block; font-size: 0.875rem; font-weight: 600; margin: 1rem 0 0.35rem; }
+      input {
+        width: 100%;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        font: inherit;
+      }
+      .btn {
+        margin-top: 1rem;
+        display: inline-flex;
+        padding: 0.6rem 1.1rem;
+        border: none;
+        border-radius: 999px;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .hint { font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem; }
+      .msg { margin-top: 1rem; font-size: 0.9rem; }
+      .msg.ok { color: #15803d; }
+      .msg.err { color: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <div id="site-nav"></div>
+    <p style="font-size:0.75rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;margin:0;">Admin</p>
+    <h1>Hide a listing</h1>
+    <p class="hint">
+      Auto-list is on — use this to hide spam. Requires <code>LISTING_ADMIN_SECRET</code> on the server.
+      Secret is kept in sessionStorage for this browser tab only.
+    </p>
+    <label for="secret">Admin secret</label>
+    <input id="secret" type="password" autocomplete="off" />
+    <label for="slug">Article slug</label>
+    <input id="slug" type="text" placeholder="founder-manifesto" autocomplete="off" />
+    <button class="btn" id="hideBtn" type="button">Hide from Articles</button>
+    <button class="btn" id="restoreBtn" type="button" style="background:#e5e7eb;color:#111827;margin-left:0.5rem;">Restore (unlist)</button>
+    <p class="msg" id="msg"></p>
+    <script src="/site-nav.js"></script>
+    <script>
+      const secretEl = document.getElementById("secret");
+      const slugEl = document.getElementById("slug");
+      const msg = document.getElementById("msg");
+      secretEl.value = sessionStorage.getItem("listingAdminSecret") || "";
+
+      async function setStatus(status) {
+        const secret = secretEl.value.trim();
+        const slug = slugEl.value.trim();
+        sessionStorage.setItem("listingAdminSecret", secret);
+        msg.className = "msg";
+        msg.textContent = "Working…";
+        try {
+          const res = await fetch("/api/listings/hide", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${secret}`,
+            },
+            body: JSON.stringify({ slug, status }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.error || `http_${res.status}`);
+          msg.className = "msg ok";
+          msg.textContent = `Updated ${body.article_id} → ${body.listing_status}`;
+        } catch (e) {
+          msg.className = "msg err";
+          msg.textContent = e.message || "Failed";
+        }
+      }
+
+      document.getElementById("hideBtn").onclick = () => setStatus("hidden");
+      document.getElementById("restoreBtn").onclick = () => setStatus("unlisted");
+    </script>
+  </body>
+</html>
