@@ -90,7 +90,10 @@ function toArticleId(articleId: string): `0x${string}` {
   return keccak256(toBytes(articleId.trim()));
 }
 
-/** Block unlock when the embed is missing or has a bad publisher signature. */
+/** Block unlock when the embed is missing or has a bad publisher signature.
+ *  Missing signature is allowed when the article is registered on-chain and the
+ *  embed price matches (hosted /articles pages often have no stored embed-sig).
+ */
 export async function assertEmbedAuthorized(params: {
   embedSig: string | null | undefined;
   articleId: string;
@@ -100,11 +103,6 @@ export async function assertEmbedAuthorized(params: {
   publicClient: PublicClient;
 }): Promise<void> {
   const sig = params.embedSig?.trim();
-  if (!sig) {
-    throw new EmbedSignatureError(
-      "This embed is missing a publisher signature. Get a new embed from the generator."
-    );
-  }
 
   const chainId = params.chainId ?? monadMainnet.id;
   const articleIdBytes = toArticleId(params.articleId);
@@ -137,6 +135,11 @@ export async function assertEmbedAuthorized(params: {
     throw new EmbedSignatureError(
       "This embed was modified. Payments are blocked for your safety."
     );
+  }
+
+  if (!sig) {
+    // Hosted catalog / thin embeds: on-chain registration + price match is enough.
+    return;
   }
 
   const valid = await verifyEmbedSignature({

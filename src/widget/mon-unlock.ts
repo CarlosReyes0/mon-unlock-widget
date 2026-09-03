@@ -572,17 +572,6 @@ export class MonUnlock extends LitElement {
     }
   }
 
-  private missingEmbedSigMessage() {
-    return "This embed is missing a publisher signature. Get a new embed from the generator.";
-  }
-
-  private requireEmbedSigForPayment(): boolean {
-    if (!this.isOnchain) return true;
-    if (this.embedSig?.trim()) return true;
-    this.error = this.missingEmbedSigMessage();
-    return false;
-  }
-
   private openPrivyCheckout() {
     if (!this.article) return;
     if (!this.isOnchain || !this.unlockContract.trim()) {
@@ -590,8 +579,6 @@ export class MonUnlock extends LitElement {
       void this.connect();
       return;
     }
-    // Fiat checkout can authorize via registered USDC price without embed-sig.
-    // MetaMask / on-chain crypto still requires embed-sig (see startMetaMaskPath).
 
     this.error = null;
     const url = buildCheckoutUrl({
@@ -630,7 +617,6 @@ export class MonUnlock extends LitElement {
   }
 
   private startMetaMaskPath() {
-    if (!this.requireEmbedSigForPayment()) return;
     const inWalletBrowser = hasReliableInjectedProvider();
     if (this.isMobileViewport() && !inWalletBrowser) {
       this.showMetaMaskHelp = true;
@@ -643,7 +629,6 @@ export class MonUnlock extends LitElement {
   private renderUnlockActions() {
     const inWalletBrowser = hasReliableInjectedProvider();
     const onchain = this.isOnchain;
-    const missingSig = onchain && !this.embedSig?.trim();
 
     // Demo mode: single connect button (simulated unlock).
     if (!onchain) {
@@ -673,14 +658,11 @@ export class MonUnlock extends LitElement {
         <button
           type="button"
           class="mon-btn mon-btn-secondary"
-          ?disabled=${this.loading || this.checkoutOpen || missingSig}
+          ?disabled=${this.loading || this.checkoutOpen}
           @click=${() => this.startMetaMaskPath()}
         >
           Use MetaMask
         </button>
-        ${missingSig
-          ? html`<p class="mt-2 text-xs text-stone-500">MetaMask path needs a signed embed from the generator.</p>`
-          : nothing}
 
         ${this.showMetaMaskHelp
           ? html`
