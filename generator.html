@@ -360,6 +360,20 @@
             <div class="hint">Used to derive a unique on-chain ID. Keep it short and stable.</div>
           </div>
 
+          <div class="field" style="padding:0.85rem 1rem;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+            <label style="display:flex;align-items:flex-start;gap:0.65rem;font-weight:600;margin:0;cursor:pointer;">
+              <input id="listOnOpenPaywall" type="checkbox" style="width:auto;margin-top:0.2rem;" />
+              <span>List on Open Paywall</span>
+            </label>
+            <p class="hint" style="margin:0.45rem 0 0.75rem 1.55rem;">
+              Shows this article in the public <a href="/articles">Articles</a> feed and hosts it at
+              <code>/articles/your-slug</code>. Goes live immediately (you can hide later). Same unlock works on your site embed.
+            </p>
+            <label for="externalUrl">Your site URL <span style="font-weight:400;color:#6b7280;">(optional)</span></label>
+            <input id="externalUrl" type="url" placeholder="https://yoursite.com/this-post" autocomplete="off" />
+            <div class="hint">Add now or later from the dashboard. Directory cards link out when set.</div>
+          </div>
+
           <div class="field">
             <label for="teaser">Teaser (free preview)</label>
             <textarea id="teaser" placeholder="Write a short preview that entices readers to unlock..."></textarea>
@@ -905,6 +919,8 @@
           articleId: document.getElementById("articleId").value.trim(),
           teaser: document.getElementById("teaser").value.trim(),
           body: document.getElementById("body").value.trim(),
+          listOnOpenPaywall: Boolean(document.getElementById("listOnOpenPaywall")?.checked),
+          externalUrl: document.getElementById("externalUrl")?.value.trim() || "",
         };
       }
 
@@ -923,14 +939,26 @@
       async function buildMetaPayload(v) {
         const { keccak256, toBytes } = await import("https://esm.sh/viem@2");
         const priceWei = await parsePriceUnits(v.price || "0.50", selectedAsset(), await import("https://esm.sh/viem@2"));
-        return {
+        const payload = {
           slug: v.articleId,
           articleIdHash: keccak256(toBytes(v.articleId)),
           priceWei: priceWei.toString(),
           publisher: connectedWallet,
           teaser: v.teaser,
           body: v.body,
+          title: v.title,
+          author: v.author,
+          paymentAsset: selectedAsset(),
         };
+        // Opt-in only from generator — unchecking must not wipe an existing listing.
+        // Use the dashboard Listing editor to unlist or edit the URL later.
+        if (v.listOnOpenPaywall) {
+          payload.listOnOpenPaywall = true;
+          payload.externalUrl = v.externalUrl || null;
+        } else if (v.externalUrl) {
+          payload.externalUrl = v.externalUrl;
+        }
+        return payload;
       }
 
       async function isArticleRegisteredByWallet(articleId) {
@@ -1571,6 +1599,14 @@ ${teaserEsc}
                   teaser: v.teaser,
                   body: v.body,
                   confirmRegistered: true,
+                  title: v.title,
+                  author: v.author,
+                  paymentAsset: selectedAsset(),
+                  ...(v.listOnOpenPaywall
+                    ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
+                    : v.externalUrl
+                      ? { externalUrl: v.externalUrl }
+                      : {}),
                 };
 
                 const metaResult = await syncMetadataToSupabase(metaPayload);
@@ -1688,6 +1724,14 @@ ${teaserEsc}
                       teaser: v.teaser,
                       body: v.body,
                       confirmRegistered: true,
+                      title: v.title,
+                      author: v.author,
+                      paymentAsset: selectedAsset(),
+                      ...(v.listOnOpenPaywall
+                        ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
+                        : v.externalUrl
+                          ? { externalUrl: v.externalUrl }
+                          : {}),
                     };
 
                     const metaResult = await syncMetadataToSupabase(metaPayload);
@@ -1759,6 +1803,15 @@ ${teaserEsc}
                 publisher: connectedWallet,
                 teaser: v.teaser,
                 body: v.body,
+                title: v.title,
+                author: v.author,
+                paymentAsset: selectedAsset(),
+                ...(v.listOnOpenPaywall
+                  ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
+                  : v.externalUrl
+                    ? { externalUrl: v.externalUrl }
+                    : {}),
+                embedSig: embedSig || undefined,
               };
               const metaResult = await syncMetadataToSupabase(metaPayload);
               if (metaStatus) {

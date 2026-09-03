@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Article — Open Paywall</title>
+    <meta name="description" content="Read this article on Open Paywall. One unlock works here and on the publisher’s site." />
+    <link rel="stylesheet" href="/dist/openpaywall.css" />
+    <script type="module" src="/dist/openpaywall.js?v=20240714"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #57534e;
+        --soft: #78716c;
+        --line: #e7e5e4;
+        --surface: #ffffff;
+        --accent: #0f766e;
+        --page-pad: 2rem;
+        --font-serif: "Literata", Georgia, serif;
+        --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        background:
+          linear-gradient(180deg, #ecfeff 0%, transparent 28%),
+          var(--surface);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        width: min(42rem, 100%);
+        margin: 0 auto;
+        padding: 1.25rem var(--page-pad) 3rem;
+      }
+      .back {
+        display: inline-flex;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .back:hover { color: var(--accent); }
+      .meta {
+        margin: 0 0 0.5rem;
+        font-size: 0.8rem;
+        color: var(--soft);
+      }
+      .also {
+        margin: 0 0 1.25rem;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .also a { color: var(--accent); }
+      .status {
+        margin: 2rem 0;
+        color: var(--muted);
+      }
+      .status.error { color: #b91c1c; }
+      #paywallHost {
+        margin-top: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div id="site-nav"></div>
+      <a class="back" href="/articles">← All articles</a>
+      <p class="meta" id="meta" hidden></p>
+      <p class="also" id="also" hidden></p>
+      <div id="paywallHost"></div>
+      <p class="status" id="status">Loading article…</p>
+      <div id="site-footer"></div>
+    </div>
+    <script src="/site-nav.js"></script>
+    <script>
+      (function () {
+        const SUPABASE_URL = "https://flczjqljgntmkanipugo.supabase.co";
+        const SUPABASE_ANON_KEY =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
+        const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
+        const MON_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+        const USDC_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+
+        function slugFromLocation() {
+          const params = new URLSearchParams(location.search);
+          const q = params.get("slug");
+          if (q) return q.trim();
+          const parts = location.pathname.split("/").filter(Boolean);
+          if (parts[0] === "articles" && parts[1]) {
+            return decodeURIComponent(parts[1]);
+          }
+          return "";
+        }
+
+        function escapeHtml(str) {
+          return String(str || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        function formatPriceDisplay(priceWei, paymentAsset) {
+          try {
+            const n = BigInt(priceWei);
+            if (paymentAsset === "usdc") {
+              const whole = n / 1000000n;
+              const frac = n % 1000000n;
+              const fracStr = frac.toString().padStart(6, "0").replace(/0+$/, "");
+              return fracStr ? `${whole}.${fracStr}` : String(whole);
+            }
+            const whole = n / 10n ** 18n;
+            const frac = n % 10n ** 18n;
+            const fracStr = frac.toString().padStart(18, "0").slice(0, 4).replace(/0+$/, "");
+            return fracStr ? `${whole}.${fracStr}` : String(whole);
+          } catch {
+            return paymentAsset === "usdc" ? "0.50" : "1";
+          }
+        }
+
+        async function loadArticle(slug) {
+          try {
+            const res = await fetch(`/api/articles/${encodeURIComponent(slug)}`);
+            if (res.ok) {
+              const data = await res.json();
+              return data.article;
+            }
+            if (res.status === 404) return null;
+          } catch {
+            /* fall through to supabase */
+          }
+
+          const qs =
+            "select=article_id,title,author,teaser,price_wei,payment_asset,publisher,external_url,embed_sig,listing_status" +
+            `&article_id=eq.${encodeURIComponent(slug)}&listing_status=eq.listed&limit=1`;
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/articles?${qs}`, {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          });
+          if (!res.ok) throw new Error("load_failed");
+          const rows = await res.json();
+          const row = rows && rows[0];
+          if (!row) return null;
+          const paymentAsset = row.payment_asset === "usdc" ? "usdc" : "mon";
+          return {
+            slug: row.article_id,
+            title: row.title || row.article_id,
+            author: row.author || "Author",
+            teaser: row.teaser || "",
+            priceWei: String(row.price_wei || "0"),
+            paymentAsset,
+            externalUrl: row.external_url || null,
+            embedSig: row.embed_sig || "",
+            unlockContract: paymentAsset === "usdc" ? USDC_CONTRACT : MON_CONTRACT,
+          };
+        }
+
+        function mountPaywall(article) {
+          const host = document.getElementById("paywallHost");
+          const price = formatPriceDisplay(article.priceWei, article.paymentAsset);
+          const widget = document.createElement("open-paywall");
+          widget.setAttribute("article-id", article.slug);
+          widget.setAttribute("title", article.title);
+          widget.setAttribute("author", article.author);
+          widget.setAttribute("price", price);
+          widget.setAttribute("payment-asset", article.paymentAsset);
+          widget.setAttribute(
+            "unlock-contract",
+            article.unlockContract ||
+              (article.paymentAsset === "usdc" ? USDC_CONTRACT : MON_CONTRACT)
+          );
+          widget.setAttribute("walletconnect-project-id", WC_PROJECT_ID);
+          if (article.embedSig) {
+            widget.setAttribute("embed-sig", article.embedSig);
+          }
+
+          const teaser = document.createElement("div");
+          teaser.setAttribute("slot", "teaser");
+          // Teaser may be plain text or simple HTML from generator
+          if (/<[a-z][\s\S]*>/i.test(article.teaser || "")) {
+            teaser.innerHTML = article.teaser;
+          } else {
+            teaser.innerHTML = escapeHtml(article.teaser || "").replace(/\n/g, "<br>");
+          }
+          widget.appendChild(teaser);
+          // Body intentionally omitted — widget fetches from article-body after unlock
+          host.replaceChildren(widget);
+        }
+
+        async function main() {
+          const status = document.getElementById("status");
+          const slug = slugFromLocation();
+          if (!slug) {
+            status.className = "status error";
+            status.textContent = "Missing article slug.";
+            return;
+          }
+
+          try {
+            const article = await loadArticle(slug);
+            if (!article) {
+              status.className = "status error";
+              status.textContent = "This article is not listed on Open Paywall.";
+              return;
+            }
+
+            document.title = `${article.title} — Open Paywall`;
+            const meta = document.getElementById("meta");
+            meta.hidden = false;
+            meta.textContent = `By ${article.author}`;
+
+            if (article.externalUrl) {
+              const also = document.getElementById("also");
+              also.hidden = false;
+              also.innerHTML = `Also published at <a href="${escapeHtml(
+                article.externalUrl
+              )}" rel="noopener noreferrer" target="_blank">${escapeHtml(
+                String(article.externalUrl).replace(/^https?:\/\//, "")
+              )}</a>`;
+            }
+
+            mountPaywall(article);
+            status.hidden = true;
+          } catch (e) {
+            status.className = "status error";
+            status.textContent = "Could not load this article.";
+            console.error(e);
+          }
+        }
+
+        main();
+      })();
+    </script>
+  </body>
+</html>

@@ -28,16 +28,19 @@ https://mon-unlock-widget-production.up.railway.app
 
 Pages:
 - `/` – Homepage
+- `/articles` – Public article feed (opt-in listings)
+- `/articles/{slug}` – Hosted article page (same unlock as embed)
 - `/generator.html` – Create embed
 - `/account.html` – Publisher account (email / Google / wallet)
-- `/dashboard.html` – Writer dashboard + Stripe payouts
+- `/dashboard.html` – Writer dashboard + Stripe payouts + listing controls
+- `/admin-listings.html` – Moderator hide (requires `LISTING_ADMIN_SECRET`)
 - `/agents` · `/agents.md` · `/llms.txt` · `/skill.md` – Agent discovery
 - `/openapi.json` – Machine-readable agent API
 - `/embed-example.html` – Clean copy-paste embed reference
 - `/connect-demo.html` – Dev: Stripe Connect sample (not in main nav)
 - `/connect-store.html` – Dev: sample storefront
 
-Product nav is shared via `site-nav.js`: **Home · Create embed · Account · Dashboard · Agents**.
+Product nav is shared via `site-nav.js`: **Home · Articles · Create embed · Account · Dashboard · Agents**.
 
 ## Agents & Stripe Directory
 

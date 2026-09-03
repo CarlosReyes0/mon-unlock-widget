@@ -107,6 +107,48 @@ test("POST /api/stripe/payouts/process returns 503 without cron secret", async (
   assert.equal(body.error, "payout_cron_not_configured");
 });
 
+test("GET /api/listings/health reports supabaseConfigured=false without secrets", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/listings/health`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.supabaseConfigured, false);
+  assert.equal(body.adminConfigured, false);
+});
+
+test("GET /api/articles returns 503 without Supabase", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/articles`);
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "supabase_not_configured");
+});
+
+test("GET /articles serves articles.html", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/articles`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Articles/i);
+  assert.match(text, /Directory/i);
+});
+
+test("GET /articles/demo-slug serves article.html", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/articles/demo-slug`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /open-paywall|Loading article/i);
+});
+
+test("POST /api/listings/hide returns 503 without admin secret", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/listings/hide`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug: "x", status: "hidden" }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "listing_admin_not_configured");
+});
+
 test("GET / serves index.html", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/`);
   assert.equal(res.status, 200);

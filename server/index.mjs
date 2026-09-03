@@ -46,6 +46,13 @@ import {
 } from "./publish.mjs";
 import { withMppCharge, mppStatus, publishAmount } from "./mpp.mjs";
 import { buildOpenApiDocument } from "./openapi.mjs";
+import {
+  listPublicArticles,
+  getPublicArticle,
+  adminSetListingStatus,
+  listingsSupabaseConfigured,
+  listingAdminConfigured,
+} from "./listings-api.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -804,6 +811,71 @@ const server = http.createServer(async (req, res) => {
         error: e?.code || "webhook_failed",
         message: e?.message || "webhook_failed",
       });
+    }
+  }
+
+  // --- Article aggregator (public feed + hosted pages) ---
+  if (method === "GET" && url.pathname === "/api/articles") {
+    try {
+      if (!listingsSupabaseConfigured()) {
+        return sendJson(res, 503, { error: "supabase_not_configured" });
+      }
+      const limit = url.searchParams.get("limit");
+      const body = await listPublicArticles({ limit });
+      return sendJson(res, 200, body);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "list_failed" });
+    }
+  }
+
+  if (method === "GET" && url.pathname.startsWith("/api/articles/")) {
+    try {
+      if (!listingsSupabaseConfigured()) {
+        return sendJson(res, 503, { error: "supabase_not_configured" });
+      }
+      const slug = decodeURIComponent(url.pathname.slice("/api/articles/".length));
+      const body = await getPublicArticle(slug);
+      return sendJson(res, 200, body);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "get_failed" });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/listings/health") {
+    return sendJson(res, 200, {
+      ok: true,
+      supabaseConfigured: listingsSupabaseConfigured(),
+      adminConfigured: listingAdminConfigured(),
+    });
+  }
+
+  if (method === "POST" && url.pathname === "/api/listings/hide") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await adminSetListingStatus({
+        slug: parsed.slug,
+        status: parsed.status || "hidden",
+        authorization: req.headers.authorization,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 400;
+      return sendJson(res, status, { error: e?.message || "hide_failed" });
+    }
+  }
+
+  // Pretty URLs: /articles → feed, /articles/:slug → hosted article
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/articles") {
+    return serveStatic(req, res, "/articles.html");
+  }
+  if ((method === "GET" || method === "HEAD") && url.pathname.startsWith("/articles/")) {
+    const slug = url.pathname.slice("/articles/".length);
+    if (slug && !slug.includes("/")) {
+      // Serve article.html; client reads slug from pathname or ?slug=
+      return serveStatic(req, res, "/article.html");
     }
   }
 

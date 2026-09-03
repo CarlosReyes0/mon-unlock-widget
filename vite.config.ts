@@ -95,6 +95,16 @@ export default defineConfig(({ mode }) => {
               req.url?.startsWith("/publisher-auth.css?")
             ) {
               req.url = "/src/publisher/publisher-auth.css";
+            } else if (req.url === "/articles" || req.url?.startsWith("/articles?")) {
+              req.url = "/articles.html";
+            } else if (req.url?.startsWith("/articles/")) {
+              const qIndex = req.url.indexOf("?");
+              const pathOnly = qIndex >= 0 ? req.url.slice(0, qIndex) : req.url;
+              const query = qIndex >= 0 ? req.url.slice(qIndex) : "";
+              const slug = decodeURIComponent(pathOnly.slice("/articles/".length).split("/")[0] || "");
+              req.url = slug
+                ? `/article.html?slug=${encodeURIComponent(slug)}${query ? "&" + query.slice(1) : ""}`
+                : "/articles.html";
             }
             next();
           });
