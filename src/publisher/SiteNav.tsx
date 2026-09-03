@@ -39,8 +39,9 @@ export function SiteNav() {
 export function SiteFooter() {
   return (
     <footer className="mon-site-footer">
-      Dev tools: <a href="/connect-demo.html">Connect sample</a> ·{" "}
-      <a href="/connect-store.html">Sample storefront</a>
+      <span className="mon-site-footer-note">Developer examples (not free demos):</span>{" "}
+      <a href="/connect-demo.html">Stripe Connect onboarding</a> ·{" "}
+      <a href="/connect-store.html">Connect marketplace</a>
     </footer>
   );
 }
