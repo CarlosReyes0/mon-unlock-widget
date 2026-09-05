@@ -13,7 +13,6 @@ import {
   truncateAddress,
   hasReliableInjectedProvider,
   buildCheckoutUrl,
-  getCheckoutBaseUrl,
   isCheckoutMessage,
   readFiatReturnFromLocation,
   clearFiatReturnParams,
@@ -22,11 +21,7 @@ import {
   looksLikeHtml,
   sanitizeRichHtml,
   resolvePaymentAsset,
-  resolveSubscriptionContract,
-  subscribeOnchain,
-  transferUsdcToWriter,
 } from "../core/index.js";
-import type { Address } from "viem";
 import "./styles.css";
 
 /**
@@ -53,12 +48,6 @@ export class MonUnlock extends LitElement {
   @property({ type: String, attribute: "payment-asset" }) paymentAsset = "";
   /** WalletConnect Project ID (enables mobile connection via WalletConnect) */
   @property({ type: String, attribute: "walletconnect-project-id" }) walletConnectProjectId = "";
-  /** Writer wallet — used for subscribe-to-this-writer */
-  @property({ type: String }) publisher = "";
-  /** Monthly plan label override, e.g. "5" meaning $5/mo */
-  @property({ type: String, attribute: "subscription-price" }) subscriptionPrice = "";
-  /** "false" hides the one-article buy button */
-  @property({ type: String, attribute: "allow-a-la-carte" }) allowALaCarteAttr = "";
 
   @state() private article: Article | null = null;
   @state() private wallet: WalletState = { connected: false, address: null };
@@ -68,14 +57,6 @@ export class MonUnlock extends LitElement {
   @state() private txHash: string | null = null;
   @state() private fetchedBody: string | null = null;
   @state() private fiatSession: string | null = null;
-  @state() private accessReason: "purchase" | "subscription" | "locked" | "subscribe_only" | null =
-    null;
-  @state() private canPurchase = true;
-  @state() private planOffered = false;
-  @state() private planLabel = "";
-  @state() private planUsdc = "0";
-  @state() private writerAddress = "";
-  @state() private subscriptionBusy = false;
 
   @state() private urlCopied = false;
   @state() private checkoutOpen = false;
@@ -115,7 +96,7 @@ export class MonUnlock extends LitElement {
     window.addEventListener("pageshow", this.onPageShow);
     this.unsubWallet = this.walletManager.subscribe((s) => {
       this.wallet = s;
-      void this.refreshPlanAndAccess();
+      // Re-check access (local cache or on-chain) whenever wallet changes
       if (this.isOnchain) {
         void this.verifyOnchain();
       } else {
@@ -125,7 +106,6 @@ export class MonUnlock extends LitElement {
     this.loadArticle();
     this.consumeFiatReturnParams();
     this.restoreFiatSession();
-    void this.refreshPlanAndAccess();
   }
 
   /** After mobile same-tab checkout, article URL includes mon_fiat_session. */
@@ -411,8 +391,7 @@ export class MonUnlock extends LitElement {
       params.set("unlock_contract", this.unlockContract.trim());
     }
 
-    const cdnUrl = `${getCheckoutBaseUrl()}/api/article-body?${params.toString()}`;
-    const edgeUrl = `${apiBase}/article-body?${params.toString()}`;
+    const url = `${apiBase}/article-body?${params.toString()}`;
     const maxAttempts = Math.max(1, opts?.maxAttempts ?? (fiatSession ? 4 : 10));
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -421,16 +400,13 @@ export class MonUnlock extends LitElement {
         const abortTimer = setTimeout(() => controller.abort(), 8_000);
         let res: Response;
         try {
-          res = await fetch(cdnUrl, { signal: controller.signal });
-          if (!res.ok) {
-            res = await fetch(edgeUrl, {
-              signal: controller.signal,
-              headers: {
-                apikey: anonKey,
-                Authorization: `Bearer ${anonKey}`,
-              },
-            });
-          }
+          res = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              apikey: anonKey,
+              Authorization: `Bearer ${anonKey}`,
+            },
+          });
         } finally {
           clearTimeout(abortTimer);
         }
@@ -459,194 +435,6 @@ export class MonUnlock extends LitElement {
     }
     console.warn("[mon-unlock] exhausted retries fetching body after unlock");
     return false;
-  }
-
-  private writerForPlan(): string {
-    const fromAttr = (this.publisher || "").trim().toLowerCase();
-    if (/^0x[a-f0-9]{40}$/.test(fromAttr)) return fromAttr;
-    return this.writerAddress;
-  }
-
-  private async refreshPlanAndAccess() {
-    const writer = this.writerForPlan();
-    if (writer) {
-      try {
-        const res = await fetch(`${getCheckoutBaseUrl()}/api/writers/${writer}/plan`);
-        if (res.ok) {
-          const data = (await res.json()) as {
-            plan?: {
-              offered?: boolean;
-              monthlyPriceLabel?: string;
-              monthlyPriceUsdc?: string;
-              allowALaCarte?: boolean;
-              publisher?: string;
-            };
-          };
-          const plan = data.plan;
-          this.planOffered = Boolean(plan?.offered);
-          this.planLabel = plan?.monthlyPriceLabel || this.subscriptionPrice || "";
-          this.planUsdc = plan?.monthlyPriceUsdc || "0";
-          this.writerAddress = plan?.publisher || writer;
-          if (this.allowALaCarteAttr !== "false" && plan?.allowALaCarte === false) {
-            this.canPurchase = false;
-          }
-        }
-      } catch {
-        /* plan optional */
-      }
-    }
-    if (this.allowALaCarteAttr === "false") this.canPurchase = false;
-    await this.applyServerAccess();
-  }
-
-  private async applyServerAccess() {
-    if (!this.article?.id) return;
-    const reader = this.wallet.address;
-    if (!reader && !this.fiatSession) return;
-    try {
-      const params = new URLSearchParams({ article_id: this.article.id });
-      if (reader) params.set("reader", reader);
-      if (this.fiatSession) params.set("fiat_session", this.fiatSession);
-      const res = await fetch(`${getCheckoutBaseUrl()}/api/access?${params}`);
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        allowed?: boolean;
-        reason?: "purchase" | "subscription" | "locked" | "subscribe_only";
-        canPurchase?: boolean;
-        writer?: string;
-        plan?: { offered?: boolean; monthlyPriceLabel?: string; monthlyPriceUsdc?: string };
-      };
-      this.accessReason = data.reason || null;
-      if (typeof data.canPurchase === "boolean") this.canPurchase = data.canPurchase;
-      if (data.writer) this.writerAddress = data.writer;
-      if (data.plan) {
-        this.planOffered = Boolean(data.plan.offered);
-        this.planLabel = data.plan.monthlyPriceLabel || this.planLabel;
-        this.planUsdc = data.plan.monthlyPriceUsdc || this.planUsdc;
-      }
-      if (data.allowed) {
-        this.unlocked = true;
-        void this.fetchBodyIfNeeded();
-      } else if (this.accessReason === "locked" || this.accessReason === "subscribe_only") {
-        // Server says no live sub and no purchase — do not keep a stale unlocked view.
-        if (!this.fiatSession) this.unlocked = false;
-      }
-    } catch {
-      /* keep local/on-chain result */
-    }
-  }
-
-  private async subscribeWithCard() {
-    const reader = this.wallet.address;
-    const writer = this.writerForPlan();
-    if (!reader) {
-      this.error = "Sign in or connect a wallet to subscribe.";
-      return;
-    }
-    if (!writer) {
-      this.error = "This writer has no subscription plan yet.";
-      return;
-    }
-    this.subscriptionBusy = true;
-    this.error = null;
-    try {
-      const returnUrl = window.location.href;
-      const res = await fetch(`${getCheckoutBaseUrl()}/api/subscriptions/stripe/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reader,
-          writer,
-          successUrl: returnUrl,
-          cancelUrl: returnUrl,
-        }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error || "Could not start subscription.");
-      window.location.assign(data.url);
-    } catch (e) {
-      this.error = e instanceof Error ? e.message : "Could not start card subscription.";
-    } finally {
-      this.subscriptionBusy = false;
-    }
-  }
-
-  private async subscribeWithUsdc() {
-    const reader = this.wallet.address;
-    const writer = this.writerForPlan();
-    if (!reader || !writer) {
-      this.error = "Connect a wallet to subscribe with USDC.";
-      return;
-    }
-    this.subscriptionBusy = true;
-    this.error = null;
-    try {
-      if (!this.wallet.connected) {
-        await this.walletManager.connect();
-      }
-      this.bindOnchainProvider();
-      await this.walletManager.ensureChain(monadMainnet);
-      const provider = this.walletManager.getProvider();
-      if (!provider) throw new Error("No wallet provider.");
-      const price = this.planUsdc && this.planUsdc !== "0" ? BigInt(this.planUsdc) : parseUsdAmount("5");
-      const contract = resolveSubscriptionContract();
-      const txHash = contract
-        ? await subscribeOnchain({
-            provider,
-            contract,
-            reader: reader as Address,
-            writer: writer as Address,
-            priceUsdc: price,
-          })
-        : await transferUsdcToWriter({
-            provider,
-            reader: reader as Address,
-            writer: writer as Address,
-            priceUsdc: price,
-          });
-      const confirm = await fetch(`${getCheckoutBaseUrl()}/api/subscriptions/crypto/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reader, writer, txHash }),
-      });
-      const body = (await confirm.json()) as { error?: string };
-      if (!confirm.ok) throw new Error(body.error || "Subscription payment was not recorded.");
-      await this.applyServerAccess();
-    } catch (e) {
-      this.error = e instanceof Error ? e.message : "USDC subscribe failed.";
-    } finally {
-      this.subscriptionBusy = false;
-    }
-  }
-
-  private renderSubscribeActions() {
-    if (!this.planOffered && !this.subscriptionPrice) return nothing;
-    const label = this.planLabel || (this.subscriptionPrice ? `$${this.subscriptionPrice}/mo` : "Subscribe");
-    return html`
-      <div class="mon-sub-actions" style="margin-top:0.75rem;">
-        <p class="text-sm font-medium text-stone-800 dark:text-stone-200" style="margin:0 0 0.5rem;">
-          Subscribe to this writer · ${label}
-        </p>
-        <div class="mon-unlock-actions">
-          <button
-            type="button"
-            class="mon-btn mon-btn-primary"
-            ?disabled=${this.subscriptionBusy || this.loading}
-            @click=${() => this.subscribeWithCard()}
-          >
-            ${this.subscriptionBusy ? "Working…" : "Subscribe with card"}
-          </button>
-          <button
-            type="button"
-            class="mon-btn mon-btn-secondary"
-            ?disabled=${this.subscriptionBusy || this.loading}
-            @click=${() => this.subscribeWithUsdc()}
-          >
-            Subscribe with USDC
-          </button>
-        </div>
-      </div>
-    `;
   }
 
   private emit(name: string, detail: unknown) {
@@ -859,48 +647,39 @@ export class MonUnlock extends LitElement {
     // Demo mode: single connect button (simulated unlock).
     if (!onchain) {
       return html`
-        ${this.canPurchase
-          ? html`
-              <button
-                class="mon-btn mon-btn-primary"
-                ?disabled=${this.loading}
-                @click=${() => this.connect()}
-              >
-                ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
-              </button>
-            `
-          : nothing}
-        ${this.renderSubscribeActions()}
+        <button
+          class="mon-btn mon-btn-primary"
+          ?disabled=${this.loading}
+          @click=${() => this.connect()}
+        >
+          ${this.loading ? "Connecting…" : "Connect wallet to unlock"}
+        </button>
       `;
     }
 
     return html`
       <div class="mon-unlock-actions">
-        ${this.canPurchase
-          ? html`
-              <button
-                type="button"
-                class="mon-btn mon-btn-primary"
-                ?disabled=${this.loading || this.checkoutOpen}
-                @click=${() => this.openPrivyCheckout()}
-              >
-                ${this.checkoutOpen
-                  ? "Checkout open…"
-                  : this.loading
-                    ? "Unlocking…"
-                    : `Pay ${priceLabel}`}
-              </button>
+        <button
+          type="button"
+          class="mon-btn mon-btn-primary"
+          ?disabled=${this.loading || this.checkoutOpen}
+          @click=${() => this.openPrivyCheckout()}
+        >
+          ${this.checkoutOpen
+            ? "Checkout open…"
+            : this.loading
+              ? "Unlocking…"
+              : `Pay ${priceLabel}`}
+        </button>
 
-              <button
-                type="button"
-                class="mon-btn mon-btn-secondary"
-                ?disabled=${this.loading || this.checkoutOpen}
-                @click=${() => this.startMetaMaskPath()}
-              >
-                Use MetaMask
-              </button>
-            `
-          : nothing}
+        <button
+          type="button"
+          class="mon-btn mon-btn-secondary"
+          ?disabled=${this.loading || this.checkoutOpen}
+          @click=${() => this.startMetaMaskPath()}
+        >
+          Use MetaMask
+        </button>
 
         ${this.showMetaMaskHelp
           ? html`
@@ -929,7 +708,6 @@ export class MonUnlock extends LitElement {
             `
           : nothing}
       </div>
-      ${this.renderSubscribeActions()}
     `;
   }
 
@@ -996,16 +774,6 @@ export class MonUnlock extends LitElement {
       // Decide whether payment is needed.
       // On-chain mode: authoritative check against the contract.
       // Demo mode: check local cache only.
-      await this.applyServerAccess();
-      if (this.unlocked) {
-        await this.fetchBodyIfNeeded();
-        this.emit("mon:connected", s);
-        return;
-      }
-      if (!this.canPurchase) {
-        throw new Error("This article is subscribe-only. Subscribe to the writer to read it.");
-      }
-
       let needsPayment: boolean;
       if (this.isOnchain) {
         needsPayment = !(await (this.unlockService as OnchainUnlockService).checkOnchainAccess(
@@ -1085,13 +853,7 @@ export class MonUnlock extends LitElement {
     return html`
       <article class="mon-card ${classMap({ dark: this.theme === "dark" })}">
         <header class="border-b border-stone-100 px-6 py-5 dark:border-zinc-800">
-          <p class="mon-badge mb-2">
-            ${this.canPurchase
-              ? asset === "usdc"
-                ? "Unlock with USDC or card"
-                : "Unlock with MON or card"
-              : "Subscribe to this writer"}
-          </p>
+          <p class="mon-badge mb-2">${asset === "usdc" ? "Unlock with USDC or card" : "Unlock with MON or card"}</p>
           <h1 class="font-serif text-2xl font-semibold leading-tight" style="color:#000">${a.title}</h1>
           <p class="mt-2 text-sm text-black dark:text-zinc-400">
             ${a.author} · ${new Date(a.publishedAt).toLocaleDateString()}
@@ -1108,11 +870,8 @@ export class MonUnlock extends LitElement {
                 <div class="mb-6 whitespace-pre-wrap text-base" style="color:#000">${a.teaser}</div>
                 ${this.renderBody(this.fetchedBody || a.body)}
                 <p class="mt-6 text-xs text-black">
-                  ${this.accessReason === "subscription"
-                    ? "Unlocked with subscription"
-                    : "Unlocked"}
-                  · ${this.unlockedStatusLabel()}
-                  ${this.accessReason === "subscription" ? nothing : paidLine}
+                  Unlocked · ${this.unlockedStatusLabel()}
+                  ${paidLine}
                 </p>
               `
             : html`

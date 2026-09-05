@@ -115,7 +115,6 @@ export function toPublicListing(row) {
       typeof row.embed_sig === "string" && row.embed_sig.trim()
         ? row.embed_sig.trim()
         : "",
-    allowALaCarte: row.allow_a_la_carte !== false,
   };
 }
 

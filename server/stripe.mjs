@@ -100,7 +100,7 @@ export function articleIdHash(articleId) {
 export async function lookupArticle(articleId) {
   const hash = articleIdHash(articleId);
   const cols =
-    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte";
+    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset";
   const bySlug = await supabase(
     `articles?select=${cols}&article_id=eq.${encodeURIComponent(articleId)}&limit=1`
   );
@@ -121,7 +121,6 @@ export async function lookupArticle(articleId) {
  *   title?: string,
  *   embedSig?: string,
  *   contract?: string,
- *   reader?: string,
  * }} input
  */
 export async function createPaymentIntent(input) {
@@ -158,31 +157,6 @@ export async function createPaymentIntent(input) {
     throw err;
   }
 
-  const publisherKey = String(article.publisher).toLowerCase();
-  if (article.allow_a_la_carte === false) {
-    const err = new Error("a_la_carte_disabled");
-    err.status = 403;
-    throw err;
-  }
-  try {
-    const plans = await supabase(
-      `writer_plans?select=allow_a_la_carte&publisher=eq.${encodeURIComponent(publisherKey)}&limit=1`
-    );
-    if (Array.isArray(plans) && plans[0]?.allow_a_la_carte === false) {
-      const err = new Error("a_la_carte_disabled");
-      err.status = 403;
-      throw err;
-    }
-  } catch (e) {
-    if (e?.message === "a_la_carte_disabled") throw e;
-    /* plan missing = allow buy */
-  }
-
-  const reader =
-    typeof input.reader === "string" && /^0x[a-fA-F0-9]{40}$/.test(input.reader.trim())
-      ? input.reader.trim().toLowerCase()
-      : "";
-
   const auth = await authorizeFiatUnlock({
     embedSig,
     contract,
@@ -211,7 +185,6 @@ export async function createPaymentIntent(input) {
       publisher: String(article.publisher).toLowerCase(),
       sessionToken,
       product: "mon_unlock_fiat",
-      ...(reader ? { reader } : {}),
     },
     description: input.title
       ? `Unlock: ${String(input.title).slice(0, 120)}`
@@ -305,7 +278,6 @@ export async function grantFiatUnlockFromIntent(intent) {
           amount_cents: amountCents,
           currency: intent.currency || "usd",
           buyer_email: intent.receipt_email || null,
-          reader: intent.metadata?.reader || null,
           status: "succeeded",
         },
       ],
@@ -402,16 +374,6 @@ export async function handleStripeWebhook(rawBody, signature) {
   if (event.type === "payment_intent.succeeded") {
     const intent = event.data.object;
     const result = await grantFiatUnlockFromIntent(intent);
-    return { received: true, type: event.type, ...result };
-  }
-
-  if (
-    event.type === "invoice.paid" ||
-    event.type === "customer.subscription.updated" ||
-    event.type === "customer.subscription.deleted"
-  ) {
-    const { applyStripeSubscriptionEvent } = await import("./subscriptions.mjs");
-    const result = await applyStripeSubscriptionEvent(event);
     return { received: true, type: event.type, ...result };
   }
 
