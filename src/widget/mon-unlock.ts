@@ -25,7 +25,6 @@ import {
   resolveSubscriptionContract,
   subscribeOnchain,
   transferUsdcToWriter,
-  parseUsdAmount,
 } from "../core/index.js";
 import type { Address } from "viem";
 import "./styles.css";
