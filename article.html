@@ -139,7 +139,7 @@
           }
 
           const qs =
-            "select=article_id,title,author,teaser,price_wei,payment_asset,publisher,external_url,embed_sig,listing_status" +
+            "select=article_id,title,author,teaser,price_wei,payment_asset,publisher,external_url,embed_sig,listing_status,allow_a_la_carte" +
             `&article_id=eq.${encodeURIComponent(slug)}&listing_status=eq.listed&limit=1`;
           const res = await fetch(`${SUPABASE_URL}/rest/v1/articles?${qs}`, {
             headers: {
@@ -162,6 +162,9 @@
             externalUrl: row.external_url || null,
             embedSig: row.embed_sig || "",
             unlockContract: paymentAsset === "usdc" ? USDC_CONTRACT : MON_CONTRACT,
+            publisher: row.publisher || "",
+            allowALaCarte: row.allow_a_la_carte !== false,
+            plan: null,
           };
         }
 
@@ -182,6 +185,18 @@
           widget.setAttribute("walletconnect-project-id", WC_PROJECT_ID);
           if (article.embedSig) {
             widget.setAttribute("embed-sig", article.embedSig);
+          }
+          if (article.publisher) {
+            widget.setAttribute("publisher", article.publisher);
+          }
+          if (article.allowALaCarte === false) {
+            widget.setAttribute("allow-a-la-carte", "false");
+          }
+          if (article.plan && article.plan.offered && article.plan.monthlyPriceCents) {
+            widget.setAttribute(
+              "subscription-price",
+              String((article.plan.monthlyPriceCents / 100).toFixed(2)).replace(/\.00$/, "")
+            );
           }
 
           const teaser = document.createElement("div");
