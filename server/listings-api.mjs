@@ -6,14 +6,13 @@ import {
   normalizeExternalUrl,
   toPublicListing,
 } from "./listings.mjs";
-import { getWriterPlan } from "./subscriptions.mjs";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 const LISTING_ADMIN_SECRET = (process.env.LISTING_ADMIN_SECRET || "").trim();
 
 const PUBLIC_COLS =
-  "article_id,title,author,teaser,price_wei,payment_asset,publisher,external_url,listed_at,listing_status,embed_sig,allow_a_la_carte";
+  "article_id,title,author,teaser,price_wei,payment_asset,publisher,external_url,listed_at,listing_status,embed_sig";
 
 export function listingsSupabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
@@ -106,18 +105,11 @@ export async function getPublicArticle(slug) {
     err.status = 404;
     throw err;
   }
-  let plan = null;
-  try {
-    if (article.publisher) plan = await getWriterPlan(article.publisher);
-  } catch {
-    plan = null;
-  }
   return {
     article: {
       ...article,
       priceLabel: formatPriceLabel(article.priceWei, article.paymentAsset),
       href: `/articles/${encodeURIComponent(article.slug)}`,
-      plan,
     },
   };
 }

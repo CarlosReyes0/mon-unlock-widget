@@ -71,5 +71,5 @@ test("GET /site-nav.js is served", async () => {
   assert.equal(res.status, 200);
   const text = await res.text();
   assert.match(text, /Create embed/);
-  assert.match(text, /Connect marketplace/);
+  assert.match(text, /Connect sample/);
 });

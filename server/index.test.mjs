@@ -107,29 +107,6 @@ test("POST /api/stripe/payouts/process returns 503 without cron secret", async (
   assert.equal(body.error, "payout_cron_not_configured");
 });
 
-test("GET /api/access without reader returns 400", async () => {
-  const res = await fetch(`http://127.0.0.1:${PORT}/api/access?article_id=demo`);
-  assert.equal(res.status, 400);
-  const body = await res.json();
-  assert.equal(body.error, "reader_or_fiat_session_required");
-});
-
-test("POST /api/subscriptions/stripe/checkout returns 503 without secrets", async () => {
-  const res = await fetch(`http://127.0.0.1:${PORT}/api/subscriptions/stripe/checkout`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      reader: "0x1111111111111111111111111111111111111111",
-      writer: "0x2222222222222222222222222222222222222222",
-    }),
-  });
-  assert.equal(res.status, 503);
-  const body = await res.json();
-  assert.ok(
-    body.error === "stripe_not_configured" || body.error === "supabase_not_configured"
-  );
-});
-
 test("GET /api/listings/health reports supabaseConfigured=false without secrets", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/listings/health`);
   assert.equal(res.status, 200);
