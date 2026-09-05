@@ -53,6 +53,18 @@ import {
   listingsSupabaseConfigured,
   listingAdminConfigured,
 } from "./listings-api.mjs";
+import {
+  cancelWriterSubscription,
+  confirmCryptoSubscription,
+  createStripeSubscriptionCheckout,
+  getWriterPlan,
+  lapseExpiredCryptoSubscriptions,
+  listReaderSubscriptions,
+  resolveArticleAccess,
+  setArticleALaCarte,
+  subscriptionContractAddress,
+  upsertWriterPlan,
+} from "./subscriptions.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -811,6 +823,172 @@ const server = http.createServer(async (req, res) => {
         error: e?.code || "webhook_failed",
         message: e?.message || "webhook_failed",
       });
+    }
+  }
+
+  // --- Writer subscriptions (fiat + Monad USDC) ---
+  if (method === "GET" && url.pathname === "/api/access") {
+    try {
+      const body = await resolveArticleAccess({
+        articleId: url.searchParams.get("article_id") || url.searchParams.get("articleId"),
+        reader: url.searchParams.get("reader"),
+        fiatSession: url.searchParams.get("fiat_session") || url.searchParams.get("fiatSession"),
+      });
+      return sendJson(res, 200, body);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "access_failed", ...(e?.access || {}) });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/article-body") {
+    try {
+      const body = await resolveArticleAccess({
+        articleId: url.searchParams.get("article_id") || url.searchParams.get("articleId"),
+        reader: url.searchParams.get("reader"),
+        fiatSession: url.searchParams.get("fiat_session") || url.searchParams.get("fiatSession"),
+        includeBody: true,
+      });
+      return sendJson(res, 200, { body: body.body, reason: body.reason });
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "body_failed" });
+    }
+  }
+
+  if (method === "GET" && url.pathname.startsWith("/api/writers/") && url.pathname.endsWith("/plan")) {
+    try {
+      const publisher = decodeURIComponent(url.pathname.slice("/api/writers/".length, -"/plan".length));
+      const plan = await getWriterPlan(publisher);
+      return sendJson(res, 200, { plan, subscriptionContract: subscriptionContractAddress() || null });
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "plan_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/writers/plan") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const plan = await upsertWriterPlan({
+        publisher: parsed.publisher,
+        monthlyPriceCents: parsed.monthlyPriceCents,
+        allowALaCarte: parsed.allowALaCarte,
+      });
+      return sendJson(res, 200, { plan });
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "plan_save_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/articles/a-la-carte") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await setArticleALaCarte({
+        articleId: parsed.articleId,
+        publisher: parsed.publisher,
+        allowALaCarte: parsed.allowALaCarte,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "a_la_carte_failed" });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/subscriptions") {
+    try {
+      const rows = await listReaderSubscriptions(url.searchParams.get("reader"));
+      return sendJson(res, 200, { subscriptions: rows });
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "list_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/subscriptions/stripe/checkout") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+      const origin = `${proto}://${req.headers.host || "localhost"}`;
+      const safeUrl = (value, fallback) => {
+        if (typeof value !== "string") return fallback;
+        try {
+          const u = new URL(value);
+          if (u.protocol !== "https:" && u.protocol !== "http:") return fallback;
+          return u.toString();
+        } catch {
+          return fallback;
+        }
+      };
+      const result = await createStripeSubscriptionCheckout({
+        reader: parsed.reader,
+        writer: parsed.writer,
+        successUrl: safeUrl(parsed.successUrl, `${origin}/account.html?sub=ok`),
+        cancelUrl: safeUrl(parsed.cancelUrl, `${origin}/account.html?sub=cancel`),
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      if (e?.message === "stripe_not_configured" || e?.message === "supabase_not_configured") {
+        return sendJson(res, 503, { error: e.message });
+      }
+      return sendJson(res, status, { error: e?.message || "checkout_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/subscriptions/crypto/confirm") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await confirmCryptoSubscription({
+        reader: parsed.reader,
+        writer: parsed.writer,
+        txHash: parsed.txHash,
+        periodEnd: parsed.periodEnd,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "confirm_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/subscriptions/cancel") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await cancelWriterSubscription({
+        reader: parsed.reader,
+        writer: parsed.writer,
+      });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "cancel_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/subscriptions/crypto/lapse") {
+    try {
+      const cronSecret = (process.env.STRIPE_PAYOUT_CRON_SECRET || "").trim();
+      if (cronSecret) {
+        const auth = String(req.headers.authorization || "");
+        const headerSecret = String(req.headers["x-cron-secret"] || "");
+        const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+        if (bearer !== cronSecret && headerSecret !== cronSecret) {
+          return sendJson(res, 401, { error: "unauthorized" });
+        }
+      }
+      const result = await lapseExpiredCryptoSubscriptions();
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "lapse_failed" });
     }
   }
 

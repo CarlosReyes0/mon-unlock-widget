@@ -90,6 +90,7 @@ test("toPublicListing omits non-listed and requires slug", () => {
   assert.equal(pub.externalUrl, "https://maya.blog/hello");
   assert.equal(pub.embedSig, "0xsig");
   assert.equal(pub.paymentAsset, "usdc");
+  assert.equal(pub.allowALaCarte, true);
   assert.ok(!("body" in pub));
 });
 

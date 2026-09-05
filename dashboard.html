@@ -68,6 +68,22 @@
         </div>
 
         <div class="card" style="margin-top:1.25rem;">
+          <h2 class="section-title">Writer subscription</h2>
+          <p style="margin:0 0 0.75rem; font-size:0.875rem; color:#6b7280; line-height:1.45;">
+            Readers can subscribe to <em>you</em> with a card or Monad USDC. No site-wide pass.
+            Cancel locks articles they did not buy.
+          </p>
+          <label for="planPrice">Monthly price (USD)</label>
+          <input id="planPrice" type="number" min="0.50" step="0.50" value="5" style="margin-bottom:0.75rem;" />
+          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:600;margin-bottom:0.75rem;">
+            <input type="checkbox" id="planAllowBuy" checked style="width:auto;" />
+            Allow pay-per-article
+          </label>
+          <button class="btn btn-primary" id="planSaveBtn" type="button" disabled>Save plan</button>
+          <p id="planSaveStatus" style="margin:0.55rem 0 0; font-size:0.75rem; color:#6b7280;"></p>
+        </div>
+
+        <div class="card" style="margin-top:1.25rem;">
           <h2 class="section-title">Stripe payouts</h2>
           <p style="margin:0 0 0.75rem; font-size:0.875rem; color:#6b7280; line-height:1.45;">
             When readers unlock with Apple Pay / card, funds land on the platform Stripe account, then transfer to <strong>your</strong> Connect account. You do not wait for a manual payout from the site owner.
@@ -108,6 +124,10 @@
           <label style="display:flex;align-items:center;gap:0.5rem;font-weight:600;margin-bottom:0.75rem;">
             <input type="checkbox" id="listingListOn" style="width:auto;" />
             List on Open Paywall
+          </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;font-weight:600;margin-bottom:0.75rem;">
+            <input type="checkbox" id="listingAllowBuy" checked style="width:auto;" />
+            Allow pay-per-article on this piece
           </label>
           <label for="listingExternalUrl">Your site URL (optional)</label>
           <input id="listingExternalUrl" type="url" placeholder="https://yoursite.com/this-post" style="margin-bottom:0.75rem;" />
@@ -348,6 +368,7 @@
             hasSlug: Boolean(a.article_id),
             displayId: formatArticleIdForDisplay(a.article_id, a.article_id_hash),
             listingStatus: a.listing_status || "unlisted",
+            allowALaCarte: a.allow_a_la_carte !== false,
             externalUrl: a.external_url || "",
             embedSig: a.embed_sig || "",
           }));
@@ -449,6 +470,8 @@
           article.articleId +
           (article.listingStatus === "hidden" ? " (currently hidden by moderator)" : "");
         document.getElementById("listingListOn").checked = article.listingStatus === "listed";
+        const allowBuy = document.getElementById("listingAllowBuy");
+        if (allowBuy) allowBuy.checked = article.allowALaCarte !== false;
         document.getElementById("listingExternalUrl").value = article.externalUrl || "";
         const view = document.getElementById("listingViewLink");
         if (view) {
@@ -484,6 +507,18 @@
           });
           const body = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(body.error || `http_${res.status}`);
+          const allowBuy = document.getElementById("listingAllowBuy");
+          if (allowBuy) {
+            await fetch("/api/articles/a-la-carte", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                articleId: listingEditorArticle.articleId,
+                publisher: currentWallet,
+                allowALaCarte: Boolean(allowBuy.checked),
+              }),
+            });
+          }
           status.textContent = "Listing saved ✓";
           status.style.color = "#16a34a";
           await loadFromSupabase(currentWallet);
@@ -630,6 +665,56 @@ ${teaser}
       function setStripeOnboardEnabled(enabled) {
         const btn = document.getElementById("stripeOnboardBtn");
         if (btn) btn.disabled = !enabled;
+        const planBtn = document.getElementById("planSaveBtn");
+        if (planBtn) planBtn.disabled = !enabled;
+      }
+
+      async function loadWriterPlan(wallet) {
+        if (!wallet) return;
+        try {
+          const res = await fetch(`/api/writers/${wallet}/plan`);
+          const data = await res.json();
+          if (!res.ok || !data.plan) return;
+          const price = document.getElementById("planPrice");
+          const allow = document.getElementById("planAllowBuy");
+          if (price && data.plan.monthlyPriceCents) {
+            price.value = String(data.plan.monthlyPriceCents / 100);
+          }
+          if (allow && typeof data.plan.allowALaCarte === "boolean") {
+            allow.checked = data.plan.allowALaCarte;
+          }
+        } catch {
+          /* optional */
+        }
+      }
+
+      async function saveWriterPlan() {
+        const status = document.getElementById("planSaveStatus");
+        if (!currentWallet) {
+          status.textContent = "Sign in first.";
+          return;
+        }
+        const dollars = Number(document.getElementById("planPrice").value);
+        const cents = Math.round(dollars * 100);
+        status.textContent = "Saving…";
+        try {
+          const res = await fetch("/api/writers/plan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              publisher: currentWallet,
+              monthlyPriceCents: cents,
+              allowALaCarte: Boolean(document.getElementById("planAllowBuy").checked),
+            }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.error || `http_${res.status}`);
+          status.textContent = "Plan saved ✓";
+          status.style.color = "#16a34a";
+        } catch (e) {
+          status.textContent = e.message || "Save failed";
+          status.style.color = "#b91c1c";
+        }
       }
 
       async function applyConnectedWallet(address, { reload = true, source = "wallet" } = {}) {
@@ -665,7 +750,10 @@ ${teaser}
         myArticles = [];
         renderArticles();
         updateStats();
-        if (reload) loadFromSupabase(currentWallet);
+        if (reload) {
+          loadFromSupabase(currentWallet);
+          loadWriterPlan(currentWallet);
+        }
       }
 
       async function connectWallet() {
@@ -902,6 +990,7 @@ ${teaser}
         document.getElementById("switchBtn")?.addEventListener("click", switchWallet);
         document.getElementById("stripeOnboardBtn")?.addEventListener("click", () => void startStripeOnboarding());
         document.getElementById("listingSaveBtn")?.addEventListener("click", () => void saveListingFromDashboard());
+        document.getElementById("planSaveBtn")?.addEventListener("click", () => void saveWriterPlan());
 
         // Keep dashboard in sync when the user switches account/network in the extension.
         const eth = getInjectedProvider();
