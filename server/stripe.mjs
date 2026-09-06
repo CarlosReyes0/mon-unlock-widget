@@ -14,7 +14,7 @@
  *   STRIPE_PLATFORM_FEE_BPS (optional, default 0)
  */
 import Stripe from "stripe";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { keccak256, toBytes } from "viem";
 import { authorizeFiatUnlock } from "./embed-signature.mjs";
 
@@ -91,6 +91,15 @@ async function supabase(path, opts = {}) {
 
 export function articleIdHash(articleId) {
   return keccak256(toBytes(articleId));
+}
+
+/** Checkout Sessions API `integration_identifier` suffix: 8 random letters. */
+export function checkoutIntegrationId(prefix) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz";
+  const bytes = randomBytes(8);
+  let suffix = "";
+  for (const b of bytes) suffix += alphabet[b % 26];
+  return `${prefix}_${suffix}`;
 }
 
 /**

@@ -20,6 +20,7 @@ import Stripe from "stripe";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkoutIntegrationId } from "./stripe.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -502,11 +503,14 @@ export async function createDestinationCheckout(input) {
   // Step: Checkout in `payment` mode with destination charge fields on the PI.
   const session = await stripeClient.checkout.sessions.create({
     mode: "payment",
+    automatic_tax: { enabled: true, liability: { type: "self" } },
+    integration_identifier: checkoutIntegrationId("op_connect_demo"),
     line_items: [
       {
         price_data: {
           currency: price.currency,
           unit_amount: price.unit_amount,
+          tax_behavior: "exclusive",
           product_data: {
             name: product.name,
             description: product.description || undefined,

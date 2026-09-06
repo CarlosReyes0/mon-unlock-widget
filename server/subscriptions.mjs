@@ -13,7 +13,13 @@ import {
   resolveAllowALaCarte,
   subscriptionIsLive,
 } from "./access.mjs";
-import { articleIdHash, getStripe, isUniqueViolation, supabaseConfigured } from "./stripe.mjs";
+import {
+  articleIdHash,
+  checkoutIntegrationId,
+  getStripe,
+  isUniqueViolation,
+  supabaseConfigured,
+} from "./stripe.mjs";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -21,6 +27,43 @@ const SUBSCRIPTION_CONTRACT = (process.env.SUBSCRIPTION_CONTRACT || "").trim();
 
 export function subscriptionContractAddress() {
   return SUBSCRIPTION_CONTRACT;
+}
+
+/**
+ * Hosted Checkout params for a writer subscription.
+ * Tax uses the platform Texas registration (`liability: self`).
+ * Checkout collects the address; do not force billing_address_collection.
+ * @param {{
+ *   reader: string,
+ *   writer: string,
+ *   priceId: string,
+ *   successUrl: string,
+ *   cancelUrl: string,
+ *   integrationId?: string,
+ * }} input
+ */
+export function writerSubscriptionCheckoutSessionParams(input) {
+  return {
+    mode: "subscription",
+    line_items: [{ price: input.priceId, quantity: 1 }],
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    client_reference_id: `${input.reader}:${input.writer}`,
+    automatic_tax: { enabled: true, liability: { type: "self" } },
+    integration_identifier: input.integrationId || checkoutIntegrationId("op_writer_sub"),
+    metadata: {
+      reader: input.reader,
+      writer: input.writer,
+      product: "writer_subscription",
+    },
+    subscription_data: {
+      metadata: {
+        reader: input.reader,
+        writer: input.writer,
+        product: "writer_subscription",
+      },
+    },
+  };
 }
 
 /**
@@ -306,6 +349,7 @@ async function ensureStripePrice(plan, writer) {
     unit_amount: cents,
     recurring: { interval: "month" },
     product: productId,
+    tax_behavior: "exclusive",
     metadata: { writer, product: "writer_subscription" },
   });
 
@@ -345,25 +389,15 @@ export async function createStripeSubscriptionCheckout(input) {
 
   const { priceId } = await ensureStripePrice(row, writer);
   const stripe = getStripe();
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: input.successUrl,
-    cancel_url: input.cancelUrl,
-    client_reference_id: `${reader}:${writer}`,
-    metadata: {
+  const session = await stripe.checkout.sessions.create(
+    writerSubscriptionCheckoutSessionParams({
       reader,
       writer,
-      product: "writer_subscription",
-    },
-    subscription_data: {
-      metadata: {
-        reader,
-        writer,
-        product: "writer_subscription",
-      },
-    },
-  });
+      priceId,
+      successUrl: input.successUrl,
+      cancelUrl: input.cancelUrl,
+    })
+  );
 
   return { url: session.url, sessionId: session.id };
 }
