@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import {
-  Elements,
+  BillingAddressElement,
+  CheckoutElementsProvider,
   ExpressCheckoutElement,
-  useElements,
-  useStripe,
-} from "@stripe/react-stripe-js";
+  PaymentElement,
+  useCheckoutElements,
+} from "@stripe/react-stripe-js/checkout";
 
 const publishableKey =
   (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
@@ -22,9 +23,9 @@ export function stripeFiatEnabled(): boolean {
   return Boolean(publishableKey);
 }
 
-type CreateIntentResult = {
+type CreateCheckoutResult = {
   clientSecret: string;
-  paymentIntentId: string;
+  sessionId: string;
   sessionToken: string;
   amountUsdCents: number;
 };
@@ -38,39 +39,50 @@ function fiatIntentErrorMessage(code: string | undefined): string {
       return "This embed was modified. Payments are blocked for your safety.";
     case "article_not_found":
       return "This article is not registered for payments yet.";
+    case "a_la_carte_disabled":
+      return "This writer only offers subscriptions.";
     default:
       return code || "Could not start card checkout.";
   }
 }
 
-async function createIntent(input: {
+function checkoutReturnUrl(): string {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("payment_intent");
+  url.searchParams.delete("payment_intent_client_secret");
+  url.searchParams.delete("redirect_status");
+  url.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+  return url.toString();
+}
+
+async function createCheckout(input: {
   articleId: string;
   title: string;
   amountUsdCents: number;
   embedSig: string;
   contract: string;
   buyerEmail?: string;
-}): Promise<CreateIntentResult> {
+}): Promise<CreateCheckoutResult> {
   const res = await fetch("/api/stripe/create-intent", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, returnUrl: checkoutReturnUrl() }),
   });
-  const data = (await res.json()) as CreateIntentResult & { error?: string };
+  const data = (await res.json()) as CreateCheckoutResult & { error?: string };
   if (!res.ok) {
     throw new Error(fiatIntentErrorMessage(data.error));
   }
-  if (!data.clientSecret || !data.paymentIntentId) {
+  if (!data.clientSecret || !data.sessionId) {
     throw new Error("Invalid payment response.");
   }
   return data;
 }
 
-async function confirmUnlock(paymentIntentId: string): Promise<string> {
+async function confirmUnlock(input: { sessionId?: string; paymentIntentId?: string }): Promise<string> {
   const res = await fetch("/api/stripe/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paymentIntentId }),
+    body: JSON.stringify(input),
   });
   const data = (await res.json()) as { sessionToken?: string; error?: string };
   if (!res.ok || !data.sessionToken) {
@@ -79,57 +91,64 @@ async function confirmUnlock(paymentIntentId: string): Promise<string> {
   return data.sessionToken;
 }
 
-/** Stripe may bounce back to unlock.html with payment_intent + redirect_status. */
-function readStripeRedirectIntent(): { paymentIntentId: string; status: string } | null {
+function readReturnedCheckout(): { sessionId: string } | { paymentIntentId: string; status: string } | null {
   const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("session_id")?.trim() ?? "";
+  if (sessionId.startsWith("cs_")) return { sessionId };
   const paymentIntentId = params.get("payment_intent")?.trim() ?? "";
   const status = params.get("redirect_status")?.trim() ?? "";
-  if (!paymentIntentId.startsWith("pi_")) return null;
-  return { paymentIntentId, status };
+  if (paymentIntentId.startsWith("pi_")) return { paymentIntentId, status };
+  return null;
 }
 
 type InnerProps = {
-  paymentIntentId: string;
+  sessionId: string;
   onUnlocked: (sessionToken: string) => void;
   onError: (message: string) => void;
   onBusy: (busy: boolean) => void;
 };
 
-function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: InnerProps) {
-  const stripe = useStripe();
-  const elements = useElements();
+function TaxLine() {
+  const state = useCheckoutElements();
+  if (state.type !== "success") return null;
+  const tax = state.checkout.total?.taxExclusive;
+  if (!tax || tax.minorUnitsAmount <= 0) return null;
+  return <p className="checkout-hint">Tax {tax.amount}</p>;
+}
+
+function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps) {
+  const checkoutState = useCheckoutElements();
   const [methodsReady, setMethodsReady] = useState(false);
 
+  const finish = useCallback(async () => {
+    const sessionToken = await confirmUnlock({ sessionId });
+    onUnlocked(sessionToken);
+  }, [onUnlocked, sessionId]);
+
   const onConfirm = useCallback(async () => {
-    if (!stripe || !elements) return;
+    if (checkoutState.type !== "success") return;
     onBusy(true);
     onError("");
     try {
-      // Keep full unlock query (incl. returnUrl) so a redirect can finish unlock.
-      const { error, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        redirect: "if_required",
-        confirmParams: {
-          return_url: window.location.href,
-        },
-      });
-      if (error) {
-        onError(error.message || "Payment cancelled.");
+      const result = await checkoutState.checkout.confirm();
+      if (result.type === "error") {
+        onError(result.error.message || "Payment cancelled.");
         return;
       }
-      const piId = paymentIntent?.id || paymentIntentId;
-      if (paymentIntent && paymentIntent.status !== "succeeded") {
-        onError("Payment is still processing. Try again in a moment.");
-        return;
-      }
-      const sessionToken = await confirmUnlock(piId);
-      onUnlocked(sessionToken);
+      await finish();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Payment failed.");
     } finally {
       onBusy(false);
     }
-  }, [stripe, elements, paymentIntentId, onBusy, onError, onUnlocked]);
+  }, [checkoutState, finish, onBusy, onError]);
+
+  if (checkoutState.type === "loading") {
+    return <p className="checkout-status">Preparing card checkout…</p>;
+  }
+  if (checkoutState.type === "error") {
+    return <p className="checkout-error">{checkoutState.error.message}</p>;
+  }
 
   return (
     <div className="checkout-fiat">
@@ -164,10 +183,22 @@ function ExpressPayInner({ paymentIntentId, onUnlocked, onError, onBusy }: Inner
           void onConfirm();
         }}
       />
+      <BillingAddressElement />
+      <PaymentElement />
+      <TaxLine />
+      <button
+        type="button"
+        className="checkout-btn primary"
+        disabled={!checkoutState.checkout.canConfirm}
+        onClick={() => {
+          void onConfirm();
+        }}
+      >
+        Pay
+      </button>
       {!methodsReady ? (
         <p className="checkout-hint">
-          Apple Pay and Google Pay show when available on this device. Otherwise use the wallets
-          Stripe presents.
+          Apple Pay and Google Pay show when available on this device. Otherwise use the card form.
         </p>
       ) : null}
     </div>
@@ -186,8 +217,7 @@ type Props = {
 };
 
 /**
- * Apple Pay / Google Pay / Link via Stripe Express Checkout Element.
- * Also completes unlock when Stripe redirects back with payment_intent in the URL.
+ * Apple Pay / Google Pay / card via Checkout Sessions (elements) + Stripe Tax.
  */
 export function StripeFiatPay({
   articleId,
@@ -200,23 +230,22 @@ export function StripeFiatPay({
   onBusy = () => {},
 }: Props) {
   const promise = useMemo(() => getStripePromise(), []);
-  const [intent, setIntent] = useState<CreateIntentResult | null>(null);
+  const [session, setSession] = useState<CreateCheckoutResult | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
   const [finishingRedirect, setFinishingRedirect] = useState(false);
 
-  // Complete payment when Stripe redirected back to unlock.html.
   useEffect(() => {
-    const redirected = readStripeRedirectIntent();
+    const redirected = readReturnedCheckout();
     if (!redirected) return;
     let cancelled = false;
     setFinishingRedirect(true);
     onBusy(true);
     void (async () => {
       try {
-        if (redirected.status && redirected.status !== "succeeded") {
+        if ("status" in redirected && redirected.status && redirected.status !== "succeeded") {
           throw new Error("Payment was not completed. You can try again.");
         }
-        const sessionToken = await confirmUnlock(redirected.paymentIntentId);
+        const sessionToken = await confirmUnlock(redirected);
         if (!cancelled) onUnlocked(sessionToken);
       } catch (e) {
         if (!cancelled) {
@@ -237,14 +266,14 @@ export function StripeFiatPay({
 
   useEffect(() => {
     if (finishingRedirect) return;
-    if (readStripeRedirectIntent()) return;
+    if (readReturnedCheckout()) return;
     if (!promise || amountUsdCents < 50) return;
     let cancelled = false;
     onBusy(true);
-    void createIntent({ articleId, title, amountUsdCents, embedSig, contract })
+    void createCheckout({ articleId, title, amountUsdCents, embedSig, contract })
       .then((created) => {
         if (cancelled) return;
-        setIntent(created);
+        setSession(created);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -280,30 +309,32 @@ export function StripeFiatPay({
     return <p className="checkout-error">{bootError}</p>;
   }
 
-  if (!intent) {
+  if (!session) {
     return <p className="checkout-status">Preparing card checkout…</p>;
   }
 
   return (
-    <Elements
+    <CheckoutElementsProvider
       stripe={promise}
       options={{
-        clientSecret: intent.clientSecret,
-        appearance: {
-          theme: "stripe",
-          variables: {
-            colorPrimary: "#5b7c5a",
-            borderRadius: "12px",
+        clientSecret: session.clientSecret,
+        elementsOptions: {
+          appearance: {
+            theme: "stripe",
+            variables: {
+              colorPrimary: "#5b7c5a",
+              borderRadius: "12px",
+            },
           },
         },
       }}
     >
       <ExpressPayInner
-        paymentIntentId={intent.paymentIntentId}
+        sessionId={session.sessionId}
         onUnlocked={onUnlocked}
         onError={onError}
         onBusy={onBusy}
       />
-    </Elements>
+    </CheckoutElementsProvider>
   );
 }

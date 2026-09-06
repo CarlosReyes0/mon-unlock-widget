@@ -2,7 +2,7 @@
  * Stripe fiat unlock + Connect USDC payout scaffolding.
  *
  * Flow:
- * 1. POST /api/stripe/create-intent — PaymentIntent for Apple Pay / cards
+ * 1. POST /api/stripe/create-intent — Checkout Session (elements) for Apple Pay / cards + tax
  * 2. Webhook payment_intent.succeeded OR POST /api/stripe/confirm — grant fiat_unlock
  * 3. payout_jobs row queued; processPayouts transfers to Connect (USDC when enabled)
  *
@@ -131,10 +131,10 @@ export async function lookupArticle(articleId) {
  *   embedSig?: string,
  *   contract?: string,
  *   reader?: string,
+ *   returnUrl?: string,
  * }} input
  */
-export async function createPaymentIntent(input) {
-  const stripe = getStripe();
+async function prepareArticleFiatCharge(input) {
   const articleId = String(input.articleId || "").trim();
   const amountUsdCents = Math.round(Number(input.amountUsdCents));
   const buyerEmail =
@@ -206,35 +206,136 @@ export async function createPaymentIntent(input) {
     throw err;
   }
 
-  const sessionToken = randomUUID();
-  const hash = article.article_id_hash || articleIdHash(articleId);
+  return {
+    articleId,
+    amountUsdCents,
+    buyerEmail,
+    title: input.title,
+    reader,
+    sessionToken: randomUUID(),
+    hash: article.article_id_hash || articleIdHash(articleId),
+    publisher: publisherKey,
+  };
+}
 
-  const intent = await stripe.paymentIntents.create({
-    amount: amountUsdCents,
-    currency: "usd",
-    automatic_payment_methods: { enabled: true },
-    receipt_email: buyerEmail,
-    metadata: {
-      articleId,
-      articleIdHash: hash,
-      publisher: String(article.publisher).toLowerCase(),
-      sessionToken,
-      product: "mon_unlock_fiat",
-      ...(reader ? { reader } : {}),
+function normalizeCheckoutReturnUrl(returnUrl) {
+  const raw = String(returnUrl || "").trim();
+  if (!raw) {
+    const err = new Error("invalid_return_url");
+    err.status = 400;
+    throw err;
+  }
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    const err = new Error("invalid_return_url");
+    err.status = 400;
+    throw err;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    const err = new Error("invalid_return_url");
+    err.status = 400;
+    throw err;
+  }
+  if (!raw.includes("{CHECKOUT_SESSION_ID}")) {
+    parsed.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+    return parsed.toString();
+  }
+  return raw;
+}
+
+/**
+ * Checkout Sessions (ui_mode: elements) for one-time article unlocks + Stripe Tax.
+ * Payouts use listed cents in metadata, not the tax-inclusive total.
+ * @param {{
+ *   articleId: string,
+ *   title?: string,
+ *   amountUsdCents: number,
+ *   sessionToken: string,
+ *   publisher: string,
+ *   hash: string,
+ *   reader?: string,
+ *   returnUrl: string,
+ *   buyerEmail?: string,
+ *   integrationId?: string,
+ * }} input
+ */
+export function articleUnlockCheckoutSessionParams(input) {
+  const title = input.title
+    ? `Unlock: ${String(input.title).slice(0, 120)}`
+    : `Unlock article ${input.articleId}`;
+  const metadata = {
+    articleId: input.articleId,
+    articleIdHash: input.hash,
+    publisher: input.publisher,
+    sessionToken: input.sessionToken,
+    amountUsdCents: String(input.amountUsdCents),
+    product: "mon_unlock_fiat",
+    ...(input.reader ? { reader: input.reader } : {}),
+  };
+  return {
+    ui_mode: "elements",
+    mode: "payment",
+    automatic_tax: { enabled: true, liability: { type: "self" } },
+    integration_identifier: input.integrationId || checkoutIntegrationId("op_article_unlock"),
+    return_url: input.returnUrl,
+    customer_email: input.buyerEmail,
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          unit_amount: input.amountUsdCents,
+          tax_behavior: "exclusive",
+          product_data: { name: title },
+        },
+        quantity: 1,
+      },
+    ],
+    metadata,
+    payment_intent_data: {
+      description: title,
+      metadata,
     },
-    description: input.title
-      ? `Unlock: ${String(input.title).slice(0, 120)}`
-      : `Unlock article ${articleId}`,
-  });
+  };
+}
+
+/**
+ * @param {{
+ *   articleId: string,
+ *   amountUsdCents: number,
+ *   buyerEmail?: string,
+ *   title?: string,
+ *   embedSig?: string,
+ *   contract?: string,
+ *   reader?: string,
+ *   returnUrl?: string,
+ * }} input
+ */
+export async function createArticleCheckoutSession(input) {
+  const stripe = getStripe();
+  const prepared = await prepareArticleFiatCharge(input);
+  const returnUrl = normalizeCheckoutReturnUrl(input.returnUrl);
+  const session = await stripe.checkout.sessions.create(
+    articleUnlockCheckoutSessionParams({
+      ...prepared,
+      returnUrl,
+    })
+  );
 
   return {
-    clientSecret: intent.client_secret,
-    paymentIntentId: intent.id,
-    sessionToken,
-    amountUsdCents,
-    publisher: String(article.publisher).toLowerCase(),
-    articleIdHash: hash,
+    clientSecret: session.client_secret,
+    sessionId: session.id,
+    sessionToken: prepared.sessionToken,
+    amountUsdCents: prepared.amountUsdCents,
+    publisher: prepared.publisher,
+    articleIdHash: prepared.hash,
   };
+}
+
+/** @deprecated Use createArticleCheckoutSession — article cards now go through Checkout Tax. */
+export async function createPaymentIntent(input) {
+  return createArticleCheckoutSession(input);
 }
 
 /** Postgres unique_violation (23505) from PostgREST / Supabase. */
@@ -280,7 +381,11 @@ export async function grantFiatUnlockFromIntent(intent) {
   const articleIdHash = intent.metadata.articleIdHash || articleIdHashSafe(articleId);
   const publisher = (intent.metadata.publisher || "").toLowerCase();
   const sessionToken = intent.metadata.sessionToken || randomUUID();
-  const amountCents = intent.amount_received || intent.amount;
+  const listedCents = Math.round(Number(intent.metadata.amountUsdCents));
+  const amountCents =
+    Number.isFinite(listedCents) && listedCents >= 50
+      ? listedCents
+      : intent.amount_received || intent.amount;
 
   if (!articleId || !publisher || !articleIdHash) {
     const err = new Error("incomplete_intent_metadata");
@@ -374,18 +479,62 @@ function articleIdHashSafe(articleId) {
 }
 
 /**
- * @param {string} paymentIntentId
+ * @param {import("stripe").Stripe.Checkout.Session} session
  */
-export async function confirmPaymentIntent(paymentIntentId) {
+export async function grantFiatUnlockFromCheckoutSession(session) {
+  if (session.metadata?.product !== "mon_unlock_fiat") {
+    return { granted: false, reason: "wrong_product" };
+  }
+  if (session.payment_status !== "paid") {
+    return { granted: false, reason: "not_paid" };
+  }
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
+  if (!paymentIntentId) {
+    return { granted: false, reason: "no_payment_intent" };
+  }
+  const listedCents = Math.round(Number(session.metadata.amountUsdCents));
+  return grantFiatUnlockFromIntent({
+    id: paymentIntentId,
+    status: "succeeded",
+    amount: Number.isFinite(listedCents) && listedCents >= 50 ? listedCents : session.amount_subtotal,
+    amount_received:
+      Number.isFinite(listedCents) && listedCents >= 50 ? listedCents : session.amount_subtotal,
+    currency: session.currency,
+    receipt_email: session.customer_details?.email || session.customer_email || null,
+    metadata: session.metadata,
+  });
+}
+
+/**
+ * @param {{ paymentIntentId?: string, sessionId?: string }} input
+ */
+export async function confirmFiatPayment(input) {
   const stripe = getStripe();
-  const id = String(paymentIntentId || "").trim();
-  if (!id.startsWith("pi_")) {
+  const sessionId = String(input.sessionId || "").trim();
+  if (sessionId.startsWith("cs_")) {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
+    return grantFiatUnlockFromCheckoutSession(session);
+  }
+  const paymentIntentId = String(input.paymentIntentId || "").trim();
+  if (!paymentIntentId.startsWith("pi_")) {
     const err = new Error("invalid_payment_intent");
     err.status = 400;
     throw err;
   }
-  const intent = await stripe.paymentIntents.retrieve(id);
+  const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
   return grantFiatUnlockFromIntent(intent);
+}
+
+/**
+ * @param {string} paymentIntentId
+ */
+export async function confirmPaymentIntent(paymentIntentId) {
+  return confirmFiatPayment({ paymentIntentId });
 }
 
 /**
@@ -407,6 +556,12 @@ export async function handleStripeWebhook(rawBody, signature) {
   }
 
   const event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const result = await grantFiatUnlockFromCheckoutSession(session);
+    return { received: true, type: event.type, ...result };
+  }
 
   if (event.type === "payment_intent.succeeded") {
     const intent = event.data.object;

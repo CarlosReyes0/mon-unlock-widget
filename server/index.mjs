@@ -19,8 +19,8 @@ import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import {
   stripeConfigured,
   supabaseConfigured,
-  createPaymentIntent,
-  confirmPaymentIntent,
+  createArticleCheckoutSession,
+  confirmFiatPayment,
   handleStripeWebhook,
   createConnectOnboardingLink,
   processPendingPayouts,
@@ -416,13 +416,15 @@ const server = http.createServer(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
-      const result = await createPaymentIntent({
+      const result = await createArticleCheckoutSession({
         articleId: parsed.articleId,
         amountUsdCents: parsed.amountUsdCents,
         buyerEmail: parsed.buyerEmail,
         title: parsed.title,
         embedSig: parsed.embedSig,
         contract: parsed.contract,
+        reader: parsed.reader,
+        returnUrl: parsed.returnUrl,
       });
       return sendJson(res, 200, result);
     } catch (e) {
@@ -439,7 +441,10 @@ const server = http.createServer(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
-      const result = await confirmPaymentIntent(parsed.paymentIntentId);
+      const result = await confirmFiatPayment({
+        paymentIntentId: parsed.paymentIntentId,
+        sessionId: parsed.sessionId,
+      });
       return sendJson(res, 200, result);
     } catch (e) {
       const status = e?.status || 500;
