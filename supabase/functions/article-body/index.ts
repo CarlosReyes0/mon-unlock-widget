@@ -191,6 +191,32 @@ Deno.serve(async (req) => {
     }
 
     if (!isUnlocked && reader) {
+      const { data: articleRow } = await supabase
+        .from('articles')
+        .select('publisher')
+        .eq('article_id_hash', article.article_id_hash)
+        .limit(1);
+      const writer = articleRow?.[0]?.publisher?.toLowerCase();
+      if (writer) {
+        const { data: subs } = await supabase
+          .from('subscriptions')
+          .select('status,canceled_at,current_period_end')
+          .eq('reader', reader)
+          .eq('writer', writer)
+          .eq('status', 'active');
+        const now = Date.now();
+        isUnlocked = Boolean(
+          (subs || []).some(
+            (s) =>
+              !s.canceled_at &&
+              s.current_period_end &&
+              new Date(s.current_period_end).getTime() > now
+          )
+        );
+      }
+    }
+
+    if (!isUnlocked && reader) {
       const { data: unlocks, error: unlockError } = await supabase
         .from('unlocks')
         .select('id')
