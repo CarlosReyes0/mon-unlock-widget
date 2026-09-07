@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   normalizeExternalUrl,
@@ -7,6 +10,8 @@ import {
   formatPriceLabel,
   isListingStatus,
 } from "./listings.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("normalizeExternalUrl accepts https and clears empty", () => {
   assert.deepEqual(normalizeExternalUrl(""), { ok: true, url: null });
@@ -102,4 +107,29 @@ test("formatPriceLabel formats usdc and mon", () => {
 test("isListingStatus", () => {
   assert.equal(isListingStatus("listed"), true);
   assert.equal(isListingStatus("nope"), false);
+});
+
+test("generator lists on Open Paywall by default (opt-out)", () => {
+  const html = fs.readFileSync(path.join(ROOT, "generator.html"), "utf8");
+  assert.match(
+    html,
+    /id="listOnOpenPaywall"[^>]*\bchecked\b/,
+    "List on Open Paywall must be checked so writers opt out instead of opting in"
+  );
+  assert.match(html, /uncheck to opt out/i);
+  assert.match(html, /function listingSyncFields/);
+  assert.doesNotMatch(
+    html,
+    /Opt-in only from generator/,
+    "Unchecking must send listOnOpenPaywall=false so writers can opt out"
+  );
+});
+
+test("dashboard and articles copy describe opt-out listing", () => {
+  const dashboard = fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8");
+  const articles = fs.readFileSync(path.join(ROOT, "articles.html"), "utf8");
+  assert.match(dashboard, /Uncheck to opt out/);
+  assert.doesNotMatch(dashboard, /Opt in to list/);
+  assert.match(articles, /unless the writer opts out/);
+  assert.doesNotMatch(articles, /Writers opt in to list here/);
 });

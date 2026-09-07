@@ -152,6 +152,7 @@ test("GET /articles serves articles.html", async () => {
   const text = await res.text();
   assert.match(text, /Articles/i);
   assert.match(text, /Directory/i);
+  assert.match(text, /unless the writer opts out/);
 });
 
 test("GET /articles/demo-slug serves article.html", async () => {

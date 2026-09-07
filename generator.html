@@ -362,11 +362,12 @@
 
           <div class="field" style="padding:0.85rem 1rem;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
             <label style="display:flex;align-items:flex-start;gap:0.65rem;font-weight:600;margin:0;cursor:pointer;">
-              <input id="listOnOpenPaywall" type="checkbox" style="width:auto;margin-top:0.2rem;" />
+              <input id="listOnOpenPaywall" type="checkbox" checked style="width:auto;margin-top:0.2rem;" />
               <span>List on Open Paywall</span>
             </label>
             <p class="hint" style="margin:0.45rem 0 0.75rem 1.55rem;">
-              Shows this article in the public <a href="/articles">Articles</a> feed and hosts it at
+              Listed by default — uncheck to opt out. Shows this article in the public
+              <a href="/articles">Articles</a> feed and hosts it at
               <code>/articles/your-slug</code>. Goes live immediately (you can hide later). Same unlock works on your site embed.
             </p>
             <label for="externalUrl">Your site URL <span style="font-weight:400;color:#6b7280;">(optional)</span></label>
@@ -924,6 +925,13 @@
         };
       }
 
+      function listingSyncFields(v) {
+        return {
+          listOnOpenPaywall: Boolean(v.listOnOpenPaywall),
+          externalUrl: v.externalUrl || null,
+        };
+      }
+
       let mediaHealthScanToken = 0;
       let mediaSheetValidationToken = 0;
       let pendingMediaValidation = null;
@@ -949,15 +957,8 @@
           title: v.title,
           author: v.author,
           paymentAsset: selectedAsset(),
+          ...listingSyncFields(v),
         };
-        // Opt-in only from generator — unchecking must not wipe an existing listing.
-        // Use the dashboard Listing editor to unlist or edit the URL later.
-        if (v.listOnOpenPaywall) {
-          payload.listOnOpenPaywall = true;
-          payload.externalUrl = v.externalUrl || null;
-        } else if (v.externalUrl) {
-          payload.externalUrl = v.externalUrl;
-        }
         return payload;
       }
 
@@ -1602,11 +1603,7 @@ ${teaserEsc}
                   title: v.title,
                   author: v.author,
                   paymentAsset: selectedAsset(),
-                  ...(v.listOnOpenPaywall
-                    ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
-                    : v.externalUrl
-                      ? { externalUrl: v.externalUrl }
-                      : {}),
+                  ...listingSyncFields(v),
                 };
 
                 const metaResult = await syncMetadataToSupabase(metaPayload);
@@ -1657,6 +1654,7 @@ ${teaserEsc}
                   publisher: connectedWallet,
                   teaser: v.teaser,
                   body: v.body,
+                  ...listingSyncFields(v),
                 };
                 const reserved = await syncMetadataToSupabase(reservePayload);
                 if (!reserved.ok && reserved.error === "slug_taken") {
@@ -1727,11 +1725,7 @@ ${teaserEsc}
                       title: v.title,
                       author: v.author,
                       paymentAsset: selectedAsset(),
-                      ...(v.listOnOpenPaywall
-                        ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
-                        : v.externalUrl
-                          ? { externalUrl: v.externalUrl }
-                          : {}),
+                      ...listingSyncFields(v),
                     };
 
                     const metaResult = await syncMetadataToSupabase(metaPayload);
@@ -1806,11 +1800,7 @@ ${teaserEsc}
                 title: v.title,
                 author: v.author,
                 paymentAsset: selectedAsset(),
-                ...(v.listOnOpenPaywall
-                  ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
-                  : v.externalUrl
-                    ? { externalUrl: v.externalUrl }
-                    : {}),
+                ...listingSyncFields(v),
                 embedSig: embedSig || undefined,
               };
               const metaResult = await syncMetadataToSupabase(metaPayload);

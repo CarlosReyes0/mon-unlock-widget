@@ -1,6 +1,6 @@
 /**
  * Article aggregator listing helpers (pure — unit-tested).
- * Open Paywall is source of truth; opt-in listing with optional external URL.
+ * Open Paywall is source of truth; opt-out listing with optional external URL.
  */
 
 const LISTING_STATUSES = new Set(["unlisted", "listed", "hidden"]);

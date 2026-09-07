@@ -2,6 +2,8 @@
 // Reserves a globally unique article slug for a publisher (reserve-on-create),
 // and upserts teaser/body for dashboard + article-body fetch.
 // Optional listing fields: title, author, listOnOpenPaywall, externalUrl, embedSig.
+// Generator sends listOnOpenPaywall true by default (opt-out). Omitted stays unlisted
+// so indexer / agent inserts are not auto-listed.
 // Same publisher may update their row; a different publisher gets 409 slug_taken.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';

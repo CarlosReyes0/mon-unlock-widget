@@ -28,7 +28,7 @@ https://mon-unlock-widget-production.up.railway.app
 
 Pages:
 - `/` – Homepage
-- `/articles` – Public article feed (opt-in listings)
+- `/articles` – Public article feed (listed by default; writers can opt out)
 - `/articles/{slug}` – Hosted article page (same unlock as embed)
 - `/generator.html` – Create embed
 - `/account.html` – Publisher account (email / Google / wallet)

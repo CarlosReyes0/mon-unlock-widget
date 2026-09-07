@@ -1,6 +1,6 @@
 // Edge Function: update-listing
 // Publisher updates listing_status / external_url / title / author / embed_sig
-// for an article they own. Auto-list when listOnOpenPaywall=true; hide is admin-only.
+// for an article they own. listOnOpenPaywall=true lists; false unlists (opt-out). Hide is admin-only.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
