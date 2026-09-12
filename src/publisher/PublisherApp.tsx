@@ -10,6 +10,10 @@ type SubRow = {
   current_period_end?: string | null;
 };
 
+function shortAddr(addr: string) {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 export function PublisherApp() {
   const [signedIn, setSignedIn] = useState(false);
   const [payoutBusy, setPayoutBusy] = useState(false);
@@ -19,6 +23,7 @@ export function PublisherApp() {
   const [priceDollars, setPriceDollars] = useState("5");
   const [allowBuy, setAllowBuy] = useState(true);
   const [planMsg, setPlanMsg] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const address = () => window.__monPublisherAddress || "";
 
@@ -55,6 +60,7 @@ export function PublisherApp() {
       if (!ready) {
         setPayoutMsg("");
         setSubs([]);
+        setCopied(false);
         return;
       }
       const wallet = address();
@@ -100,7 +106,7 @@ export function PublisherApp() {
       }
       window.location.href = body.url;
     } catch (e) {
-      setPayoutMsg(e instanceof Error ? e.message : "Could not start Stripe onboarding");
+      setPayoutMsg(e instanceof Error ? e.message : "Could not start payouts");
     } finally {
       setPayoutBusy(false);
     }
@@ -123,9 +129,9 @@ export function PublisherApp() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "save_failed");
-      setPlanMsg("Saved. Readers can subscribe at this price.");
+      setPlanMsg("Saved.");
     } catch (e) {
-      setPlanMsg(e instanceof Error ? e.message : "Could not save plan");
+      setPlanMsg(e instanceof Error ? e.message : "Could not save");
     }
   }
 
@@ -141,12 +147,27 @@ export function PublisherApp() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "cancel_failed");
-      setSubMsg("Unsubscribed. Articles you did not buy are locked again.");
+      setSubMsg("Unsubscribed.");
       await loadSubs(reader);
     } catch (e) {
       setSubMsg(e instanceof Error ? e.message : "Could not cancel");
     }
   }
+
+  async function copyAddress() {
+    const wallet = address();
+    if (!wallet) return;
+    try {
+      await navigator.clipboard.writeText(wallet);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  const wallet = address();
+  const following = subs.filter((s) => s.live);
 
   return (
     <div className="mon-pub-shell">
@@ -155,43 +176,25 @@ export function PublisherApp() {
         <p className="mon-pub-shell__brand">Account</p>
         <h1>Account</h1>
         <p className="mon-pub-shell__lead">
-          Sign in with email, Google, or a wallet. Same account for writing and reading. No password
-          stored here.
+          {signedIn
+            ? "Set your price. Readers pay you with a card or USDC."
+            : "Sign in to write and get paid. Email or Google — no password."}
         </p>
 
         <div className="mon-pub-shell__card">
+          {signedIn ? <h2 className="mon-pub-shell__card-title">You</h2> : null}
           <PublisherAuth variant="page" onReadyChange={onReadyChange} />
-
-          {signedIn ? (
-            <>
-              <div className="mon-pub-shell__links">
-                <button
-                  type="button"
-                  className="mon-pub-auth__btn mon-pub-auth__btn--primary"
-                  disabled={payoutBusy}
-                  onClick={() => void setupStripePayouts()}
-                >
-                  {payoutBusy ? "Opening Stripe…" : "Set up Stripe payouts"}
-                </button>
-              </div>
-              {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}
-              <p className="mon-pub-auth__hint" style={{ marginTop: "1rem" }}>
-                Card unlocks and card subscriptions pay out through Stripe Connect. USDC
-                subscriptions go to your Monad wallet.
-              </p>
-            </>
-          ) : null}
         </div>
 
         {signedIn ? (
           <>
             <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
-              <h2 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem" }}>Your writer plan</h2>
+              <h2 className="mon-pub-shell__card-title">Get paid</h2>
               <p className="mon-pub-auth__hint">
-                Readers subscribe to you (not a site-wide pass). Cancel drops their sub access
-                immediately. Articles they bought stay unlocked.
+                Readers pay you. Card money goes to your bank. Some readers pay USDC — you keep more
+                of the price.
               </p>
-              <label className="mon-pub-auth__hint" htmlFor="planPrice">
+              <label className="mon-pub-shell__field-label" htmlFor="planPrice">
                 Monthly price (USD)
               </label>
               <input
@@ -201,55 +204,79 @@ export function PublisherApp() {
                 step="0.50"
                 value={priceDollars}
                 onChange={(e) => setPriceDollars(e.target.value)}
-                style={{
-                  width: "8rem",
-                  margin: "0.35rem 0 0.75rem",
-                  padding: "0.5rem 0.65rem",
-                  borderRadius: 8,
-                  border: "1px solid #d6d3d1",
-                }}
+                className="mon-pub-shell__input"
               />
-              <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <label className="mon-pub-shell__check">
                 <input
                   type="checkbox"
                   checked={allowBuy}
                   onChange={(e) => setAllowBuy(e.target.checked)}
                 />
-                Allow pay-per-article (uncheck = subscribe only)
+                Allow pay-per-article
               </label>
-              <div className="mon-pub-shell__links" style={{ marginTop: "0.75rem" }}>
+              <div className="mon-pub-shell__links">
                 <button type="button" className="mon-pub-auth__btn" onClick={() => void savePlan()}>
-                  Save plan
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="mon-pub-auth__btn mon-pub-auth__btn--primary"
+                  disabled={payoutBusy}
+                  onClick={() => void setupStripePayouts()}
+                >
+                  {payoutBusy ? "Opening…" : "Connect payments"}
                 </button>
               </div>
               {planMsg ? <p className="mon-pub-auth__hint">{planMsg}</p> : null}
+              {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}
+              <p className="mon-pub-auth__hint" style={{ marginTop: "0.85rem" }}>
+                USDC is on. Withdraw when you want.
+              </p>
             </div>
 
-            <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
-              <h2 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem" }}>Subscriptions you pay for</h2>
-              {subs.filter((s) => s.live).length === 0 ? (
-                <p className="mon-pub-auth__hint">You are not subscribed to any writer.</p>
+            <p className="mon-pub-shell__next">
+              <a href="/generator.html">Write a post</a>
+              <span aria-hidden="true"> · </span>
+              <a href="/articles">Articles feed</a>
+            </p>
+
+            <details className="mon-pub-shell__advanced">
+              <summary>Advanced</summary>
+              <p className="mon-pub-auth__hint">
+                USDC and on-chain payouts use this address. Copy it to withdraw.
+              </p>
+              {wallet ? (
+                <p className="mon-pub-shell__wallet">
+                  <code>{shortAddr(wallet)}</code>
+                  <button type="button" className="mon-pub-auth__btn" onClick={() => void copyAddress()}>
+                    {copied ? "Copied" : "Copy address"}
+                  </button>
+                </p>
               ) : (
-                <ul style={{ paddingLeft: "1.1rem", margin: "0.5rem 0" }}>
-                  {subs
-                    .filter((s) => s.live)
-                    .map((s) => (
-                      <li key={`${s.writer}-${s.source}`} style={{ marginBottom: "0.5rem" }}>
-                        {s.writer.slice(0, 6)}…{s.writer.slice(-4)} · {s.source}
-                        <button
-                          type="button"
-                          className="mon-pub-auth__btn"
-                          style={{ marginLeft: "0.5rem" }}
-                          onClick={() => void cancelSub(s.writer)}
-                        >
-                          Cancel
-                        </button>
-                      </li>
-                    ))}
-                </ul>
+                <p className="mon-pub-auth__hint">Address ready after sign-in finishes.</p>
               )}
-              {subMsg ? <p className="mon-pub-auth__hint">{subMsg}</p> : null}
-            </div>
+            </details>
+
+            {following.length > 0 ? (
+              <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
+                <h2 className="mon-pub-shell__card-title">Following</h2>
+                <ul className="mon-pub-shell__follow-list">
+                  {following.map((s) => (
+                    <li key={`${s.writer}-${s.source}`}>
+                      {shortAddr(s.writer)}
+                      <button
+                        type="button"
+                        className="mon-pub-auth__btn"
+                        onClick={() => void cancelSub(s.writer)}
+                      >
+                        Cancel
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {subMsg ? <p className="mon-pub-auth__hint">{subMsg}</p> : null}
+              </div>
+            ) : null}
           </>
         ) : null}
         <SiteFooter />

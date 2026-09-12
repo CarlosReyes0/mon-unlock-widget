@@ -96,6 +96,11 @@ body {
   margin-top: 0.85rem;
 }
 
+.checkout-usdc-alt {
+  width: 100%;
+  margin-top: 0.65rem;
+}
+
 .checkout-divider {
   margin: 1.25rem 0 0.75rem;
   color: var(--muted);

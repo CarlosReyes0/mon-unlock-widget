@@ -392,10 +392,10 @@ export function CryptoPaySection({
     return (
       <>
         <p className="checkout-copy">
-          Continue with email or Google to pay on Monad. No MetaMask needed.
+          Continue with email or Google to pay USDC. Lower fees than card. No MetaMask needed.
         </p>
         <button type="button" className="checkout-btn primary" onClick={() => login()}>
-          Continue with crypto
+          Continue with email to pay USDC
         </button>
       </>
     );
@@ -473,8 +473,8 @@ export function CryptoPaySection({
       </div>
       <p className="checkout-hint">
         {settleUsdc
-          ? "You pay USDC on Monad. The publisher receives USDC — nothing is converted to MON (MON is only for gas)."
-          : "Legacy path: funds via Coinbase, may swap USDC → MON, then pays MON on-chain."}
+          ? "You pay USDC. The writer receives USDC. A tiny bit of MON is only for network fees."
+          : "Legacy path: may convert USDC to MON, then pay on-chain."}
       </p>
       <button type="button" className="checkout-link" onClick={() => logout()}>
         Use a different account
