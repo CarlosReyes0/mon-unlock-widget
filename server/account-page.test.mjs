@@ -12,7 +12,7 @@ test("account page is You + Get paid, no wallet address", () => {
   assert.match(app, /Get paid/);
   assert.match(app, /Connect payments/);
   assert.match(app, /then money goes to your bank/);
-  assert.match(app, /stays\s+in Open Paywall until we add cash-out/);
+  assert.match(app, /goes to the wallet created when you signed in/);
   assert.doesNotMatch(app, /USDC wallet/);
   assert.doesNotMatch(app, /USDC is on/);
   assert.doesNotMatch(app, /Copy address/);

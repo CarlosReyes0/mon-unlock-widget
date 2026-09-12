@@ -179,8 +179,8 @@ export function PublisherApp() {
                 Card: connect payments, then money goes to your bank.
               </p>
               <p className="mon-pub-auth__hint">
-                USDC: some readers pay this way so they (and you) lose less to fees. That money stays
-                in Open Paywall until we add cash-out. Nothing for you to set up.
+                USDC: a reader pays, it goes to the wallet created when you signed in. Automatic. No
+                extra setup.
               </p>
               <label className="mon-pub-shell__field-label" htmlFor="planPrice">
                 Monthly price (USD)
