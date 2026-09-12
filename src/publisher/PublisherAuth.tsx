@@ -209,9 +209,7 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
   if (authenticated && !address) {
     return (
       <div className="mon-pub-auth">
-        <p className="mon-pub-auth__status">
-          {walletSetup ? "Setting up your publisher wallet…" : "Finishing sign-in…"}
-        </p>
+        <p className="mon-pub-auth__status">Finishing sign-in…</p>
         {email ? <p className="mon-pub-auth__hint">Signed in as {email}</p> : null}
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
         <div className="mon-pub-auth__row" style={{ marginTop: "0.75rem" }}>
@@ -228,20 +226,15 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
       <div className="mon-pub-auth">
         <div className="mon-pub-auth__row">
           <p className="mon-pub-auth__status">
-            Signed in{email ? ` as ${email}` : ""} · <strong>{shortAddr(address)}</strong>
+            {email ? email : variant === "page" ? "Signed in" : `Signed in · ${shortAddr(address)}`}
           </p>
           <button type="button" className="mon-pub-auth__btn" disabled={actionBusy} onClick={() => void signOut()}>
             Sign out
           </button>
         </div>
-        {variant === "page" ? (
-          <p className="mon-pub-auth__hint">
-            This wallet receives on-chain MON and is the publisher identity for your embeds. Set up Stripe
-            payouts from the dashboard to receive fiat unlocks.
-          </p>
-        ) : (
-          <p className="mon-pub-auth__hint">Email/Google creates an embedded wallet — no MetaMask required.</p>
-        )}
+        {variant !== "page" ? (
+          <p className="mon-pub-auth__hint">Ready to publish.</p>
+        ) : null}
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
       </div>
     );
@@ -270,9 +263,7 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
           Connect wallet
         </button>
       </div>
-      <p className="mon-pub-auth__hint">
-        Create a publisher account with email or Google (embedded wallet), or connect MetaMask / another wallet.
-      </p>
+      <p className="mon-pub-auth__hint">Email or Google. No password.</p>
       {error ? <p className="mon-pub-auth__error">{error}</p> : null}
     </div>
   );

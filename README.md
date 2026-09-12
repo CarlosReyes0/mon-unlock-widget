@@ -194,7 +194,7 @@ The body supports safe HTML for rich content. Common examples:
 
 1. Reader pays with card / Apple Pay / Google Pay → funds hit **your platform** Stripe account.
 2. Server records `fiat_unlocks` and queues `payout_jobs`.
-3. Publisher clicks **Set up Stripe payouts** on `/dashboard.html` or `/account.html` → Stripe Connect Express onboarding.
+3. Publisher clicks **Connect payments** on `/account.html` (or **Set up Stripe payouts** on `/dashboard.html`) → Stripe Connect Express onboarding.
 4. A cron (or ops) call to `POST /api/stripe/payouts/process` with `Authorization: Bearer $STRIPE_PAYOUT_CRON_SECRET` transfers pending jobs to the publisher’s Connect account.
 
 Set `STRIPE_PAYOUT_CRON_SECRET` on Railway. Without Connect onboarding, jobs stay `pending` with `publisher_not_onboarded`.

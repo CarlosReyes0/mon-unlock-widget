@@ -253,7 +253,7 @@ export function CheckoutApp() {
 
         {stripeFiatEnabled() && amountUsdCents ? (
           <>
-            <p className="checkout-copy">Pay with Apple Pay, Google Pay, or card. No wallet needed.</p>
+            <p className="checkout-copy">Pay with Apple Pay, Google Pay, or card.</p>
             {error ? <p className="checkout-error">{error}</p> : null}
             {phaseDone ? (
               <p className="checkout-status ok">Unlocked — returning to article…</p>
@@ -272,14 +272,16 @@ export function CheckoutApp() {
             {hasPrivy && !showCrypto ? (
               <button
                 type="button"
-                className="checkout-link"
+                className="checkout-btn ghost checkout-usdc-alt"
                 disabled={fiatBusy}
                 onClick={() => setShowCrypto(true)}
               >
-                Or pay with crypto
+                {settleUsdc
+                  ? `Pay $${priceLabel} USDC — lower fees`
+                  : "Pay with USDC — lower fees"}
               </button>
             ) : null}
-            {hasPrivy && showCrypto ? <p className="checkout-divider">Crypto</p> : null}
+            {hasPrivy && showCrypto ? <p className="checkout-divider">USDC</p> : null}
           </>
         ) : null}
 
