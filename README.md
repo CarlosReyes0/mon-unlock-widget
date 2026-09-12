@@ -27,8 +27,8 @@ Open the URL shown in the terminal.
 https://mon-unlock-widget-production.up.railway.app
 
 Pages:
-- `/` – Homepage
-- `/articles` – Public article feed (opt-in listings)
+- `/` – Public article feed (also `/articles`)
+- `/demo` – Unlock demo video (former homepage)
 - `/articles/{slug}` – Hosted article page (same unlock as embed)
 - `/generator.html` – Create embed
 - `/account.html` – Publisher account (email / Google / wallet)
@@ -40,7 +40,7 @@ Pages:
 - `/connect-demo.html` – Dev: Stripe Connect sample (not in main nav)
 - `/connect-store.html` – Dev: sample storefront
 
-Product nav is shared via `site-nav.js`: **Home · Articles · Create embed · Account · Dashboard · Agents**.
+Product nav is shared via `site-nav.js`: **Articles · Demo · Create embed · Account · Dashboard · Agents**.
 
 ## Agents & Stripe Directory
 

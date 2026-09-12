@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Open Paywall — Embeddable paywall for pay-per-article monetization</title>
+    <title>Demo — Open Paywall</title>
     <meta
       name="description"
-      content="Embeddable paywall for independent publishers. Paste one HTML block to monetize long-form articles with pay-per-article Monad payments, plus fiat / Apple Pay / Google Pay. AI agents can create paywalls via MPP or OpenClaw."
+      content="See how readers unlock on Open Paywall — card, Apple Pay, or USDC. Simulated preview only."
     />
     <link rel="llms-txt" href="/llms.txt" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -63,6 +63,15 @@
 
       .hero #site-nav {
         margin-bottom: 1.25rem !important;
+      }
+
+      .kicker {
+        margin: 0 0 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
       }
 
       .brand {
@@ -137,9 +146,10 @@
     </style>
   </head>
   <body>
-    <section class="hero" aria-label="Open Paywall">
+    <section class="hero" aria-label="Open Paywall demo">
       <div class="wrap">
         <div id="site-nav"></div>
+        <p class="kicker">Demo</p>
         <h1 class="brand">Open Paywall</h1>
         <p class="lede">Unlock premium content with Monad or fiat</p>
       </div>

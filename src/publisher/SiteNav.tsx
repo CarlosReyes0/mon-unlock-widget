@@ -1,6 +1,6 @@
 const LINKS = [
-  { href: "/", nav: "home", label: "Home" },
-  { href: "/articles", nav: "articles", label: "Articles" },
+  { href: "/", nav: "articles", label: "Articles" },
+  { href: "/demo", nav: "demo", label: "Demo" },
   { href: "/generator.html", nav: "embed", label: "Create embed" },
   { href: "/account.html", nav: "account", label: "Account" },
   { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
@@ -9,9 +9,11 @@ const LINKS = [
 
 function isActive(nav: string) {
   const path = typeof window !== "undefined" ? window.location.pathname : "";
-  if (nav === "home") return path === "/" || path.endsWith("/index.html");
+  if (nav === "demo")
+    return path === "/demo" || path.endsWith("/demo.html") || path.endsWith("/index.html");
   if (nav === "articles")
     return (
+      path === "/" ||
       path === "/articles" ||
       path.startsWith("/articles/") ||
       path.endsWith("/articles.html") ||
