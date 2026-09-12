@@ -95,6 +95,15 @@ export default defineConfig(({ mode }) => {
               req.url?.startsWith("/publisher-auth.css?")
             ) {
               req.url = "/src/publisher/publisher-auth.css";
+            } else if (req.url === "/" || req.url?.startsWith("/?")) {
+              req.url = "/articles.html";
+            } else if (
+              req.url === "/demo" ||
+              req.url?.startsWith("/demo?") ||
+              req.url === "/demo.html" ||
+              req.url?.startsWith("/demo.html?")
+            ) {
+              req.url = "/index.html";
             } else if (req.url === "/articles" || req.url?.startsWith("/articles?")) {
               req.url = "/articles.html";
             } else if (req.url?.startsWith("/articles/")) {

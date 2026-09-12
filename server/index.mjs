@@ -1050,6 +1050,17 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Site root is the articles feed. Old homepage lives at /demo.
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/") {
+    return serveStatic(req, res, "/articles.html");
+  }
+  if (
+    (method === "GET" || method === "HEAD") &&
+    (url.pathname === "/demo" || url.pathname === "/demo.html")
+  ) {
+    return serveStatic(req, res, "/index.html");
+  }
+
   // Pretty URLs: /articles → feed, /articles/:slug → hosted article
   if ((method === "GET" || method === "HEAD") && url.pathname === "/articles") {
     return serveStatic(req, res, "/articles.html");

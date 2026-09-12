@@ -154,6 +154,24 @@ test("GET /articles serves articles.html", async () => {
   assert.match(text, /Directory/i);
 });
 
+test("GET / serves the articles feed", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Directory/i);
+  assert.match(text, /id="feed"/);
+  assert.doesNotMatch(text, /unlock-demo\.mp4/);
+});
+
+test("GET /demo serves the former homepage demo", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/demo`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Demo — Open Paywall/);
+  assert.match(text, /unlock-demo\.mp4/);
+  assert.match(text, /See it in action/);
+});
+
 test("GET /articles/demo-slug serves article.html", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/articles/demo-slug`);
   assert.equal(res.status, 200);
@@ -170,13 +188,6 @@ test("POST /api/listings/hide returns 503 without admin secret", async () => {
   assert.equal(res.status, 503);
   const body = await res.json();
   assert.equal(body.error, "listing_admin_not_configured");
-});
-
-test("GET / serves index.html", async () => {
-  const res = await fetch(`http://127.0.0.1:${PORT}/`);
-  assert.equal(res.status, 200);
-  const text = await res.text();
-  assert.match(text, /<!DOCTYPE html>/i);
 });
 
 test("GET /assets/unlock-demo.mp4 serves video/mp4 with range support", async () => {

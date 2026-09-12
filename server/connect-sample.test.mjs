@@ -72,4 +72,9 @@ test("GET /site-nav.js is served", async () => {
   const text = await res.text();
   assert.match(text, /Create embed/);
   assert.match(text, /Connect marketplace/);
+  assert.match(text, /href: "\/"/);
+  assert.match(text, /label: "Articles"/);
+  assert.match(text, /href: "\/demo"/);
+  assert.match(text, /label: "Demo"/);
+  assert.doesNotMatch(text, /label: "Home"/);
 });
