@@ -6,16 +6,17 @@ import { test } from "node:test";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-test("account page is You + Get paid, wallet under Advanced", () => {
+test("account page is You + Get paid, no wallet address", () => {
   const app = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherApp.tsx"), "utf8");
   const auth = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherAuth.tsx"), "utf8");
   assert.match(app, /Get paid/);
   assert.match(app, /Connect payments/);
-  assert.match(app, /Card money goes to your bank/);
-  assert.match(app, /<summary>USDC wallet<\/summary>/);
-  assert.match(app, /Moving that USDC/);
+  assert.match(app, /then money goes to your bank/);
+  assert.match(app, /stays\s+in Open Paywall until we add cash-out/);
+  assert.doesNotMatch(app, /USDC wallet/);
   assert.doesNotMatch(app, /USDC is on/);
-  assert.doesNotMatch(app, /Copy it to withdraw/);
+  assert.doesNotMatch(app, /Copy address/);
+  assert.doesNotMatch(app, /<summary>Advanced<\/summary>/);
   assert.match(app, /Write a post/);
   assert.doesNotMatch(app, /Your writer plan/);
   assert.doesNotMatch(app, /Subscriptions you pay for/);

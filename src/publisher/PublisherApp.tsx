@@ -23,7 +23,6 @@ export function PublisherApp() {
   const [priceDollars, setPriceDollars] = useState("5");
   const [allowBuy, setAllowBuy] = useState(true);
   const [planMsg, setPlanMsg] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const address = () => window.__monPublisherAddress || "";
 
@@ -60,7 +59,6 @@ export function PublisherApp() {
       if (!ready) {
         setPayoutMsg("");
         setSubs([]);
-        setCopied(false);
         return;
       }
       const wallet = address();
@@ -154,19 +152,6 @@ export function PublisherApp() {
     }
   }
 
-  async function copyAddress() {
-    const wallet = address();
-    if (!wallet) return;
-    try {
-      await navigator.clipboard.writeText(wallet);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  const wallet = address();
   const following = subs.filter((s) => s.live);
 
   return (
@@ -191,8 +176,11 @@ export function PublisherApp() {
             <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
               <h2 className="mon-pub-shell__card-title">Get paid</h2>
               <p className="mon-pub-auth__hint">
-                Card money goes to your bank after you connect payments. Readers can also pay USDC —
-                that needs no extra setup, and you keep more of the price.
+                Card: connect payments, then money goes to your bank.
+              </p>
+              <p className="mon-pub-auth__hint">
+                USDC: some readers pay this way so they (and you) lose less to fees. That money stays
+                in Open Paywall until we add cash-out. Nothing for you to set up.
               </p>
               <label className="mon-pub-shell__field-label" htmlFor="planPrice">
                 Monthly price (USD)
@@ -236,27 +224,6 @@ export function PublisherApp() {
               <span aria-hidden="true"> · </span>
               <a href="/articles">Articles feed</a>
             </p>
-
-            <details className="mon-pub-shell__advanced" id="usdc-wallet">
-              <summary>USDC wallet</summary>
-              <p className="mon-pub-auth__hint">
-                If a reader pays USDC, it lands here — the wallet created when you signed in. You
-                don’t need this to write or to get paid by card.
-              </p>
-              <p className="mon-pub-auth__hint">
-                Moving that USDC to Coinbase or another wallet isn’t in the app yet.
-              </p>
-              {wallet ? (
-                <p className="mon-pub-shell__wallet">
-                  <code>{shortAddr(wallet)}</code>
-                  <button type="button" className="mon-pub-auth__btn" onClick={() => void copyAddress()}>
-                    {copied ? "Copied" : "Copy address"}
-                  </button>
-                </p>
-              ) : (
-                <p className="mon-pub-auth__hint">Address ready after sign-in finishes.</p>
-              )}
-            </details>
 
             {following.length > 0 ? (
               <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
