@@ -191,8 +191,8 @@ export function PublisherApp() {
             <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
               <h2 className="mon-pub-shell__card-title">Get paid</h2>
               <p className="mon-pub-auth__hint">
-                Readers pay you. Card money goes to your bank. Some readers pay USDC — you keep more
-                of the price.
+                Card money goes to your bank after you connect payments. Readers can also pay USDC —
+                that needs no extra setup, and you keep more of the price.
               </p>
               <label className="mon-pub-shell__field-label" htmlFor="planPrice">
                 Monthly price (USD)
@@ -229,9 +229,6 @@ export function PublisherApp() {
               </div>
               {planMsg ? <p className="mon-pub-auth__hint">{planMsg}</p> : null}
               {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}
-              <p className="mon-pub-auth__hint" style={{ marginTop: "0.85rem" }}>
-                USDC is on. Withdraw when you want.
-              </p>
             </div>
 
             <p className="mon-pub-shell__next">
@@ -240,10 +237,14 @@ export function PublisherApp() {
               <a href="/articles">Articles feed</a>
             </p>
 
-            <details className="mon-pub-shell__advanced">
-              <summary>Advanced</summary>
+            <details className="mon-pub-shell__advanced" id="usdc-wallet">
+              <summary>USDC wallet</summary>
               <p className="mon-pub-auth__hint">
-                USDC and on-chain payouts use this address. Copy it to withdraw.
+                If a reader pays USDC, it lands here — the wallet created when you signed in. You
+                don’t need this to write or to get paid by card.
+              </p>
+              <p className="mon-pub-auth__hint">
+                Moving that USDC to Coinbase or another wallet isn’t in the app yet.
               </p>
               {wallet ? (
                 <p className="mon-pub-shell__wallet">

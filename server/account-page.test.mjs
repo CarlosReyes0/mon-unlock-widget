@@ -11,8 +11,11 @@ test("account page is You + Get paid, wallet under Advanced", () => {
   const auth = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherAuth.tsx"), "utf8");
   assert.match(app, /Get paid/);
   assert.match(app, /Connect payments/);
-  assert.match(app, /USDC is on/);
-  assert.match(app, /<summary>Advanced<\/summary>/);
+  assert.match(app, /Card money goes to your bank/);
+  assert.match(app, /<summary>USDC wallet<\/summary>/);
+  assert.match(app, /Moving that USDC/);
+  assert.doesNotMatch(app, /USDC is on/);
+  assert.doesNotMatch(app, /Copy it to withdraw/);
   assert.match(app, /Write a post/);
   assert.doesNotMatch(app, /Your writer plan/);
   assert.doesNotMatch(app, /Subscriptions you pay for/);
@@ -28,4 +31,10 @@ test("checkout offers USDC as a lower-fee alternative to card", () => {
   assert.doesNotMatch(checkout, /Or pay with crypto/);
   assert.match(crypto, /Continue with email to pay USDC/);
   assert.doesNotMatch(crypto, /Continue with crypto/);
+});
+
+test("card checkout does not dump raw JSON parse errors", () => {
+  const stripe = fs.readFileSync(path.join(ROOT, "src/checkout/StripeFiatPay.tsx"), "utf8");
+  assert.match(stripe, /You can pay with USDC/);
+  assert.match(stripe, /readApiJson/);
 });

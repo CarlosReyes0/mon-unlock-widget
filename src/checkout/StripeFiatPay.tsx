@@ -55,6 +55,26 @@ function checkoutReturnUrl(): string {
   return url.toString();
 }
 
+async function readApiJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error("card_unavailable");
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("card_unavailable");
+  }
+}
+
+function cardCheckoutErrorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : "";
+  if (msg === "card_unavailable" || /JSON|Unexpected end/i.test(msg)) {
+    return "Card checkout isn’t available right now. You can pay with USDC.";
+  }
+  return msg || "Could not start card checkout.";
+}
+
 async function createCheckout(input: {
   articleId: string;
   title: string;
@@ -68,7 +88,7 @@ async function createCheckout(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...input, returnUrl: checkoutReturnUrl() }),
   });
-  const data = (await res.json()) as CreateCheckoutResult & { error?: string };
+  const data = await readApiJson<CreateCheckoutResult & { error?: string }>(res);
   if (!res.ok) {
     throw new Error(fiatIntentErrorMessage(data.error));
   }
@@ -84,7 +104,7 @@ async function confirmUnlock(input: { sessionId?: string; paymentIntentId?: stri
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const data = (await res.json()) as { sessionToken?: string; error?: string };
+  const data = await readApiJson<{ sessionToken?: string; error?: string }>(res);
   if (!res.ok || !data.sessionToken) {
     throw new Error(data.error || "Payment succeeded but unlock was not recorded.");
   }
@@ -249,8 +269,9 @@ export function StripeFiatPay({
         if (!cancelled) onUnlocked(sessionToken);
       } catch (e) {
         if (!cancelled) {
-          onError(e instanceof Error ? e.message : "Could not finish payment.");
-          setBootError(e instanceof Error ? e.message : "Could not finish payment.");
+          const msg = cardCheckoutErrorMessage(e);
+          onError(msg);
+          setBootError(msg);
         }
       } finally {
         if (!cancelled) {
@@ -277,9 +298,7 @@ export function StripeFiatPay({
       })
       .catch((e) => {
         if (cancelled) return;
-        const msg = e instanceof Error ? e.message : "Stripe unavailable.";
-        setBootError(msg);
-        onError(msg);
+        setBootError(cardCheckoutErrorMessage(e));
       })
       .finally(() => {
         if (!cancelled) onBusy(false);
