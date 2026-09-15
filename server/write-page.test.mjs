@@ -27,3 +27,20 @@ test("publishPost lists USDC posts on Open Paywall", () => {
   assert.match(src, /paymentAsset: "usdc"/);
   assert.match(src, /parseUnits\(PRICE_USDC, 6\)/);
 });
+
+test("publish sends registerArticle via eth_sendTransaction and checks MON for gas", () => {
+  const src = fs.readFileSync(path.join(ROOT, "src/publisher/publish-post.ts"), "utf8");
+  assert.match(src, /eth_sendTransaction/);
+  assert.match(src, /getBalance/);
+  assert.match(src, /Use a different wallet/);
+  assert.doesNotMatch(src, /writeContract/);
+  assert.match(src, /mapWalletSendToEthSend/);
+});
+
+test("publisher auth prefers a connected wallet over the Privy embedded wallet", () => {
+  const auth = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherAuth.tsx"), "utf8");
+  assert.match(auth, /pickPublisherWallet/);
+  assert.match(auth, /Use a different wallet/);
+  assert.match(auth, /wantsEmbeddedWallet/);
+  assert.match(auth, /mapWalletSendToEthSend/);
+});

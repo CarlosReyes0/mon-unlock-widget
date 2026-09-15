@@ -3,7 +3,7 @@ import { locatePaywall } from "../core/split-post.js";
 import { PublisherAuth } from "./PublisherAuth.js";
 import { SiteNav } from "./SiteNav.js";
 import { publishPost } from "./publish-post.js";
-import type { Eip1193Provider } from "../core/wallet.js";
+import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import type { Address } from "viem";
 
 const DRAFT_KEY = "openpaywall-write-draft";
@@ -148,7 +148,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         setError("No wallet account.");
         return;
       }
-      window.__monPublisherProvider = eth;
+      window.__monPublisherProvider = mapWalletSendToEthSend(eth);
       window.__monPublisherAddress = addr;
       window.__monPublisherReady = true;
       setSignedIn(true);
