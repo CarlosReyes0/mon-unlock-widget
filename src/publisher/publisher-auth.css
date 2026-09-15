@@ -390,28 +390,31 @@
   position: absolute;
   left: 0;
   right: 0;
+  height: 0;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.15rem 0 0.35rem;
-  transform: translateY(-50%);
-  background: #fff;
   pointer-events: none;
 }
 
 .mon-write__fold::before {
   content: "";
-  display: block;
-  width: 100%;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
   height: 1px;
   background: #e7e5e4;
+  transform: translateY(-0.85em);
 }
 
 .mon-write__fold span {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, calc(-50% - 0.85em));
+  background: #fff;
+  padding: 0 0.55rem;
   font-family: "DM Sans", system-ui, sans-serif;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 400;
   color: #9ca3af;
   letter-spacing: 0.01em;

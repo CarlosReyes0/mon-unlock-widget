@@ -42,6 +42,15 @@ function WriteBody({
     area.style.height = `${area.scrollHeight}px`;
 
     const measure = measureRef.current;
+    if (measure) {
+      const cs = window.getComputedStyle(area);
+      measure.style.width = `${area.clientWidth}px`;
+      measure.style.font = cs.font;
+      measure.style.fontSize = cs.fontSize;
+      measure.style.lineHeight = cs.lineHeight;
+      measure.style.letterSpacing = cs.letterSpacing;
+      measure.style.padding = cs.padding;
+    }
     const anchor = measure?.querySelector("[data-fold-anchor]") as HTMLElement | null;
     if (!fold.hasFold || !anchor) {
       setFoldTop(null);
