@@ -1,14 +1,10 @@
 # Posting
 
-On Substack you write, hit **Publish**, and it’s up.
+Go to **/write**. Title, the piece, **Publish**. Then it’s live on `/articles/…`.
 
-That’s the whole product. Not a form. Not copy-paste HTML.
+Price is $0.50. The start of the piece is free; the rest is paid. Embed HTML is optional after, from the generator.
 
 <video src="docs/posting/posting_flow.mp4" controls playsinline></video>
-
-**Should be:** Title. The piece. **Publish.** Then people can read it here.
-
-Price stays $0.50. The start of the piece is free; the rest is paid.
 
 ## New post
 

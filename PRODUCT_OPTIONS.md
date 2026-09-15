@@ -27,7 +27,7 @@ Check off or delete items as you decide.
 
 ## Posting (north star)
 
-See **[POSTING.md](./POSTING.md)** (mockups in `docs/posting/`). Write, hit Publish, it’s up. Don’t add more boxes to the embed generator.
+See **[POSTING.md](./POSTING.md)** (mockups in `docs/posting/`). Live at **/write**: title, piece, Publish. Generator stays the embed tool.
 
 ## Edit articles without re-pasting HTML
 

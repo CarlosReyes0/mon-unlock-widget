@@ -19,6 +19,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  */
 const EXCLUDE_FROM_DOCKERFILE = new Set([
   "account.html",
+  "write.html",
   "unlock.html",
   "publisher-auth.html",
   "demo-checkout-mock.html",
@@ -52,10 +53,15 @@ test("Dockerfile copies every production root HTML page", () => {
 
 test("Dockerfile still excludes Vite-built publisher/checkout source HTML", () => {
   const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
-  // Source account.html must not overwrite dist-publisher output.
+  // Source account.html / write.html must not overwrite dist-publisher output.
   assert.equal(
     /COPY\s+--from=builder\s+\/app\/account\.html/.test(dockerfile),
     false,
     "Do not COPY source account.html — dist-publisher provides the built page"
+  );
+  assert.equal(
+    /COPY\s+--from=builder\s+\/app\/write\.html/.test(dockerfile),
+    false,
+    "Do not COPY source write.html — dist-publisher provides the built page"
   );
 });

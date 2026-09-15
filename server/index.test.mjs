@@ -172,6 +172,13 @@ test("GET /demo serves the former homepage demo", async () => {
   assert.match(text, /See it in action/);
 });
 
+test("GET /write serves the write page", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/write`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Write — Open Paywall/);
+});
+
 test("GET /articles/demo-slug serves article.html", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/articles/demo-slug`);
   assert.equal(res.status, 200);

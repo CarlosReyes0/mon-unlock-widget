@@ -17,7 +17,7 @@ test("account page is You + Get paid, no wallet address", () => {
   assert.doesNotMatch(app, /USDC is on/);
   assert.doesNotMatch(app, /Copy address/);
   assert.doesNotMatch(app, /<summary>Advanced<\/summary>/);
-  assert.match(app, /Write a post/);
+  assert.match(app, /href="\/write"/);
   assert.doesNotMatch(app, /Your writer plan/);
   assert.doesNotMatch(app, /Subscriptions you pay for/);
   assert.doesNotMatch(app, /Set up Stripe payouts/);

@@ -29,8 +29,9 @@ https://mon-unlock-widget-production.up.railway.app
 Pages:
 - `/` – Public article feed (also `/articles`)
 - `/demo` – Unlock demo video (former homepage)
+- `/write` – New post (title, write, Publish)
 - `/articles/{slug}` – Hosted article page (same unlock as embed)
-- `/generator.html` – Create embed
+- `/generator.html` – Create embed for your own site
 - `/account.html` – Publisher account (email / Google / wallet)
 - `/dashboard.html` – Writer dashboard + Stripe payouts + listing controls
 - `/admin-listings.html` – Moderator hide (requires `LISTING_ADMIN_SECRET`)
@@ -40,7 +41,7 @@ Pages:
 - `/connect-demo.html` – Dev: Stripe Connect sample (not in main nav)
 - `/connect-store.html` – Dev: sample storefront
 
-Product nav is shared via `site-nav.js`: **Articles · Demo · Create embed · Account · Dashboard · Agents**.
+Product nav is shared via `site-nav.js`: **Articles · Demo · Write · Account · Dashboard · Agents**.
 
 ## Agents & Stripe Directory
 

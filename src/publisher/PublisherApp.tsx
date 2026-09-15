@@ -220,7 +220,7 @@ export function PublisherApp() {
             </div>
 
             <p className="mon-pub-shell__next">
-              <a href="/generator.html">Write a post</a>
+              <a href="/write">Write a post</a>
               <span aria-hidden="true"> · </span>
               <a href="/articles">Articles feed</a>
             </p>

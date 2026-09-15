@@ -39,8 +39,8 @@ RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 # Copy built assets, static pages, and the API server.
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-checkout/ ./
-# Built publisher pages (account.html → /account.js). Do not copy source
-# account.html afterward — it still points at /src/publisher/main.tsx.
+# Built publisher pages (account.html, write.html → /account.js, /write.js). Do not copy source
+# account.html or write.html afterward — they still point at /src/publisher/*.tsx.
 COPY --from=builder /app/dist-publisher/ ./
 # Static HTML allowlist — keep in sync with server/dockerfile-static.test.mjs.
 # When you add a new root *.html page that should ship to Railway, COPY it here
