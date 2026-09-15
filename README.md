@@ -6,7 +6,7 @@ Readers unlock the full article with **MON** on Monad, or with **card / Apple Pa
 
 **Agent discovery:** [/llms.txt](./llms.txt) · [/agents.md](./agents.md) · [/skill.md](./skill.md) · [/openapi.json](./openapi.json)
 
-**What to build next:** see **[FOCUS.md](./FOCUS.md)** (Phase 1: onchain MON → Phase 2: embed generator) and **[PRODUCT_OPTIONS.md](./PRODUCT_OPTIONS.md)** (saved backlog of product ideas).
+**What to build next:** see **[POSTING.md](./POSTING.md)** (writer posting should feel like Substack), **[FOCUS.md](./FOCUS.md)** (Phase 1: onchain MON → Phase 2: embed generator), and **[PRODUCT_OPTIONS.md](./PRODUCT_OPTIONS.md)** (saved backlog of product ideas).
 
 **Smart contract:** [`contracts/`](./contracts/) — `ArticleUnlock.sol` (Foundry). Run `forge test` in `contracts/`.
 

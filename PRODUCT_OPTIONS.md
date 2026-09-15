@@ -25,9 +25,15 @@ Check off or delete items as you decide.
 
 ---
 
+## Posting (north star)
+
+See **[POSTING.md](./POSTING.md)**. Substack-simple: title + write/paste + **Publish**. Live on `/articles/{slug}`. Embed copy is optional after, not the flow.
+
+Do not add fields to `/generator.html` to “make posting better.” The generator is the embed tool. Posting is a different surface.
+
 ## Edit articles without re-pasting HTML
 
-(You liked this direction.)
+(You liked this direction. Fits posting once Publish exists.)
 
 - [ ] **Dashboard edit + save** — best default
 - [ ] **Draft → Publish**
@@ -61,6 +67,7 @@ Check off or delete items as you decide.
 
 ## Related docs
 
+- `POSTING.md` — how posting should feel (Substack-simple; no code in that note)
 - `FOCUS.md` — phase roadmap and out-of-scope rules
 - `WEEKLY_UPDATE_2026-08-01.md` — latest DeltaV-style progress writeup
 - `agents.md` / `skill.md` — agent publish + 402 hard-stop
