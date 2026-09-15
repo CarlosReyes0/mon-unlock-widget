@@ -25,9 +25,13 @@ Check off or delete items as you decide.
 
 ---
 
+## Posting (north star)
+
+See **[POSTING.md](./POSTING.md)** (mockups in `docs/posting/`). Live at **/write**: title, piece, Publish. Generator stays the embed tool.
+
 ## Edit articles without re-pasting HTML
 
-(You liked this direction.)
+(You liked this direction. Fits posting once Publish exists.)
 
 - [ ] **Dashboard edit + save** — best default
 - [ ] **Draft → Publish**
@@ -61,6 +65,7 @@ Check off or delete items as you decide.
 
 ## Related docs
 
+- `POSTING.md` — posting = write + Publish (like Substack)
 - `FOCUS.md` — phase roadmap and out-of-scope rules
 - `WEEKLY_UPDATE_2026-08-01.md` — latest DeltaV-style progress writeup
 - `agents.md` / `skill.md` — agent publish + 402 hard-stop

@@ -10,7 +10,7 @@
   const PRODUCT_LINKS = [
     { href: "/", nav: "articles", label: "Articles" },
     { href: "/demo", nav: "demo", label: "Demo" },
-    { href: "/generator.html", nav: "embed", label: "Create embed" },
+    { href: "/write", nav: "write", label: "Write" },
     { href: "/account.html", nav: "account", label: "Account" },
     { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
     { href: "/agents", nav: "agents", label: "Agents" },
@@ -27,7 +27,7 @@
         path.endsWith("/articles.html") ||
         path.endsWith("/article.html")
       );
-    if (nav === "embed") return path.includes("generator");
+    if (nav === "write") return path === "/write" || path.includes("write.html");
     if (nav === "account") return path.includes("account");
     if (nav === "dashboard") return path.includes("dashboard");
     if (nav === "agents") return path.includes("agents") || path.includes("skill");
@@ -61,6 +61,7 @@
     el.style.cssText =
       "margin-top:3rem;padding-top:1.25rem;border-top:1px solid #e7e5e4;font-size:0.75rem;color:#78716c;";
     el.innerHTML =
+      'Need HTML for your own site? <a href="/generator.html" style="color:#57534e;">Create embed</a><br/>' +
       'Agents: <a href="/llms.txt" style="color:#57534e;">llms.txt</a> · ' +
       '<a href="/agents.md" style="color:#57534e;">agents.md</a> · ' +
       '<a href="/openapi.json" style="color:#57534e;">OpenAPI</a><br/>' +

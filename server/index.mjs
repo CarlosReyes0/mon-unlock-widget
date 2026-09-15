@@ -1065,6 +1065,9 @@ const server = http.createServer(async (req, res) => {
   if ((method === "GET" || method === "HEAD") && url.pathname === "/articles") {
     return serveStatic(req, res, "/articles.html");
   }
+  if ((method === "GET" || method === "HEAD") && (url.pathname === "/write" || url.pathname === "/write.html")) {
+    return serveStatic(req, res, "/write.html");
+  }
   if ((method === "GET" || method === "HEAD") && url.pathname.startsWith("/articles/")) {
     const slug = url.pathname.slice("/articles/".length);
     if (slug && !slug.includes("/")) {

@@ -61,10 +61,11 @@ export default defineConfig(({ mode }) => {
         outDir: "dist-publisher",
         emptyOutDir: true,
         rollupOptions: {
-          input: {
-            account: resolve(__dirname, "account.html"),
-            "publisher-auth": resolve(__dirname, "publisher-auth.html"),
-          },
+            input: {
+              account: resolve(__dirname, "account.html"),
+              write: resolve(__dirname, "write.html"),
+              "publisher-auth": resolve(__dirname, "publisher-auth.html"),
+            },
           output: {
             entryFileNames: "[name].js",
             chunkFileNames: "chunks/[name]-[hash].js",
@@ -104,6 +105,13 @@ export default defineConfig(({ mode }) => {
               req.url?.startsWith("/demo.html?")
             ) {
               req.url = "/index.html";
+            } else if (
+              req.url === "/write" ||
+              req.url?.startsWith("/write?") ||
+              req.url === "/write.html" ||
+              req.url?.startsWith("/write.html?")
+            ) {
+              req.url = "/write.html";
             } else if (req.url === "/articles" || req.url?.startsWith("/articles?")) {
               req.url = "/articles.html";
             } else if (req.url?.startsWith("/articles/")) {

@@ -274,3 +274,95 @@
 .mon-site-footer-note {
   color: #a8a29e;
 }
+
+.mon-write {
+  min-height: 100vh;
+  margin: 0;
+  background: #fff;
+  color: #111827;
+  font-family: "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mon-write__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.5rem;
+  border-bottom: 1px solid #e7e5e4;
+}
+
+.mon-write__bar .mon-site-nav {
+  margin: 0;
+  flex: 1;
+}
+
+.mon-write__publish {
+  flex-shrink: 0;
+}
+
+.mon-write__page {
+  width: min(40rem, calc(100% - 2.5rem));
+  margin: 0 auto;
+  padding: 2.25rem 0 4rem;
+}
+
+.mon-write__auth {
+  margin-bottom: 1.25rem;
+}
+
+.mon-write__status {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.mon-write__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.mon-write__title,
+.mon-write__body {
+  display: block;
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: #111827;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.mon-write__title {
+  font-family: Literata, Georgia, serif;
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  min-height: 3.5rem;
+  margin: 0 0 1rem;
+}
+
+.mon-write__body {
+  font-family: inherit;
+  font-size: 1.15rem;
+  line-height: 1.7;
+  min-height: 55vh;
+}
+
+.mon-write__title::placeholder,
+.mon-write__body::placeholder {
+  color: #c4c4c4;
+}
+
+.mon-write__draft {
+  margin: 2rem 0 0;
+  font-size: 0.85rem;
+  color: #d1d5db;
+}

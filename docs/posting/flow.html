@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Write — Open Paywall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #6b7280;
+        --placeholder: #c4c4c4;
+        --line: #e7e5e4;
+        --accent: #7c3aed;
+        --accent-dark: #5b21b6;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #fff;
+        color: var(--ink);
+        font-family: "DM Sans", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.05rem 1.5rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .nav {
+        display: flex;
+        gap: 1.35rem;
+        font-size: 0.95rem;
+      }
+      .nav span { color: #111827; font-weight: 400; }
+      .nav .on {
+        color: var(--accent);
+        font-weight: 600;
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 0.15rem;
+      }
+      .publish {
+        appearance: none;
+        border: none;
+        background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.95rem;
+        padding: 0.55rem 1.25rem;
+        border-radius: 9999px;
+        min-width: 6.25rem;
+        cursor: pointer;
+        transition: transform 0.12s ease, filter 0.12s ease;
+      }
+      .publish.pressed {
+        transform: scale(0.96);
+        filter: brightness(0.92);
+      }
+      .stage { position: relative; height: calc(100% - 4.1rem); }
+      .screen {
+        position: absolute;
+        inset: 0;
+        padding: 4.5rem 0 3rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.45s ease;
+      }
+      .screen.show { opacity: 1; pointer-events: auto; }
+      .col {
+        width: min(40rem, calc(100% - 4rem));
+        margin: 0 auto;
+      }
+      .title {
+        font-family: "Literata", Georgia, serif;
+        font-size: 4.15rem;
+        font-weight: 500;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        min-height: 4.5rem;
+        margin: 0 0 1.15rem;
+        color: var(--ink);
+      }
+      .title.empty { color: var(--placeholder); font-weight: 400; }
+      .body {
+        font-size: 1.15rem;
+        line-height: 1.7;
+        color: #1f2937;
+        min-height: 2rem;
+      }
+      .body.ph { color: var(--placeholder); font-size: 1.2rem; }
+      .body p { margin: 0 0 1.15rem; }
+      .break {
+        margin: 1.75rem 0 1.25rem;
+        text-align: center;
+        color: #9ca3af;
+        font-size: 0.9rem;
+        opacity: 0;
+        transition: opacity 0.4s ease;
+      }
+      .break.show { opacity: 1; }
+      .break::before {
+        content: "";
+        display: block;
+        height: 1px;
+        background: var(--line);
+        margin: 0 auto 0.85rem;
+      }
+      .paid-preview {
+        color: #d1d5db;
+        opacity: 0;
+        transition: opacity 0.4s ease;
+      }
+      .paid-preview.show { opacity: 1; }
+      .draft {
+        position: absolute;
+        left: 1.5rem;
+        bottom: 1.15rem;
+        color: #d1d5db;
+        font-size: 0.85rem;
+      }
+      .meta {
+        margin: 0 0 0.65rem;
+        color: #9ca3af;
+        font-size: 0.9rem;
+      }
+      .back {
+        position: absolute;
+        top: 1.15rem;
+        left: 1.5rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+      }
+      .pay {
+        margin-top: 1.75rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 1.25rem 1.35rem 1.35rem;
+        max-width: 22rem;
+      }
+      .pay p { margin: 0 0 0.85rem; color: #4b5563; font-size: 0.95rem; }
+      .pay .hint { margin: 0.7rem 0 0; color: #9ca3af; font-size: 0.85rem; }
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 0.9em;
+        background: var(--ink);
+        margin-left: 2px;
+        vertical-align: -0.05em;
+        animation: blink 1s steps(1) infinite;
+      }
+      .caret.off { display: none; }
+      @keyframes blink { 50% { background: transparent; } }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <nav class="nav" id="nav">
+        <span>Articles</span>
+        <span class="on" id="navWrite">Write</span>
+        <span>Account</span>
+      </nav>
+      <button class="publish" id="publish" type="button">Publish</button>
+    </header>
+
+    <div class="stage">
+      <section class="screen show" id="write">
+        <div class="col">
+          <h1 class="title empty" id="title">Title<span class="caret off" id="titleCaret"></span></h1>
+          <div class="body ph" id="body">Write, or paste…</div>
+          <div class="break" id="brk">Free above · paid below</div>
+          <div class="body paid-preview" id="paid">
+            The quiet wasn’t empty. It had weight, and I carried it without naming it.
+          </div>
+        </div>
+        <div class="draft">Draft saved.</div>
+      </section>
+
+      <section class="screen" id="live">
+        <div class="back">← All articles</div>
+        <div class="col">
+          <p class="meta">Carlos · $0.50</p>
+          <h1 class="title" style="font-size: 3.4rem;">July rain walk</h1>
+          <div class="body">
+            <p>Walking home the streets were empty. Rain on the awning sounded like typing. I kept my hands in my pockets and did not check the phone.</p>
+            <p>The rain wasn’t heavy, just steady enough to make everything feel slightly softened, slightly delayed.</p>
+          </div>
+          <div class="pay">
+            <p>You’ve reached the paid part.</p>
+            <button class="publish" type="button">Continue</button>
+            <p class="hint">$0.50 · card or USDC</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const titleEl = document.getElementById("title");
+      const titleCaret = document.getElementById("titleCaret");
+      const bodyEl = document.getElementById("body");
+      const brk = document.getElementById("brk");
+      const paid = document.getElementById("paid");
+      const publish = document.getElementById("publish");
+      const write = document.getElementById("write");
+      const live = document.getElementById("live");
+      const nav = document.getElementById("nav");
+
+      const TITLE = "July rain walk";
+      const BODY = `<p>Walking home the streets were empty. Rain on the awning sounded like typing. I kept my hands in my pockets and did not check the phone.</p>
+<p>The rain wasn’t heavy, just steady enough to make everything feel slightly softened, slightly delayed.</p>
+<p>I turned down a side street I usually ignore. The pavement reflected the streetlights in broken patches, and for a few minutes there was no thought of where I was going.</p>`;
+
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      async function typeTitle() {
+        titleEl.classList.remove("empty");
+        titleEl.textContent = "";
+        titleEl.appendChild(titleCaret);
+        titleCaret.classList.remove("off");
+        for (const ch of TITLE) {
+          titleCaret.insertAdjacentText("beforebegin", ch);
+          await sleep(70);
+        }
+        await sleep(400);
+        titleCaret.classList.add("off");
+      }
+
+      let started = false;
+      async function play() {
+        if (started) return;
+        started = true;
+        await sleep(800);
+        await typeTitle();
+        await sleep(500);
+        bodyEl.classList.remove("ph");
+        bodyEl.innerHTML = BODY;
+        await sleep(900);
+        brk.classList.add("show");
+        paid.classList.add("show");
+        await sleep(1400);
+        publish.classList.add("pressed");
+        await sleep(220);
+        publish.classList.remove("pressed");
+        await sleep(200);
+        write.classList.remove("show");
+        live.classList.add("show");
+        nav.innerHTML =
+          '<span class="on">Articles</span><span>Write</span><span>Account</span>';
+        publish.style.visibility = "hidden";
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (e.code === "Space") {
+          e.preventDefault();
+          play();
+        }
+      });
+      document.body.addEventListener("click", () => play(), { once: true });
+      window.addEventListener("load", () => {
+        setTimeout(play, 2000);
+      });
+    </script>
+  </body>
+</html>

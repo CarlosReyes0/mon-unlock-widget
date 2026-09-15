@@ -1,7 +1,7 @@
 const LINKS = [
   { href: "/", nav: "articles", label: "Articles" },
   { href: "/demo", nav: "demo", label: "Demo" },
-  { href: "/generator.html", nav: "embed", label: "Create embed" },
+  { href: "/write", nav: "write", label: "Write" },
   { href: "/account.html", nav: "account", label: "Account" },
   { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
   { href: "/agents", nav: "agents", label: "Agents" },
@@ -19,7 +19,7 @@ function isActive(nav: string) {
       path.endsWith("/articles.html") ||
       path.endsWith("/article.html")
     );
-  if (nav === "embed") return path.includes("generator");
+  if (nav === "write") return path === "/write" || path.includes("write.html");
   if (nav === "account") return path.includes("account");
   if (nav === "dashboard") return path.includes("dashboard");
   if (nav === "agents") return path.includes("agents") || path.includes("skill");
@@ -41,6 +41,8 @@ export function SiteNav() {
 export function SiteFooter() {
   return (
     <footer className="mon-site-footer">
+      Need HTML for your own site? <a href="/generator.html">Create embed</a>
+      <br />
       <span className="mon-site-footer-note">Developer examples (not free demos):</span>{" "}
       <a href="/connect-demo.html">Stripe Connect onboarding</a> ·{" "}
       <a href="/connect-store.html">Connect marketplace</a>

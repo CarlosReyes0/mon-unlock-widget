@@ -17,7 +17,7 @@ if (!appId) {
       <div className="mon-pub-shell__inner">
         <nav className="mon-site-nav" aria-label="Product">
           <a href="/">Home</a>
-          <a href="/generator.html">Create embed</a>
+          <a href="/write">Write</a>
           <a className="active" href="/account.html">
             Account
           </a>
