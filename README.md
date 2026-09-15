@@ -256,7 +256,7 @@ The widget’s silent `eth_accounts` check only works after the reader has appro
 
 ### 2. Agent-published embeds need a signed `embed-sig`
 
-`POST /api/agents/publish` returns HTML without `embed-sig` (agents cannot sign as the publisher wallet). Open `finishRegistrationUrl` (`/register.html`), register on Monad, approve the signature prompt, then use **Copy signed embed** and paste that full HTML on your site.
+`POST /api/agents/publish` returns HTML without `embed-sig` (agents cannot sign as the publisher wallet). Open `finishRegistrationUrl` (`/register.html`), approve the signature, then **Copy signed embed**. On-chain registration is relayed (free gas) when `RELAYER_PRIVATE_KEY` is set; otherwise the page asks the wallet to pay gas.
 
 ## License
 

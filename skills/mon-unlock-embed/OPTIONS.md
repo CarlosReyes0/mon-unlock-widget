@@ -8,7 +8,7 @@ Publishing a paid article needs **three things**. You can automate different amo
 | 2. **Supabase** | Stores body + teaser (shown after unlock) | No |
 | 3. **On-chain** | Registers price on Monad so readers can pay | **No — readers can't pay without this** |
 
-Steps 1 and 2 always happen when you use the agent. Step 3 is where you choose how.
+Steps 1 and 2 always happen when you use the agent. Step 3 is where you choose how. The hosted `/register.html` path now **relays gas** when `RELAYER_PRIVATE_KEY` is set — you still sign, you don't pay MON.
 
 ---
 

@@ -76,7 +76,7 @@
     <div class="card">
       <h1>Finish on-chain registration</h1>
       <p class="muted" id="intro">
-        Your article is already saved. Register on Monad, sign the embed, then copy the ready-to-paste HTML.
+        Your article is already saved. Sign once — we register it on Monad so readers can pay. You only need gas if the free relayer is off.
       </p>
 
       <p><strong>Slug:</strong> <span class="slug" id="slugDisplay">—</span></p>
@@ -85,8 +85,8 @@
 
       <ol class="steps">
         <li>Connect your publisher wallet</li>
-        <li>Click Register on Monad and approve the transaction</li>
-        <li>Approve the embed signature, then copy the signed embed</li>
+        <li>Click Register on Monad and Approve the embed signature</li>
+        <li>Copy the signed embed (gas is covered when the relayer is on)</li>
       </ol>
 
       <div>
@@ -120,6 +120,34 @@
       const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
       const SUPABASE_REGISTER_URL =
         "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
+      const RELAY_REGISTER_URL = `${location.origin}/api/relay/register`;
+
+      async function tryRelayRegister({ slug, articleIdHash, priceWei, publisher, embedSig, paymentAsset, contract }) {
+        try {
+          const res = await fetch(RELAY_REGISTER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              slug,
+              articleIdHash,
+              priceWei: priceWei.toString(),
+              publisher,
+              embedSig,
+              paymentAsset,
+              contract,
+            }),
+          });
+          if (res.status === 404 || res.status === 405) return { ok: false, fallback: true };
+          const body = await res.json().catch(() => ({}));
+          if (res.ok) return { ok: true, ...body };
+          if (res.status === 503 || body.fallback) {
+            return { ok: false, fallback: true, error: body.error };
+          }
+          return { ok: false, fallback: false, error: body.error || `HTTP ${res.status}`, taken: body.error === "slug_taken" };
+        } catch {
+          return { ok: false, fallback: true };
+        }
+      }
 
       async function reserveArticleId({ slug, articleIdHash, priceWei, publisher, teaser, confirmRegistered }) {
         try {
@@ -316,7 +344,7 @@ ${teaserBlock}
           wallet = accounts[0];
           connectBtn.textContent = wallet.slice(0, 6) + "…" + wallet.slice(-4);
           registerBtn.disabled = !slug;
-          setStatus("Wallet connected. Click Register on Monad.", true);
+          setStatus("Wallet connected. Click Register on Monad — approve the signature.", true);
         } catch (e) {
           setStatus(e.message || "Connection failed.", false);
         }
@@ -328,11 +356,9 @@ ${teaserBlock}
         if (!eth) return;
 
         registerBtn.disabled = true;
-        setStatus("Switching to Monad…", true);
+        setStatus("Reserving article id…", true);
 
         try {
-          await ensureMonad(eth);
-
           const { keccak256, toBytes, parseEther, parseUnits, createWalletClient, custom, createPublicClient, http } =
             await import("https://esm.sh/viem@2");
 
@@ -395,7 +421,7 @@ ${teaserBlock}
                   teaser,
                   confirmRegistered: true,
                 });
-                setStatus("Already registered — sign the embed next…", true);
+                setStatus("Already registered — approve the embed signature…", true);
                 await signAndShowEmbed(eth, wallet, slug, existing[0] ?? priceWei);
                 setStatus("Already registered ✓ Copy the signed embed below.", true);
                 registerBtn.textContent = "Done";
@@ -407,32 +433,58 @@ ${teaserBlock}
             }
           } catch { /* proceed to register */ }
 
-          setStatus("Confirm the transaction in your wallet…", true);
+          setStatus("Approve the embed signature…", true);
+          const embedSig = await signAndShowEmbed(eth, wallet, slug, priceWei);
 
-          const walletClient = createWalletClient({
-            account: wallet,
-            chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
-            transport: custom(eth),
+          setStatus("Registering on Monad…", true);
+          const relayed = await tryRelayRegister({
+            slug,
+            articleIdHash: articleIdBytes,
+            priceWei,
+            publisher: wallet,
+            embedSig,
+            paymentAsset,
+            contract: contractAddress,
           });
 
-          const txHash = await walletClient.writeContract({
-            address: contractAddress,
-            abi: [{
-              name: "registerArticle",
-              type: "function",
-              stateMutability: "nonpayable",
-              inputs: [
-                { name: "articleId", type: "bytes32" },
-                { name: "priceWei", type: "uint256" },
-              ],
-              outputs: [],
-            }],
-            functionName: "registerArticle",
-            args: [articleIdBytes, priceWei],
-          });
-
-          setStatus("Waiting for confirmation…", true);
-          await publicClient.waitForTransactionReceipt({ hash: txHash });
+          let txHash = relayed.ok ? (relayed.txHash || "relayed") : null;
+          if (!relayed.ok && relayed.taken) {
+            setStatus("This article id is already taken by another publisher.", false);
+            registerBtn.disabled = false;
+            return;
+          }
+          if (!relayed.ok && !relayed.fallback) {
+            setStatus(relayed.error || "Registration failed.", false);
+            registerBtn.disabled = false;
+            return;
+          }
+          if (!relayed.ok) {
+            setStatus("Switching to Monad…", true);
+            await ensureMonad(eth);
+            setStatus("Confirm the transaction in your wallet…", true);
+            const walletClient = createWalletClient({
+              account: wallet,
+              chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+              transport: custom(eth),
+            });
+            txHash = await walletClient.writeContract({
+              address: contractAddress,
+              abi: [{
+                name: "registerArticle",
+                type: "function",
+                stateMutability: "nonpayable",
+                inputs: [
+                  { name: "articleId", type: "bytes32" },
+                  { name: "priceWei", type: "uint256" },
+                ],
+                outputs: [],
+              }],
+              functionName: "registerArticle",
+              args: [articleIdBytes, priceWei],
+            });
+            setStatus("Waiting for confirmation…", true);
+            await publicClient.waitForTransactionReceipt({ hash: txHash });
+          }
 
           await reserveArticleId({
             slug,
@@ -443,9 +495,10 @@ ${teaserBlock}
             confirmRegistered: true,
           });
 
-          setStatus("Registered ✓ Sign the embed so payments work…", true);
-          await signAndShowEmbed(eth, wallet, slug, priceWei);
-          setStatus("Registered ✓ Copy the signed embed below. Tx: " + txHash.slice(0, 10) + "…", true);
+          const txNote = typeof txHash === "string" && txHash.startsWith("0x")
+            ? " Tx: " + txHash.slice(0, 10) + "…"
+            : "";
+          setStatus("Registered ✓ Copy the signed embed below." + txNote, true);
           registerBtn.textContent = "Done";
         } catch (e) {
           const msg = String(e?.shortMessage || e?.message || "Registration failed.");

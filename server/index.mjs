@@ -9,6 +9,7 @@
  *   CDP_API_KEY_SECRET / CDP_API_SECRET — Secret (Ed25519 or EC PEM)
  *   STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
+ *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
  *   PORT                               — listen port (Railway sets this)
  */
 import http from "node:http";
@@ -65,6 +66,7 @@ import {
   subscriptionContractAddress,
   upsertWriterPlan,
 } from "./subscriptions.mjs";
+import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -997,6 +999,31 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // --- Publisher gas relayer (registerArticleFor; writer still signs) ---
+  if (method === "GET" && url.pathname === "/api/relay/health") {
+    return sendJson(res, 200, relayerHealth());
+  }
+
+  if (method === "POST" && url.pathname === "/api/relay/register") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await relayRegisterArticle(parsed, { ip: clientIp(req) });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      if (e?.message === "body_too_large") {
+        return sendJson(res, 413, { error: "body_too_large" });
+      }
+      if (e instanceof SyntaxError) {
+        return sendJson(res, 400, { error: "invalid_json" });
+      }
+      const status = e?.status || 500;
+      const payload = { error: e?.message || "relay_failed" };
+      if (e?.fallback) payload.fallback = true;
+      return sendJson(res, status, payload);
+    }
+  }
+
   // --- Article aggregator (public feed + hosted pages) ---
   if (method === "GET" && url.pathname === "/api/articles") {
     try {
@@ -1087,6 +1114,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured})`
+    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} relayer=${relayerConfigured()})`
   );
 });
