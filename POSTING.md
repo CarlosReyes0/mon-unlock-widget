@@ -4,6 +4,8 @@ On Substack you write, hit **Publish**, and it’s up.
 
 That’s the whole product. Not a form. Not copy-paste HTML.
 
+<video src="docs/posting/posting_flow.mp4" controls playsinline></video>
+
 **Should be:** Title. The piece. **Publish.** Then people can read it here.
 
 Price stays $0.50. The start of the piece is free; the rest is paid.
