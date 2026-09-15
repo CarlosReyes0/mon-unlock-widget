@@ -6,6 +6,13 @@ import {
   usePrivy,
   useWallets,
 } from "@privy-io/react-auth";
+import { monadMainnet } from "../core/chains.js";
+import {
+  mapWalletSendToEthSend,
+  newestExternalWalletAddress,
+  pickPublisherWallet,
+  type Eip1193Provider,
+} from "../core/wallet.js";
 
 export type PublisherAuthDetail = {
   address: string;
@@ -34,13 +41,23 @@ function isMobileDevice() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-function pickWallet(wallets: ReturnType<typeof useWallets>["wallets"]) {
-  if (!wallets.length) return null;
-  return (
-    wallets.find((w) => w.walletClientType === "privy") ||
-    wallets.find((w) => w.walletClientType === "metamask") ||
-    wallets[0]
-  );
+const PREFERRED_WALLET_KEY = "mon-publisher-preferred-wallet";
+
+function readPreferredWallet(): string | null {
+  try {
+    return sessionStorage.getItem(PREFERRED_WALLET_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePreferredWallet(addr: string | null) {
+  try {
+    if (addr) sessionStorage.setItem(PREFERRED_WALLET_KEY, addr);
+    else sessionStorage.removeItem(PREFERRED_WALLET_KEY);
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 type Props = {
@@ -60,11 +77,34 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
   const [address, setAddress] = useState<string | null>(null);
   const [walletSetup, setWalletSetup] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [preferredWallet, setPreferredWallet] = useState<string | null>(() => readPreferredWallet());
   const skipWalletCreateRef = useRef(false);
+  const seenWalletAddrsRef = useRef<string[]>([]);
 
-  const activeWallet = useMemo(() => pickWallet(wallets), [wallets]);
+  const activeWallet = useMemo(
+    () => pickPublisherWallet(wallets, preferredWallet),
+    [wallets, preferredWallet]
+  );
   const email = user?.email?.address || user?.google?.email || null;
+  const wantsEmbeddedWallet = Boolean(user?.email?.address || user?.google);
   const signInBusy = busy || modalOpen || walletSetup;
+
+  function choosePreferredWallet(addr: string | null) {
+    setPreferredWallet(addr);
+    writePreferredWallet(addr);
+  }
+
+  useEffect(() => {
+    const added = newestExternalWalletAddress(seenWalletAddrsRef.current, wallets);
+    seenWalletAddrsRef.current = wallets.map((w) => w.address);
+    if (added) choosePreferredWallet(added);
+  }, [wallets]);
+
+  useEffect(() => {
+    if (!preferredWallet && activeWallet && activeWallet.walletClientType !== "privy") {
+      choosePreferredWallet(activeWallet.address);
+    }
+  }, [preferredWallet, activeWallet]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,10 +122,15 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
       }
 
       try {
+        try {
+          await activeWallet.switchChain(monadMainnet.id);
+        } catch {
+          /* publish-post will retry wallet_switchEthereumChain */
+        }
         const provider = await activeWallet.getEthereumProvider();
         if (cancelled) return;
         const addr = activeWallet.address;
-        window.__monPublisherProvider = provider;
+        window.__monPublisherProvider = mapWalletSendToEthSend(provider as Eip1193Provider);
         window.__monPublisherAddress = addr;
         window.__monPublisherReady = true;
         setAddress(addr);
@@ -112,12 +157,20 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     if (!authenticated) {
       skipWalletCreateRef.current = false;
       setSigningOut(false);
+      seenWalletAddrsRef.current = [];
     }
   }, [authenticated]);
 
   // Email/Google sign-in can finish before the embedded wallet is ready — create it explicitly.
+  // Do not create an embedded wallet for Connect-wallet logins; that would steal the publisher address.
   useEffect(() => {
-    if (!ready || !authenticated || activeWallet || skipWalletCreateRef.current) {
+    if (
+      !ready ||
+      !authenticated ||
+      activeWallet ||
+      skipWalletCreateRef.current ||
+      !wantsEmbeddedWallet
+    ) {
       setWalletSetup(false);
       return;
     }
@@ -142,7 +195,7 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
       cancelled = true;
       setWalletSetup(false);
     };
-  }, [ready, authenticated, activeWallet, createWallet]);
+  }, [ready, authenticated, activeWallet, createWallet, wantsEmbeddedWallet]);
 
   useEffect(() => {
     window.MonPublisherAuth = {
@@ -216,6 +269,7 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     setBusy(true);
     setError("");
     setAddress(null);
+    choosePreferredWallet(null);
     clearPublisherSession();
     onReadyChange?.(false);
     try {
@@ -245,6 +299,11 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
         {email ? <p className="mon-pub-auth__hint">Signed in as {email}</p> : null}
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
         <div className="mon-pub-auth__row" style={{ marginTop: "0.75rem" }}>
+          {!wantsEmbeddedWallet ? (
+            <button type="button" className="mon-pub-auth__btn" disabled={signInBusy} onClick={startWalletLogin}>
+              Connect wallet
+            </button>
+          ) : null}
           <button type="button" className="mon-pub-auth__btn" disabled={busy} onClick={() => void signOut()}>
             Sign out
           </button>
@@ -258,14 +317,19 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
       <div className="mon-pub-auth">
         <div className="mon-pub-auth__row">
           <p className="mon-pub-auth__status">
-            {email ? email : variant === "page" ? "Signed in" : `Signed in · ${shortAddr(address)}`}
+            {variant === "page" ? email || "Signed in" : `Signed in · ${shortAddr(address)}`}
           </p>
+          <button type="button" className="mon-pub-auth__btn" disabled={signInBusy} onClick={startWalletLogin}>
+            Use a different wallet
+          </button>
           <button type="button" className="mon-pub-auth__btn" disabled={busy} onClick={() => void signOut()}>
             Sign out
           </button>
         </div>
         {variant !== "page" ? (
-          <p className="mon-pub-auth__hint">Ready to publish.</p>
+          <p className="mon-pub-auth__hint">
+            Publishing from {shortAddr(address)}. Connect the wallet you funded if this is not it.
+          </p>
         ) : null}
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
       </div>

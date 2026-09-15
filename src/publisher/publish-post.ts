@@ -2,8 +2,10 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  encodeFunctionData,
   http,
   keccak256,
+  parseEther,
   parseUnits,
   toBytes,
   type Address,
@@ -12,12 +14,14 @@ import { buildEmbedSignMessage } from "../core/embed-signature.js";
 import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
 import { monadMainnet } from "../core/chains.js";
 import { splitPost, uniqueSlugFromTitle } from "../core/split-post.js";
-import type { Eip1193Provider } from "../core/wallet.js";
+import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 
 const REGISTER_ARTICLE_URL =
   "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
 const PRICE_USDC = "0.50";
 const ZERO = "0x0000000000000000000000000000000000000000";
+/** registerArticle is free except gas; dust below this cannot pay the Monad fee. */
+const MIN_MON_FOR_GAS = parseEther("0.001");
 
 const GET_ARTICLE_ABI = [
   {
@@ -90,6 +94,39 @@ async function ensureMonad(eth: Eip1193Provider, onStatus?: (msg: string) => voi
   }
 }
 
+function publishTxError(e: unknown, publisher: string): Error {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (
+    /insufficient|funds|balance/i.test(msg) ||
+    /wallet_sendTransaction|this request method is not supported/i.test(msg) ||
+    /missing or invalid parameters/i.test(msg)
+  ) {
+    return new Error(
+      `Wallet ${publisher} needs a little MON to pay the network fee. ` +
+        `If you funded a different address, tap “Use a different wallet” and connect that one.`
+    );
+  }
+  return e instanceof Error ? e : new Error(msg);
+}
+
+async function sendRegisterArticle(
+  eth: Eip1193Provider,
+  publisher: Address,
+  contract: Address,
+  articleIdHash: `0x${string}`,
+  priceWei: bigint
+) {
+  const data = encodeFunctionData({
+    abi: REGISTER_ABI,
+    functionName: "registerArticle",
+    args: [articleIdHash, priceWei],
+  });
+  return eth.request({
+    method: "eth_sendTransaction",
+    params: [{ from: publisher, to: contract, data }],
+  });
+}
+
 async function syncMetadata(payload: Record<string, unknown>): Promise<ReserveResult> {
   const res = await fetch(REGISTER_ARTICLE_URL, {
     method: "POST",
@@ -111,7 +148,7 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
   const contract = MAINNET_USDC_UNLOCK_CONTRACT as Address;
   const publisher = input.publisher.toLowerCase() as Address;
   const author = (input.author || "Author").trim() || "Author";
-  const eth = input.provider;
+  const eth = mapWalletSendToEthSend(input.provider);
   const status = input.onStatus;
 
   await ensureMonad(eth, status);
@@ -125,6 +162,16 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
     chain: monadMainnet,
     transport: custom(eth),
   });
+
+  status?.("Checking wallet…");
+  const monBal = await publicClient.getBalance({ address: publisher });
+  if (monBal < MIN_MON_FOR_GAS) {
+    throw new Error(
+      `Wallet ${publisher} has no MON for the network fee. ` +
+        `If you funded a different address, tap “Use a different wallet” and connect that one, ` +
+        `or send a little MON here and try Publish again.`
+    );
+  }
 
   let lastTaken = "";
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -173,12 +220,11 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
     }
 
     if (!alreadyOurs) {
-      await walletClient.writeContract({
-        address: contract,
-        abi: REGISTER_ABI,
-        functionName: "registerArticle",
-        args: [articleIdHash, priceWei],
-      });
+      try {
+        await sendRegisterArticle(eth, publisher, contract, articleIdHash, priceWei);
+      } catch (e) {
+        throw publishTxError(e, publisher);
+      }
     }
 
     status?.("Signing…");
