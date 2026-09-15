@@ -6,6 +6,15 @@ import { test } from "node:test";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+test("sign out stays clickable while wallet setup is busy", () => {
+  const auth = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherAuth.tsx"), "utf8");
+  assert.match(auth, /Sign out/);
+  assert.doesNotMatch(auth, /disabled=\{actionBusy\}[\s\S]{0,120}Sign out/);
+  assert.doesNotMatch(auth, /Sign out[\s\S]{0,120}disabled=\{actionBusy\}/);
+  assert.match(auth, /disabled=\{busy\}[\s\S]{0,80}Sign out/);
+  assert.match(auth, /setWalletSetup\(false\)/);
+});
+
 test("account page is You + Get paid, no wallet address", () => {
   const app = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherApp.tsx"), "utf8");
   const auth = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherAuth.tsx"), "utf8");

@@ -136,7 +136,24 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           {auth === "privy" ? (
             <PublisherAuth variant="inline" onReadyChange={onReadyChange} />
           ) : signedIn ? (
-            <p className="mon-pub-auth__status">Wallet connected. Ready to publish.</p>
+            <div className="mon-pub-auth">
+              <div className="mon-pub-auth__row">
+                <p className="mon-pub-auth__status">Wallet connected. Ready to publish.</p>
+                <button
+                  type="button"
+                  className="mon-pub-auth__btn"
+                  onClick={() => {
+                    window.__monPublisherProvider = undefined;
+                    window.__monPublisherAddress = undefined;
+                    window.__monPublisherReady = false;
+                    setSignedIn(false);
+                    setError("");
+                  }}
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="mon-pub-auth">
               <button type="button" className="mon-pub-auth__btn" onClick={() => void connectInjected()}>

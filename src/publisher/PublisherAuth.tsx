@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useCreateWallet,
   useLoginWithOAuth,
@@ -59,15 +59,18 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
   const [error, setError] = useState("");
   const [address, setAddress] = useState<string | null>(null);
   const [walletSetup, setWalletSetup] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const skipWalletCreateRef = useRef(false);
 
   const activeWallet = useMemo(() => pickWallet(wallets), [wallets]);
   const email = user?.email?.address || user?.google?.email || null;
-  const actionBusy = busy || modalOpen || walletSetup;
+  const signInBusy = busy || modalOpen || walletSetup;
 
   useEffect(() => {
     let cancelled = false;
 
     async function syncProvider() {
+      if (skipWalletCreateRef.current) return;
       if (!authenticated || !activeWallet) {
         window.__monPublisherProvider = undefined;
         window.__monPublisherAddress = undefined;
@@ -105,9 +108,19 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     };
   }, [authenticated, activeWallet, onReadyChange]);
 
+  useEffect(() => {
+    if (!authenticated) {
+      skipWalletCreateRef.current = false;
+      setSigningOut(false);
+    }
+  }, [authenticated]);
+
   // Email/Google sign-in can finish before the embedded wallet is ready — create it explicitly.
   useEffect(() => {
-    if (!ready || !authenticated || activeWallet) return;
+    if (!ready || !authenticated || activeWallet || skipWalletCreateRef.current) {
+      setWalletSetup(false);
+      return;
+    }
 
     let cancelled = false;
     setWalletSetup(true);
@@ -121,12 +134,13 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
         const msg = e instanceof Error ? e.message : "Failed to create wallet";
         if (!/already has|already exists/i.test(msg)) setError(msg);
       } finally {
-        if (!cancelled) setWalletSetup(false);
+        setWalletSetup(false);
       }
     })();
 
     return () => {
       cancelled = true;
+      setWalletSetup(false);
     };
   }, [ready, authenticated, activeWallet, createWallet]);
 
@@ -188,11 +202,29 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     }
   }
 
+  function clearPublisherSession() {
+    if (typeof window === "undefined") return;
+    window.__monPublisherProvider = undefined;
+    window.__monPublisherAddress = undefined;
+    window.__monPublisherReady = false;
+    window.dispatchEvent(new CustomEvent("mon-publisher-auth", { detail: null }));
+  }
+
   async function signOut() {
+    skipWalletCreateRef.current = true;
+    setSigningOut(true);
     setBusy(true);
     setError("");
+    setAddress(null);
+    clearPublisherSession();
+    onReadyChange?.(false);
     try {
       await logout();
+    } catch (e) {
+      skipWalletCreateRef.current = false;
+      setSigningOut(false);
+      const msg = e instanceof Error ? e.message : "Sign out failed";
+      setError(msg);
     } finally {
       setBusy(false);
     }
@@ -206,14 +238,14 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     );
   }
 
-  if (authenticated && !address) {
+  if (authenticated && !signingOut && !address) {
     return (
       <div className="mon-pub-auth">
         <p className="mon-pub-auth__status">Finishing sign-in…</p>
         {email ? <p className="mon-pub-auth__hint">Signed in as {email}</p> : null}
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
         <div className="mon-pub-auth__row" style={{ marginTop: "0.75rem" }}>
-          <button type="button" className="mon-pub-auth__btn" disabled={actionBusy} onClick={() => void signOut()}>
+          <button type="button" className="mon-pub-auth__btn" disabled={busy} onClick={() => void signOut()}>
             Sign out
           </button>
         </div>
@@ -221,14 +253,14 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     );
   }
 
-  if (authenticated && address) {
+  if (authenticated && !signingOut && address) {
     return (
       <div className="mon-pub-auth">
         <div className="mon-pub-auth__row">
           <p className="mon-pub-auth__status">
             {email ? email : variant === "page" ? "Signed in" : `Signed in · ${shortAddr(address)}`}
           </p>
-          <button type="button" className="mon-pub-auth__btn" disabled={actionBusy} onClick={() => void signOut()}>
+          <button type="button" className="mon-pub-auth__btn" disabled={busy} onClick={() => void signOut()}>
             Sign out
           </button>
         </div>
@@ -246,7 +278,7 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
         <button
           type="button"
           className="mon-pub-auth__btn mon-pub-auth__btn--primary"
-          disabled={actionBusy}
+          disabled={signInBusy}
           onClick={() => void startEmailLogin()}
         >
           Continue with email
@@ -254,12 +286,12 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
         <button
           type="button"
           className="mon-pub-auth__btn"
-          disabled={actionBusy}
+          disabled={signInBusy}
           onClick={() => void startGoogleLogin()}
         >
           Continue with Google
         </button>
-        <button type="button" className="mon-pub-auth__btn" disabled={actionBusy} onClick={startWalletLogin}>
+        <button type="button" className="mon-pub-auth__btn" disabled={signInBusy} onClick={startWalletLogin}>
           Connect wallet
         </button>
       </div>
