@@ -18,7 +18,9 @@ function loadDraft(): { title: string; body: string } {
   }
 }
 
-export function WriteApp() {
+type WriteAuth = "privy" | "injected";
+
+export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [signedIn, setSignedIn] = useState(false);
@@ -54,6 +56,29 @@ export function WriteApp() {
   const onReadyChange = useCallback((ready: boolean) => {
     setSignedIn(ready);
   }, []);
+
+  async function connectInjected() {
+    setError("");
+    const eth = (window as { ethereum?: Eip1193Provider }).ethereum;
+    if (!eth) {
+      setError("Install MetaMask, or sign in with email on the live site.");
+      return;
+    }
+    try {
+      const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+      const addr = accounts?.[0];
+      if (!addr) {
+        setError("No wallet account.");
+        return;
+      }
+      window.__monPublisherProvider = eth;
+      window.__monPublisherAddress = addr;
+      window.__monPublisherReady = true;
+      setSignedIn(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not connect wallet.");
+    }
+  }
 
   async function onPublish() {
     setError("");
@@ -108,7 +133,18 @@ export function WriteApp() {
 
       <div className="mon-write__page">
         <div className="mon-write__auth">
-          <PublisherAuth variant="inline" onReadyChange={onReadyChange} />
+          {auth === "privy" ? (
+            <PublisherAuth variant="inline" onReadyChange={onReadyChange} />
+          ) : signedIn ? (
+            <p className="mon-pub-auth__status">Wallet connected. Ready to publish.</p>
+          ) : (
+            <div className="mon-pub-auth">
+              <button type="button" className="mon-pub-auth__btn" onClick={() => void connectInjected()}>
+                Connect wallet
+              </button>
+              <p className="mon-pub-auth__hint">Email / Google needs a Privy app id. Wallet still works.</p>
+            </div>
+          )}
         </div>
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
         {status ? <p className="mon-write__status">{status}</p> : null}

@@ -13,12 +13,9 @@ const root = createRoot(rootEl);
 
 if (!appId) {
   root.render(
-    <div className="mon-write">
-      <p className="mon-pub-shell__lead" style={{ padding: "2rem" }}>
-        Set <code>VITE_PRIVY_APP_ID</code> to write and publish. Until then, use the{" "}
-        <a href="/generator.html">embed generator</a>.
-      </p>
-    </div>
+    <React.StrictMode>
+      <WriteApp auth="injected" />
+    </React.StrictMode>
   );
 } else {
   root.render(
