@@ -17,6 +17,8 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.doesNotMatch(app, /paymentAsset/);
   assert.doesNotMatch(app, /Copy full embed/);
   assert.match(app, /Sign out/);
+  assert.match(app, /Free above · paid below/);
+  assert.match(app, /locatePaywall/);
 });
 
 test("publishPost lists USDC posts on Open Paywall", () => {
