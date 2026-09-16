@@ -188,6 +188,27 @@
           }
         }
 
+        function normalizeListingTitle(title) {
+          return String(title || "")
+            .replace(/[\u200B-\u200D\uFEFF\u2060]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+
+        function dedupePublicArticles(articles) {
+          const seen = new Set();
+          const out = [];
+          for (const a of articles || []) {
+            const publisher = String(a.publisher || "").trim().toLowerCase();
+            const titleKey = normalizeListingTitle(a.title || "").toLowerCase();
+            const key = `${publisher}::${titleKey || String(a.slug || "").trim()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({ ...a, title: normalizeListingTitle(a.title || a.slug) });
+          }
+          return out;
+        }
+
         async function loadViaApi() {
           const res = await fetch("/api/articles?limit=50");
           if (!res.ok) throw new Error("api_" + res.status);
@@ -214,6 +235,7 @@
             teaser: row.teaser || "",
             priceWei: String(row.price_wei || "0"),
             paymentAsset: row.payment_asset === "usdc" ? "usdc" : "mon",
+            publisher: row.publisher || "",
             externalUrl: row.external_url || null,
             priceLabel: formatPrice(row.price_wei, row.payment_asset === "usdc" ? "usdc" : "mon"),
             href: `/articles/${encodeURIComponent(row.article_id)}`,
@@ -259,7 +281,7 @@
             } catch {
               articles = await loadViaSupabase();
             }
-            render(articles);
+            render(dedupePublicArticles(articles));
           } catch (e) {
             status.className = "error";
             status.textContent = "Could not load articles. Try again later.";

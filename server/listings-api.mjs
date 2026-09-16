@@ -2,6 +2,7 @@
  * Server-side listing API (feed + admin hide) using Supabase REST.
  */
 import {
+  dedupePublicArticles,
   formatPriceLabel,
   normalizeExternalUrl,
   toPublicListing,
@@ -115,14 +116,16 @@ export async function listPublicArticles({ limit = 50 } = {}) {
     `&order=listed_at.desc.nullslast` +
     `&limit=${capped}`;
   const rows = await supabase(path);
-  const articles = (Array.isArray(rows) ? rows : [])
-    .map((row) => toPublicListing(row))
-    .filter(Boolean)
-    .map((a) => ({
-      ...a,
-      priceLabel: formatPriceLabel(a.priceWei, a.paymentAsset),
-      href: `/articles/${encodeURIComponent(a.slug)}`,
-    }));
+  const articles = dedupePublicArticles(
+    (Array.isArray(rows) ? rows : [])
+      .map((row) => toPublicListing(row))
+      .filter(Boolean)
+      .map((a) => ({
+        ...a,
+        priceLabel: formatPriceLabel(a.priceWei, a.paymentAsset),
+        href: `/articles/${encodeURIComponent(a.slug)}`,
+      }))
+  );
   return { articles };
 }
 

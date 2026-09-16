@@ -4,6 +4,35 @@
  */
 
 const LISTING_STATUSES = new Set(["unlisted", "listed", "hidden"]);
+const INVISIBLE_TITLE_CHARS = /[\u200B-\u200D\uFEFF\u2060]/g;
+
+/** Strip paste/LLM padding so identical pieces compare as the same title. */
+export function normalizeListingTitle(title) {
+  return String(title || "")
+    .replace(INVISIBLE_TITLE_CHARS, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Keep the newest listed row when the same publisher listed the same title
+ * more than once (Write mints a unique slug per Publish click).
+ * @param {Array<Record<string, unknown>>} articles newest-first
+ */
+export function dedupePublicArticles(articles) {
+  const rows = Array.isArray(articles) ? articles : [];
+  const seen = new Set();
+  const out = [];
+  for (const article of rows) {
+    const publisher = String(article?.publisher || "").trim().toLowerCase();
+    const titleKey = normalizeListingTitle(article?.title || "").toLowerCase();
+    const key = `${publisher}::${titleKey || String(article?.slug || "").trim()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(article);
+  }
+  return out;
+}
 
 /**
  * @param {unknown} raw
@@ -89,9 +118,14 @@ export function toPublicListing(row) {
   const priceWei = row.price_wei != null ? String(row.price_wei) : "0";
   const paymentAsset = row.payment_asset === "usdc" ? "usdc" : "mon";
 
+  const title =
+    typeof row.title === "string" && row.title.trim()
+      ? normalizeListingTitle(row.title) || slug
+      : slug;
+
   return {
     slug,
-    title: typeof row.title === "string" && row.title.trim() ? row.title.trim() : slug,
+    title,
     author:
       typeof row.author === "string" && row.author.trim()
         ? row.author.trim()

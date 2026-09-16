@@ -14,7 +14,7 @@ import {
 import { buildEmbedSignMessage } from "../core/embed-signature.js";
 import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
 import { monadMainnet } from "../core/chains.js";
-import { splitPost, uniqueSlugFromTitle } from "../core/split-post.js";
+import { cleanTitle, nextPublishSlug, splitPost } from "../core/split-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 
 const REGISTER_ARTICLE_URL =
@@ -64,7 +64,10 @@ export type PublishPostInput = {
   author?: string;
   provider: Eip1193Provider;
   publisher: Address;
+  /** Reuse a slug reserved on an earlier Publish click for this draft. */
+  preferredSlug?: string;
   onStatus?: (msg: string) => void;
+  onSlugReserved?: (slug: string) => void;
 };
 
 type ReserveResult =
@@ -201,7 +204,7 @@ export async function tryRelayRegister(input: {
 }
 
 export async function publishPost(input: PublishPostInput): Promise<{ slug: string }> {
-  const title = input.title.trim();
+  const title = cleanTitle(input.title);
   const { teaser, body } = splitPost(input.rawBody);
   if (!title) throw new Error("Add a title.");
   if (!teaser || !body) throw new Error("Write, or paste, the piece.");
@@ -220,7 +223,11 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
 
   let lastTaken = "";
   for (let attempt = 0; attempt < 4; attempt++) {
-    const slug = uniqueSlugFromTitle(title);
+    const slug = nextPublishSlug({
+      title,
+      preferredSlug: input.preferredSlug,
+      attempt,
+    });
     const articleIdHash = keccak256(toBytes(slug));
     status?.("Reserving…");
     const reserved = await syncMetadata({
@@ -233,7 +240,6 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       title,
       author,
       paymentAsset: "usdc",
-      listOnOpenPaywall: true,
     });
     if (!reserved.ok && reserved.taken) {
       lastTaken = slug;
@@ -242,6 +248,7 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
     if (!reserved.ok) {
       throw new Error(reserved.error || "Could not save the post.");
     }
+    input.onSlugReserved?.(slug);
 
     let alreadyOurs = false;
     try {

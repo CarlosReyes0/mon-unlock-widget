@@ -17,6 +17,9 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.doesNotMatch(app, /paymentAsset/);
   assert.doesNotMatch(app, /Copy full embed/);
   assert.match(app, /Sign out/);
+  assert.match(app, /preferredSlug: reservedSlug/);
+  assert.match(app, /onSlugReserved: setReservedSlug/);
+  assert.match(app, /reservedSlug/);
   assert.match(app, /Free above · paid below/);
   assert.match(app, /locatePaywall/);
 });
@@ -29,6 +32,9 @@ test("publishPost lists USDC posts on Open Paywall", () => {
   assert.match(src, /\/api\/relay\/register/);
   assert.match(src, /tryRelayRegister/);
   assert.match(src, /registerArticleFor|relayer_not_configured|fallback/);
+  assert.match(src, /preferredSlug/);
+  assert.match(src, /onSlugReserved/);
+  assert.match(src, /nextPublishSlug/);
 });
 
 test("publish sends registerArticle via eth_sendTransaction and checks MON for gas", () => {

@@ -8,14 +8,18 @@ import type { Address } from "viem";
 
 const DRAFT_KEY = "openpaywall-write-draft";
 
-function loadDraft(): { title: string; body: string } {
+function loadDraft(): { title: string; body: string; reservedSlug: string } {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return { title: "", body: "" };
-    const parsed = JSON.parse(raw) as { title?: string; body?: string };
-    return { title: String(parsed.title || ""), body: String(parsed.body || "") };
+    if (!raw) return { title: "", body: "", reservedSlug: "" };
+    const parsed = JSON.parse(raw) as { title?: string; body?: string; reservedSlug?: string };
+    return {
+      title: String(parsed.title || ""),
+      body: String(parsed.body || ""),
+      reservedSlug: String(parsed.reservedSlug || ""),
+    };
   } catch {
-    return { title: "", body: "" };
+    return { title: "", body: "", reservedSlug: "" };
   }
 }
 
@@ -100,6 +104,8 @@ function WriteBody({
 export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [reservedSlug, setReservedSlug] = useState("");
+  const [draftReady, setDraftReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -110,6 +116,8 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     const d = loadDraft();
     setTitle(d.title);
     setBody(d.body);
+    setReservedSlug(d.reservedSlug);
+    setDraftReady(true);
     requestAnimationFrame(() => {
       const el = document.getElementById("writeTitle") as HTMLTextAreaElement | null;
       if (!el) return;
@@ -119,16 +127,17 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   }, []);
 
   useEffect(() => {
+    if (!draftReady) return;
     const t = window.setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, body }));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, body, reservedSlug }));
         if (title.trim() || body.trim()) setDraftNote("Draft saved.");
       } catch {
         /* ignore quota */
       }
     }, 400);
     return () => window.clearTimeout(t);
-  }, [title, body]);
+  }, [title, body, reservedSlug, draftReady]);
 
   const onReadyChange = useCallback((ready: boolean) => {
     setSignedIn(ready);
@@ -176,7 +185,9 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         author: "Author",
         publisher: window.__monPublisherAddress as Address,
         provider: window.__monPublisherProvider as Eip1193Provider,
+        preferredSlug: reservedSlug,
         onStatus: setStatus,
+        onSlugReserved: setReservedSlug,
       });
       try {
         localStorage.removeItem(DRAFT_KEY);
