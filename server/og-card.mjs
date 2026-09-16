@@ -29,6 +29,13 @@ const DEFAULT_OG_PATH = path.join(ROOT, "assets", "og-default.jpg");
 export const OG_JPEG_QUALITY = 90;
 export const DEFAULT_OG_PRICE_LABEL = "$0.50 USDC";
 
+/** Right-column gaps (px). Title uses textBaseline=top so these are visual, not baseline-to-baseline. */
+export const OG_GAP_BRAND_TO_PILL = 20;
+export const OG_GAP_PILL_TO_TITLE = 24;
+export const OG_GAP_TITLE_TO_TEASER = 22;
+export const OG_GAP_TEASER_TO_BUTTON = 28;
+export const OG_PILL_HEIGHT = 40;
+
 const FONT_LITERATA = "OP Literata";
 const FONT_SANS = "OP DM Sans";
 const FONT_SANS_MED = "OP DM Sans Medium";
@@ -265,7 +272,6 @@ export async function renderOgJpeg(article = {}) {
   const H = OG_IMAGE_HEIGHT;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
-  ctx.textBaseline = "alphabetic";
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
@@ -304,6 +310,7 @@ export async function renderOgJpeg(article = {}) {
   ctx.fillStyle = fade;
   ctx.fillRect(px, py, photoSize, photoSize);
 
+  ctx.textBaseline = "alphabetic";
   ctx.font = `600 52px "${FONT_LITERATA}"`;
   ctx.fillStyle = "#ffffff";
   const word = "Paywall";
@@ -318,33 +325,39 @@ export async function renderOgJpeg(article = {}) {
 
   const rx = px + photoSize + 48;
   const rw = W - rx - pad;
-  let y = py + 18;
+  // Top baseline so y is the top of each block — alphabetic baselines made
+  // Literata capitals overlap the price pill (ascent sits above y).
+  ctx.textBaseline = "top";
+  let y = py + 10;
 
-  drawLock(ctx, rx, y, 22);
+  const brandRowH = 24;
+  drawLock(ctx, rx, y + 1, 22);
   ctx.font = `500 22px "${FONT_SANS_MED}"`;
   ctx.fillStyle = BRAND;
-  ctx.fillText(SITE_NAME, rx + 32, y + 18);
-  y += 52;
+  ctx.fillText(SITE_NAME, rx + 32, y + 1);
+  y += brandRowH + OG_GAP_BRAND_TO_PILL;
 
   ctx.font = `600 20px "${FONT_SANS_SEMI}"`;
   const pillPadX = 18;
-  const pillH = 40;
+  const pillH = OG_PILL_HEIGHT;
   const pillW = Math.ceil(ctx.measureText(priceLabel).width) + pillPadX * 2;
   roundRect(ctx, rx, y, pillW, pillH, 20);
   ctx.fillStyle = MINT;
   ctx.fill();
   ctx.fillStyle = MINT_INK;
-  ctx.fillText(priceLabel, rx + pillPadX, y + 27);
-  y += 72;
+  ctx.textBaseline = "middle";
+  ctx.fillText(priceLabel, rx + pillPadX, y + pillH / 2);
+  ctx.textBaseline = "top";
+  y += pillH + OG_GAP_PILL_TO_TITLE;
 
   let titleSize = 56;
   let titleLines = [];
-  let titleLh = 62;
+  let titleLh = 64;
   for (const size of [56, 50, 44, 38, 34]) {
     ctx.font = `600 ${size}px "${FONT_LITERATA}"`;
     titleLines = wrapLines(ctx, title, rw, 3);
-    titleLh = Math.round(size * 1.12);
-    if (titleLines.length * titleLh <= 186) {
+    titleLh = Math.round(size * 1.18);
+    if (titleLines.length * titleLh <= 200) {
       titleSize = size;
       break;
     }
@@ -355,7 +368,7 @@ export async function renderOgJpeg(article = {}) {
     ctx.fillText(line, rx, y);
     y += titleLh;
   }
-  y += 18;
+  y += OG_GAP_TITLE_TO_TEASER;
 
   ctx.font = `400 22px "${FONT_SANS}"`;
   ctx.fillStyle = MUTED;
@@ -366,7 +379,7 @@ export async function renderOgJpeg(article = {}) {
     y += teaserLh;
   }
 
-  y += 28;
+  y += OG_GAP_TEASER_TO_BUTTON;
   const btnW = 188;
   const btnH = 56;
   const maxBtnY = H - pad - btnH;
@@ -377,8 +390,10 @@ export async function renderOgJpeg(article = {}) {
   ctx.font = `500 20px "${FONT_SANS_MED}"`;
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
-  ctx.fillText("Unlock", rx + btnW / 2, y + 35);
+  ctx.textBaseline = "middle";
+  ctx.fillText("Unlock", rx + btnW / 2, y + btnH / 2);
   ctx.textAlign = "left";
+  ctx.textBaseline = "top";
 
   const jpeg = await canvas.encode("jpeg", OG_JPEG_QUALITY);
   return Buffer.from(jpeg);

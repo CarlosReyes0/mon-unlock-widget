@@ -6,6 +6,10 @@ import { test } from "node:test";
 import { OG_DESCRIPTION_MAX, OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from "./article-og.mjs";
 import {
   DEFAULT_OG_PRICE_LABEL,
+  OG_GAP_PILL_TO_TITLE,
+  OG_GAP_BRAND_TO_PILL,
+  OG_GAP_TITLE_TO_TEASER,
+  OG_GAP_TEASER_TO_BUTTON,
   defaultOgJpegBuffer,
   formatOgPriceLabel,
   getArticleOgJpeg,
@@ -101,4 +105,11 @@ test("getArticleOgJpeg generates a per-article card when a listing exists", asyn
 
 test("OG description cap is 120–125 characters", () => {
   assert.equal(OG_DESCRIPTION_MAX, 125);
+});
+
+test("right-column gaps keep the price pill clear of the title", () => {
+  assert.ok(OG_GAP_BRAND_TO_PILL >= 16);
+  assert.ok(OG_GAP_PILL_TO_TITLE >= 20, "pill-to-title must be a real visual gap (top baseline)");
+  assert.ok(OG_GAP_TITLE_TO_TEASER >= 16);
+  assert.ok(OG_GAP_TEASER_TO_BUTTON >= 20);
 });
