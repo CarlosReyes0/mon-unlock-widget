@@ -153,6 +153,20 @@ test("POST /api/relay/register returns 503 without relayer key", async () => {
   assert.equal(body.fallback, true);
 });
 
+test("POST /api/relay/gas returns 503 without relayer key", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/relay/gas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      address: "0x1111111111111111111111111111111111111111",
+    }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "relayer_not_configured");
+  assert.equal(body.fallback, true);
+});
+
 test("GET /api/listings/health reports supabaseConfigured=false without secrets", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/listings/health`);
   assert.equal(res.status, 200);

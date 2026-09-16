@@ -9,7 +9,8 @@
  *   CDP_API_KEY_SECRET / CDP_API_SECRET — Secret (Ed25519 or EC PEM)
  *   STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
- *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
+   *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
+   *                                        and optional reader USDC-unlock gas drips
  *   PORT                               — listen port (Railway sets this)
  */
 import http from "node:http";
@@ -68,6 +69,12 @@ import {
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
 import { publicOrigin, renderArticlePage } from "./article-og.mjs";
+import { relayGasDrip } from "./relay-gas.mjs";
+import {
+  MONAD_BLOCKCHAIN,
+  buildPayUrl,
+  normalizeOnrampAsset,
+} from "./coinbase-onramp.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -86,10 +93,6 @@ const CDP_API_KEY_SECRET = (
 
 const ONRAMP_HOST = "api.developer.coinbase.com";
 const ONRAMP_PATH = "/onramp/v1/token";
-const PAY_BASE = "https://pay.coinbase.com/buy/select-asset";
-
-/** Monad network id for Coinbase Onramp session addresses. */
-const MONAD_BLOCKCHAIN = "monad";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -176,23 +179,6 @@ function isAddress(value) {
   return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
-function buildPayUrl(token, { asset, amount, redirectUrl }) {
-  const params = new URLSearchParams({
-    sessionToken: token,
-    defaultNetwork: MONAD_BLOCKCHAIN,
-    defaultAsset: asset,
-    defaultExperience: "buy",
-    fiatCurrency: "USD",
-  });
-  if (amount && Number(amount) > 0) {
-    params.set("presetCryptoAmount", String(amount));
-  }
-  if (redirectUrl) {
-    params.set("redirectUrl", redirectUrl);
-  }
-  return `${PAY_BASE}?${params.toString()}`;
-}
-
 async function createSessionToken({ address, asset, clientIp: ip }) {
   if (!CDP_API_KEY_ID || !CDP_API_KEY_SECRET) {
     const err = new Error("coinbase_not_configured");
@@ -269,12 +255,13 @@ async function handleSessionToken(req, res) {
   }
 
   const address = typeof parsed.address === "string" ? parsed.address.trim() : "";
-  const assetRaw = typeof parsed.asset === "string" ? parsed.asset.trim().toUpperCase() : "USDC";
-  const asset = assetRaw === "MON" || assetRaw === "MONAD_MON" ? "MON" : "USDC";
+  const asset = normalizeOnrampAsset(parsed.asset);
   const amount =
     parsed.amount != null && String(parsed.amount).trim() !== ""
       ? String(parsed.amount).trim()
       : undefined;
+  const amountKind =
+    typeof parsed.amountKind === "string" ? parsed.amountKind.trim().toLowerCase() : undefined;
   const redirectUrl =
     typeof parsed.redirectUrl === "string" && parsed.redirectUrl.startsWith("https://")
       ? parsed.redirectUrl
@@ -290,7 +277,7 @@ async function handleSessionToken(req, res) {
       asset,
       clientIp: clientIp(req),
     });
-    const url = buildPayUrl(token, { asset, amount, redirectUrl });
+    const url = buildPayUrl(token, { asset, amount, amountKind, redirectUrl });
     return sendJson(res, 200, { url, token, asset });
   } catch (e) {
     const status = e?.status || 500;
@@ -1059,6 +1046,26 @@ const server = http.createServer(async (req, res) => {
       }
       const status = e?.status || 500;
       const payload = { error: e?.message || "relay_failed" };
+      if (e?.fallback) payload.fallback = true;
+      return sendJson(res, status, payload);
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/relay/gas") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await relayGasDrip(parsed, { ip: clientIp(req) });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      if (e?.message === "body_too_large") {
+        return sendJson(res, 413, { error: "body_too_large" });
+      }
+      if (e instanceof SyntaxError) {
+        return sendJson(res, 400, { error: "invalid_json" });
+      }
+      const status = e?.status || 500;
+      const payload = { error: e?.message || "gas_drip_failed" };
       if (e?.fallback) payload.fallback = true;
       return sendJson(res, status, payload);
     }
