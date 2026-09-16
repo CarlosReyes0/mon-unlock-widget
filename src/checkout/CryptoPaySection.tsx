@@ -16,6 +16,7 @@ import {
   openCardBuy,
   openRampBuy,
   receiveFundConfig,
+  requestGasDrip,
 } from "./funding.js";
 import {
   estimateUsdcForMon,
@@ -100,21 +101,33 @@ export function CryptoPaySection({
     if (mon >= GAS_RESERVE) return true;
     setPhase("funding");
     setError(null);
-    const viaCoinbase = await openCardBuy(address, "MON", "0.05");
+
+    // Prefer a platform drip. Coinbase will not sell 0.05 MON (their min is ~$1 / ~45 MON),
+    // and opening that sheet is what made "Pay with USDC" look like "Buy Monad".
+    const dripped = await requestGasDrip(address);
+    if (dripped) {
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const { mon: m } = await refreshBalances();
+        if (m >= GAS_RESERVE) return true;
+      }
+    }
+
+    const viaCoinbase = await openCardBuy(address, "MON", "1");
     if (!viaCoinbase) {
       try {
         await fundWallet({ address, options: cardFundGasMonConfig("0.05") });
       } catch {
         openRampBuy(address, "MONAD_MON");
         setError(
-          "Need a tiny bit of MON for network fees. Finish the buy tab, then tap Pay with USDC again."
+          "Need a little MON for network fees (not the article). Finish the buy tab, then tap Pay with USDC again."
         );
         setPhase("ready");
         return false;
       }
     } else {
       setError(
-        "Need a tiny bit of MON for network fees. Finish buying ~0.05 MON in Coinbase, then tap Pay with USDC again."
+        "Coinbase’s minimum is about $1 of MON for network fees — that is not the article payment. Finish that buy, then tap Pay with USDC again to pay in USDC."
       );
     }
     for (let i = 0; i < 20; i++) {
@@ -185,8 +198,6 @@ export function CryptoPaySection({
   /** Legacy: fund/swap USDC → MON, then native unlock. */
   const convertUsdcAndPrepare = async (): Promise<boolean> => {
     if (!address || !embedded) return false;
-    const gasOk = await ensureGasMon();
-    if (!gasOk) return false;
 
     setPhase("swapping");
     setError(null);
@@ -200,6 +211,7 @@ export function CryptoPaySection({
 
     if (usdc < usdcNeeded) {
       setPhase("funding");
+      void requestGasDrip(address);
       const amount = formatUsdc(usdcNeeded);
       const viaCoinbase = await openCardBuy(address, "USDC", amount);
       if (!viaCoinbase) {
@@ -217,10 +229,23 @@ export function CryptoPaySection({
         if (usdc >= usdcNeeded) break;
       }
       if (usdc < usdcNeeded) {
-        setError("USDC is still arriving. When it shows in your balance, tap Pay with USDC.");
+        setError("Finish buying USDC in Coinbase, then tap Pay with USDC again.");
         setPhase("ready");
         return false;
       }
+    }
+
+    const gasOk = await ensureGasMon();
+    if (!gasOk) return false;
+
+    ({ mon, usdc } = await refreshBalances());
+    if (mon >= needMon) return true;
+    const stillNeedMon = needMon > mon ? needMon - mon : needMon;
+    usdcNeeded = await estimateUsdcForMon(stillNeedMon);
+    if (usdc < usdcNeeded) {
+      setError("USDC is still arriving. When it shows in your balance, tap Pay with USDC.");
+      setPhase("ready");
+      return false;
     }
 
     setPhase("swapping");
@@ -230,7 +255,7 @@ export function CryptoPaySection({
       provider,
       account: address as Address,
       usdcAmount: usdcNeeded,
-      minMonOut: monShortfall,
+      minMonOut: stillNeedMon,
     });
     ({ mon } = await refreshBalances());
     if (mon < priceUnits) {
@@ -296,12 +321,11 @@ export function CryptoPaySection({
     if (!address || !embedded) return;
     setError(null);
     try {
-      const gasOk = await ensureGasMon();
-      if (!gasOk) return;
-
       let { usdc } = await refreshBalances();
       if (usdc < priceUnits) {
         setPhase("funding");
+        // Drip gas in the background so Coinbase opens on USDC, not Monad.
+        void requestGasDrip(address);
         const amount = formatUsd(priceUnits);
         const viaCoinbase = await openCardBuy(address, "USDC", amount);
         if (!viaCoinbase) {
@@ -317,11 +341,14 @@ export function CryptoPaySection({
           if (usdc >= priceUnits) break;
         }
         if (usdc < priceUnits) {
-          setError("USDC is still arriving. When it shows in your balance, tap Pay with USDC.");
+          setError("Finish buying USDC in Coinbase, then tap Pay with USDC again.");
           setPhase("ready");
           return;
         }
       }
+
+      const gasOk = await ensureGasMon();
+      if (!gasOk) return;
 
       setPhase("paying");
       await embedded.switchChain(monad.id);
@@ -473,7 +500,7 @@ export function CryptoPaySection({
       </div>
       <p className="checkout-hint">
         {settleUsdc
-          ? "You pay USDC. The writer receives USDC. A tiny bit of MON is only for network fees."
+          ? "You pay USDC. The writer receives USDC. Network fees are a tiny bit of MON (we add that when we can)."
           : "Legacy path: may convert USDC to MON, then pay on-chain."}
       </p>
       <button type="button" className="checkout-link" onClick={() => logout()}>

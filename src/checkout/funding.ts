@@ -74,6 +74,8 @@ export async function fetchCoinbaseBuyUrl(
         address,
         asset,
         amount,
+        // Fiat so $0.50 USDC (or a 0.05 MON gas top-up) still clears Coinbase's ~$1 min.
+        amountKind: "fiat",
         redirectUrl: window.location.href,
       }),
     });
@@ -131,4 +133,25 @@ export async function openCardBuy(
 ): Promise<"coinbase" | null> {
   const opened = await openCoinbaseBuy(address, asset, amount);
   return opened ? "coinbase" : null;
+}
+
+/**
+ * Platform sends ~0.05 MON for approve/unlock gas so Coinbase stays on USDC.
+ * Returns true when funded, a drip was submitted, or a drip is already in flight
+ * (429) — caller should poll the MON balance before opening Coinbase.
+ */
+export async function requestGasDrip(address: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/relay/gas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    });
+    if (res.status === 429) return true;
+    if (!res.ok) return false;
+    const data = (await res.json()) as { ok?: boolean };
+    return data.ok === true;
+  } catch {
+    return false;
+  }
 }
