@@ -88,7 +88,16 @@ export default defineConfig(({ mode }) => {
       {
         name: "publisher-auth-dev-alias",
         configureServer(server) {
-          server.middlewares.use((req, _res, next) => {
+          for (const key of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "PUBLIC_ORIGIN"]) {
+            if (env[key] && !process.env[key]) process.env[key] = env[key];
+          }
+          server.middlewares.use(async (req, res, next) => {
+            try {
+              const { tryHandleOgRequest } = await import("./server/og-http.mjs");
+              if (await tryHandleOgRequest(req, res)) return;
+            } catch (e) {
+              console.error("[og-dev]", e?.message || e);
+            }
             if (req.url === "/publisher-auth.js" || req.url?.startsWith("/publisher-auth.js?")) {
               req.url = "/src/publisher/auth-mount.tsx";
             } else if (
@@ -115,6 +124,7 @@ export default defineConfig(({ mode }) => {
             } else if (req.url === "/articles" || req.url?.startsWith("/articles?")) {
               req.url = "/articles.html";
             } else if (req.url?.startsWith("/articles/")) {
+              // Fallback if OG inject failed: keep pretty URLs working in Vite.
               const qIndex = req.url.indexOf("?");
               const pathOnly = qIndex >= 0 ? req.url.slice(0, qIndex) : req.url;
               const query = qIndex >= 0 ? req.url.slice(qIndex) : "";

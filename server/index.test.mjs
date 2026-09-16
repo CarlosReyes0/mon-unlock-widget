@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
+import os from "node:os";
 import { test, after } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,12 +13,27 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PORT = 18765;
+const OG_CACHE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "og-http-cache-"));
+const OG_LISTING_FIXTURES = path.join(os.tmpdir(), `og-listings-${PORT}.json`);
+fs.writeFileSync(
+  OG_LISTING_FIXTURES,
+  JSON.stringify({
+    "the-quote-was-a-trap": {
+      title: "The Quote Was a Trap",
+      teaser: "A short free preview everyone can read.",
+      priceWei: "500000",
+      paymentAsset: "usdc",
+    },
+  })
+);
 
 const child = spawn(process.execPath, ["server/index.mjs"], {
   cwd: ROOT,
   env: {
     ...process.env,
     PORT: String(PORT),
+    OG_CACHE_DIR,
+    OG_LISTING_FIXTURES,
     // Explicitly unset so health reports not configured.
     CDP_API_KEY_ID: "",
     CDP_API_KEY_SECRET: "",
@@ -285,6 +301,54 @@ test("GET /assets/og-default.jpg is a public JPEG share card", async () => {
   assert.equal(buf[0], 0xff);
   assert.equal(buf[1], 0xd8);
   assert.ok(buf.length > 10_000);
+});
+
+test("GET /og/missing-slug.jpg falls back to the default 1200x630 JPEG", async () => {
+  const { jpegDimensions, defaultOgJpegBuffer } = await import("./og-card.mjs");
+  const res = await fetch(`http://127.0.0.1:${PORT}/og/missing-slug.jpg`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/jpeg");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf[0], 0xff);
+  assert.equal(buf[1], 0xd8);
+  assert.deepEqual(jpegDimensions(buf), { width: 1200, height: 630 });
+  assert.equal(buf.equals(defaultOgJpegBuffer()), true);
+});
+
+test("HEAD /og/missing-slug.jpg is a JPEG without a body", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/og/missing-slug.jpg`, { method: "HEAD" });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/jpeg");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf.length, 0);
+});
+
+test("GET /og/foo%20bar.jpg still returns a JPEG (does not 404)", async () => {
+  const { jpegDimensions } = await import("./og-card.mjs");
+  const res = await fetch(`http://127.0.0.1:${PORT}/og/foo%20bar.jpg`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/jpeg");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.deepEqual(jpegDimensions(buf), { width: 1200, height: 630 });
+});
+
+test("GET /articles/{listed-slug} points og:image at the generated card with a cache-bust query", async () => {
+  const origin = `http://127.0.0.1:${PORT}`;
+  const res = await fetch(`${origin}/articles/the-quote-was-a-trap`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  const m = text.match(/property="og:image" content="([^"]+)"/);
+  assert.ok(m, "missing og:image");
+  assert.match(m[1], new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/og/the-quote-was-a-trap\\.jpg\\?v=[a-f0-9]{16}$`));
+  assert.match(text, /property="og:title" content="The Quote Was a Trap"/);
+
+  const img = await fetch(m[1]);
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get("content-type"), "image/jpeg");
+  const { jpegDimensions, defaultOgJpegBuffer } = await import("./og-card.mjs");
+  const buf = Buffer.from(await img.arrayBuffer());
+  assert.deepEqual(jpegDimensions(buf), { width: 1200, height: 630 });
+  assert.equal(buf.equals(defaultOgJpegBuffer()), false);
 });
 
 test("POST /api/listings/hide returns 503 without admin secret", async () => {
