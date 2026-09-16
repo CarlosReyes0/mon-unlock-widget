@@ -179,8 +179,8 @@ export function PublisherApp() {
                 Card: connect payments, then money goes to your bank.
               </p>
               <p className="mon-pub-auth__hint">
-                USDC: a reader pays, it goes to the wallet created when you signed in. Automatic. No
-                extra setup.
+                USDC: a reader pays, it goes to the wallet you are signed in with. Automatic. No extra
+                setup.
               </p>
               <label className="mon-pub-shell__field-label" htmlFor="planPrice">
                 Monthly price (USD)

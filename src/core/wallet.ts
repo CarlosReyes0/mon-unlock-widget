@@ -9,6 +9,61 @@ const CHAIN_SWITCH_TIMEOUT_MS = 120_000;
 
 export type Eip1193Provider = { request: (args: any) => Promise<unknown> };
 
+export type PickableWallet = {
+  address: string;
+  walletClientType: string;
+};
+
+/**
+ * Prefer a linked injected wallet over Privy's embedded one.
+ * Email/Google login creates an empty embedded wallet; if the user also connected
+ * MetaMask (or similar), that is the address they expect to publish from.
+ */
+export function pickPublisherWallet<T extends PickableWallet>(
+  wallets: T[],
+  preferredAddress?: string | null
+): T | null {
+  if (!wallets.length) return null;
+  const pref = preferredAddress?.trim().toLowerCase();
+  if (pref) {
+    const match = wallets.find((w) => w.address.toLowerCase() === pref);
+    if (match) return match;
+  }
+  const external = [...wallets]
+    .reverse()
+    .find((w) => w.walletClientType !== "privy");
+  if (external) return external;
+  return wallets.find((w) => w.walletClientType === "privy") || wallets[0];
+}
+
+/** Address of an external wallet that appeared since the last snapshot, if any. */
+export function newestExternalWalletAddress(
+  previousAddresses: string[],
+  wallets: PickableWallet[]
+): string | null {
+  const prev = new Set(previousAddresses.map((a) => a.toLowerCase()));
+  const added = wallets.filter(
+    (w) => w.walletClientType !== "privy" && !prev.has(w.address.toLowerCase())
+  );
+  return added.length ? added[added.length - 1].address : null;
+}
+
+/**
+ * Viem retries failed `eth_sendTransaction` as `wallet_sendTransaction`.
+ * Privy forwards unknown methods to the chain RPC (https://rpc.monad.xyz),
+ * which does not support that wallet-namespace method.
+ */
+export function mapWalletSendToEthSend(eth: Eip1193Provider): Eip1193Provider {
+  return {
+    request: (args) => {
+      if (args?.method === "wallet_sendTransaction") {
+        return eth.request({ ...args, method: "eth_sendTransaction" });
+      }
+      return eth.request(args);
+    },
+  };
+}
+
 type WalletConnectProvider = Awaited<ReturnType<typeof EthereumProvider.init>>;
 
 function isMobileDevice(): boolean {

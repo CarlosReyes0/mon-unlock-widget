@@ -350,15 +350,75 @@
 }
 
 .mon-write__body {
+  position: relative;
+  z-index: 0;
   font-family: inherit;
   font-size: 1.15rem;
   line-height: 1.7;
   min-height: 55vh;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .mon-write__title::placeholder,
 .mon-write__body::placeholder {
   color: #c4c4c4;
+}
+
+.mon-write__body-wrap {
+  position: relative;
+  font-family: inherit;
+  font-size: 1.15rem;
+  line-height: 1.7;
+}
+
+.mon-write__fold-measure {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  visibility: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  pointer-events: none;
+}
+
+.mon-write__fold {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.mon-write__fold::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: #e7e5e4;
+  transform: translateY(-0.85em);
+}
+
+.mon-write__fold span {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, calc(-50% - 0.85em));
+  background: #fff;
+  padding: 0 0.55rem;
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #9ca3af;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .mon-write__draft {

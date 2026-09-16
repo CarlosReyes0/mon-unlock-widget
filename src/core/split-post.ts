@@ -44,6 +44,57 @@ function firstChunk(text: string): string {
   return t.slice(0, cut > 80 ? cut : TEASER_SOFT_MAX).trim();
 }
 
+function firstChunkEnd(core: string): number {
+  if (core.length <= TEASER_SOFT_MAX) return core.length;
+  const cut = core.lastIndexOf(" ", TEASER_SOFT_MAX);
+  return cut > 80 ? cut : TEASER_SOFT_MAX;
+}
+
+export type PaywallLocation = {
+  /** Exclusive end of the free preview in newline-normalized source. */
+  freeEnd: number;
+  /** Inclusive start of paid text. */
+  paidStart: number;
+  hasFold: boolean;
+};
+
+/** Where the Write editor should draw the paywall line — same rules as splitPost. */
+export function locatePaywall(raw: string): PaywallLocation {
+  const text = String(raw ?? "").replace(/\r\n/g, "\n");
+  if (!text.trim()) return { freeEnd: 0, paidStart: 0, hasFold: false };
+
+  const sep = text.search(/^---\s*$/m);
+  if (sep >= 0) {
+    const nl = text.indexOf("\n", sep);
+    const after = nl < 0 ? text.length : nl + 1;
+    const teaser = text.slice(0, sep).trim();
+    const body = text.slice(after).trim();
+    if (teaser && body) return { freeEnd: sep, paidStart: after, hasFold: true };
+    if (body) {
+      const leading = (text.slice(after).match(/^\s*/) || [""])[0].length;
+      const chunk = firstChunkEnd(body);
+      const freeEnd = after + leading + chunk;
+      return { freeEnd, paidStart: freeEnd, hasFold: chunk < body.length };
+    }
+    return { freeEnd: text.length, paidStart: text.length, hasFold: false };
+  }
+
+  const breakMatch = /\n\s*\n/.exec(text);
+  if (breakMatch) {
+    const freeEnd = breakMatch.index;
+    const gap = text.slice(freeEnd).match(/^\n\s*\n+/);
+    const paidStart = freeEnd + (gap ? gap[0].length : 0);
+    if (text.slice(paidStart).trim()) return { freeEnd, paidStart, hasFold: true };
+  }
+
+  const leading = (text.match(/^\s*/) || [""])[0].length;
+  const core = text.trim();
+  const chunk = firstChunkEnd(core);
+  if (chunk >= core.length) return { freeEnd: text.length, paidStart: text.length, hasFold: false };
+  const freeEnd = leading + chunk;
+  return { freeEnd, paidStart: freeEnd, hasFold: true };
+}
+
 /**
  * One piece → teaser (free) + body (paid).
  * A line that is only `---` is the fold. Otherwise the first paragraph is free.
