@@ -6,4 +6,5 @@ export * from "./embed-signature.js";
 export * from "./body-content.js";
 export * from "./checkout-protocol.js";
 export * from "./payment-asset.js";
+export * from "./subscription.js";
 export * from "./stripe-confirm.js";
