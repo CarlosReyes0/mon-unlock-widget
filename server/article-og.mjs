@@ -4,19 +4,26 @@
  * Crawlers (Twitterbot, Slackbot, iMessage) do not run the article page JS, so
  * /articles/{slug} injects these tags into the HTML response.
  *
- * Cover images: articles have no image column yet. Share cards use
- * assets/og-default.jpg unless the listing object already carries an https
- * imageUrl / ogImage / coverImage (extension point — do not select a missing
- * Supabase column).
+ * Cover images: articles have no image column. Listed posts get a generated
+ * layout-B card at /og/{slug}.jpg (title + teaser + price). Missing listings
+ * or generator failure fall back to assets/og-default.jpg. A listing object's
+ * own https imageUrl / ogImage / coverImage still wins (extension point —
+ * do not select a missing Supabase column).
  */
 
 export const OG_IMAGE_PATH = "/assets/og-default.jpg";
 export const OG_IMAGE_WIDTH = 1200;
 export const OG_IMAGE_HEIGHT = 630;
+export const OG_DESCRIPTION_MAX = 125;
 export const TWITTER_SITE = "@openpaywall";
 export const SITE_NAME = "Open Paywall";
 export const DEFAULT_DESCRIPTION =
   "Read this article on Open Paywall. One unlock works here and on the publisher’s site.";
+
+/** Stable public path for a per-article share card. */
+export function articleOgImagePath(slug) {
+  return `/og/${encodeURIComponent(String(slug || "").trim())}.jpg`;
+}
 
 export function publicOrigin(req) {
   const proto =
@@ -92,16 +99,18 @@ export function defaultShareMeta({ canonical, fallbackImage }) {
   };
 }
 
-export function shareMetaFromArticle(article, { canonical, fallbackImage }) {
+export function shareMetaFromArticle(article, { canonical, fallbackImage, generatedImage }) {
   const title = plainText(article?.title, 70) || SITE_NAME;
-  const description = plainText(article?.teaser, 200) || DEFAULT_DESCRIPTION;
+  const description =
+    plainText(article?.teaser, OG_DESCRIPTION_MAX) ||
+    plainText(DEFAULT_DESCRIPTION, OG_DESCRIPTION_MAX);
   const author = plainText(article?.author, 80);
   return {
     title,
     documentTitle: `${title} — Open Paywall`,
     description,
     url: canonical,
-    imageUrl: resolveShareImageUrl(article, fallbackImage),
+    imageUrl: resolveShareImageUrl(article, generatedImage || fallbackImage),
     imageAlt: title,
     siteName: SITE_NAME,
     twitterSite: TWITTER_SITE,
@@ -173,20 +182,21 @@ export function injectShareMeta(html, metaBlock, documentTitle) {
   return out.replace(/<\/head>/i, `${metaBlock}\n</head>`);
 }
 
-export async function renderArticlePage({ html, slug, origin, loadArticle }) {
+export async function renderArticlePage({ html, slug, origin, loadArticle, article }) {
   const slugNorm = String(slug || "").trim();
   const canonical = `${origin}/articles/${encodeURIComponent(slugNorm)}`;
   const fallbackImage = `${origin}${OG_IMAGE_PATH}`;
-  let article = null;
-  if (typeof loadArticle === "function" && slugNorm) {
+  let listing = article;
+  if (listing === undefined && typeof loadArticle === "function" && slugNorm) {
     try {
-      article = await loadArticle(slugNorm);
+      listing = await loadArticle(slugNorm);
     } catch {
-      article = null;
+      listing = null;
     }
   }
-  const share = article
-    ? shareMetaFromArticle(article, { canonical, fallbackImage })
+  const generatedImage = listing ? `${origin}${articleOgImagePath(slugNorm)}` : null;
+  const share = listing
+    ? shareMetaFromArticle(listing, { canonical, fallbackImage, generatedImage })
     : defaultShareMeta({ canonical, fallbackImage });
   return injectShareMeta(html, buildShareMetaTags(share), share.documentTitle);
 }

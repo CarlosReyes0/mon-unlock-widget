@@ -287,6 +287,26 @@ test("GET /assets/og-default.jpg is a public JPEG share card", async () => {
   assert.ok(buf.length > 10_000);
 });
 
+test("GET /og/missing-slug.jpg falls back to the default 1200x630 JPEG", async () => {
+  const { jpegDimensions, defaultOgJpegBuffer } = await import("./og-card.mjs");
+  const res = await fetch(`http://127.0.0.1:${PORT}/og/missing-slug.jpg`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/jpeg");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf[0], 0xff);
+  assert.equal(buf[1], 0xd8);
+  assert.deepEqual(jpegDimensions(buf), { width: 1200, height: 630 });
+  assert.equal(buf.equals(defaultOgJpegBuffer()), true);
+});
+
+test("HEAD /og/missing-slug.jpg is a JPEG without a body", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/og/missing-slug.jpg`, { method: "HEAD" });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/jpeg");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf.length, 0);
+});
+
 test("POST /api/listings/hide returns 503 without admin secret", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/listings/hide`, {
     method: "POST",

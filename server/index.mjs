@@ -69,6 +69,7 @@ import {
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
 import { publicOrigin, renderArticlePage } from "./article-og.mjs";
+import { getArticleOgJpeg, parseOgImagePath, warmupOgCard } from "./og-card.mjs";
 import { relayGasDrip } from "./relay-gas.mjs";
 import {
   MONAD_BLOCKCHAIN,
@@ -315,17 +316,16 @@ async function serveArticleHtml(req, res, slug) {
 
   try {
     const origin = publicOrigin(req);
-    const body = await renderArticlePage({
-      html,
-      slug,
-      origin,
-      loadArticle: listingsSupabaseConfigured()
-        ? async (id) => {
-            const { article } = await getPublicArticle(id);
-            return article;
-          }
-        : null,
-    });
+    let article;
+    if (listingsSupabaseConfigured()) {
+      try {
+        article = (await getPublicArticle(slug)).article;
+      } catch {
+        article = null;
+      }
+    }
+    const body = await renderArticlePage({ html, slug, origin, article });
+    if (article) warmupOgCard(slug, article);
     const buf = Buffer.from(body, "utf8");
     cors(res);
     res.writeHead(200, {
@@ -1133,6 +1133,32 @@ const server = http.createServer(async (req, res) => {
     (url.pathname === "/demo" || url.pathname === "/demo.html")
   ) {
     return serveStatic(req, res, "/index.html");
+  }
+
+  // Per-article OG cards (Twitterbot / Slackbot fetch this URL from og:image).
+  const ogSlug = parseOgImagePath(url.pathname);
+  if ((method === "GET" || method === "HEAD") && ogSlug) {
+    try {
+      const buf = await getArticleOgJpeg(ogSlug, {
+        loadArticle: listingsSupabaseConfigured()
+          ? async (id) => {
+              const { article } = await getPublicArticle(id);
+              return article;
+            }
+          : null,
+      });
+      cors(res);
+      res.writeHead(200, {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": "public, max-age=3600",
+        "Content-Length": buf.length,
+      });
+      if (method === "HEAD") return res.end();
+      return res.end(buf);
+    } catch (e) {
+      console.error("[og-card] serve failed:", e?.message || e);
+      return serveStatic(req, res, "/assets/og-default.jpg");
+    }
   }
 
   // Pretty URLs: /articles → feed, /articles/:slug → hosted article

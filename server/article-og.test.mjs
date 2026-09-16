@@ -4,8 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
+  OG_DESCRIPTION_MAX,
   OG_IMAGE_PATH,
   absoluteHttpUrl,
+  articleOgImagePath,
   buildShareMetaTags,
   defaultShareMeta,
   injectShareMeta,
@@ -69,6 +71,52 @@ test("shareMetaFromArticle maps title, teaser, and default photo", () => {
   assert.equal(share.author, "Carlos");
 });
 
+test("shareMetaFromArticle prefers generated /og/{slug}.jpg over the default card", () => {
+  const share = shareMetaFromArticle(
+    { title: "The Quote Was a Trap", teaser: "A short preview." },
+    {
+      canonical: "https://host/articles/the-quote-was-a-trap",
+      fallbackImage: "https://host/assets/og-default.jpg",
+      generatedImage: "https://host/og/the-quote-was-a-trap.jpg",
+    }
+  );
+  assert.equal(share.imageUrl, "https://host/og/the-quote-was-a-trap.jpg");
+});
+
+test("listing https cover still wins over the generated card", () => {
+  const share = shareMetaFromArticle(
+    {
+      title: "Covered",
+      teaser: "Has a real cover.",
+      imageUrl: "https://cdn.example/cover.png",
+    },
+    {
+      canonical: "https://host/articles/covered",
+      fallbackImage: "https://host/assets/og-default.jpg",
+      generatedImage: "https://host/og/covered.jpg",
+    }
+  );
+  assert.equal(share.imageUrl, "https://cdn.example/cover.png");
+});
+
+test("share descriptions stay within the mobile OG cap", () => {
+  assert.ok(OG_DESCRIPTION_MAX >= 120 && OG_DESCRIPTION_MAX <= 125);
+  const long = `${"word ".repeat(80)}end`;
+  const share = shareMetaFromArticle(
+    { title: "Long teaser", teaser: long },
+    {
+      canonical: "https://host/articles/long-teaser",
+      fallbackImage: "https://host/assets/og-default.jpg",
+    }
+  );
+  assert.ok(share.description.length <= OG_DESCRIPTION_MAX);
+  assert.ok(share.description.endsWith("…"));
+});
+
+test("articleOgImagePath is a stable public /og/{slug}.jpg URL", () => {
+  assert.equal(articleOgImagePath("the-quote-was-a-trap"), "/og/the-quote-was-a-trap.jpg");
+});
+
 test("buildShareMetaTags emits OG + Twitter Card tags with absolute image URL", () => {
   const html = buildShareMetaTags(
     defaultShareMeta({
@@ -102,7 +150,11 @@ test("renderArticlePage injects crawler-visible tags into article.html", async (
   assert.match(html, /property="og:description" content="A short free preview everyone can read\."/);
   assert.match(
     html,
-    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/assets\/og-default\.jpg"/
+    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg"/
+  );
+  assert.match(
+    html,
+    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg"/
   );
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
   assert.match(
@@ -128,6 +180,27 @@ test("renderArticlePage falls back to default card when the listing is missing",
   assert.match(html, /property="og:title" content="Open Paywall"/);
   assert.match(html, /content="http:\/\/127\.0\.0\.1:8080\/assets\/og-default\.jpg"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
+});
+
+test("renderArticlePage caps og:description around 125 characters", async () => {
+  const html = await renderArticlePage({
+    html: ARTICLE_HTML,
+    slug: "long-teaser",
+    origin: "https://host",
+    loadArticle: async () => ({
+      title: "Long",
+      teaser: `${"preview ".repeat(40)}end`,
+    }),
+  });
+  const m = html.match(/property="og:description" content="([^"]*)"/);
+  assert.ok(m);
+  assert.ok(m[1].length <= OG_DESCRIPTION_MAX);
+  const t = html.match(/name="twitter:description" content="([^"]*)"/);
+  assert.ok(t);
+  assert.ok(t[1].length <= OG_DESCRIPTION_MAX);
+  const d = html.match(/name="description" content="([^"]*)"/);
+  assert.ok(d);
+  assert.ok(d[1].length <= OG_DESCRIPTION_MAX);
 });
 
 test("injectShareMeta is idempotent", () => {
