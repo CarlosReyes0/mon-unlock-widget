@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe, type Stripe, type StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
+import { checkoutConfirmOptions } from "../core/stripe-confirm.js";
 import {
   BillingAddressElement,
   CheckoutElementsProvider,
@@ -155,10 +156,7 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
       onBusy(true);
       onError("");
       try {
-        const result = await checkoutState.checkout.confirm({
-          redirect: "if_required",
-          ...(event ? { expressCheckoutConfirmEvent: event } : {}),
-        });
+        const result = await checkoutState.checkout.confirm(checkoutConfirmOptions(event));
         if (result.type === "error") {
           const message = result.error.message || "Payment cancelled.";
           event?.paymentFailed?.({ reason: "fail", message });
