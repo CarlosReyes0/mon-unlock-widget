@@ -1115,6 +1115,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Per-article OG cards (Twitterbot / Slackbot fetch this URL from og:image).
+  // Path is stable; article HTML appends ?v={fingerprint} so title edits bust crawler cache.
   const ogSlug = parseOgImagePath(url.pathname);
   if ((method === "GET" || method === "HEAD") && ogSlug) {
     try {

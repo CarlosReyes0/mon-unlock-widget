@@ -65,6 +65,54 @@ test("tryHandleOgRequest ignores unrelated paths", async () => {
   assert.equal(handled, false);
 });
 
+test("tryHandleOgRequest serves a generated listing card from OG_LISTING_FIXTURES", async () => {
+  const prev = process.env.OG_LISTING_FIXTURES;
+  const prevCache = process.env.OG_CACHE_DIR;
+  const dir = await import("node:os").then((os) => os.tmpdir());
+  const pathMod = await import("node:path");
+  const fs = await import("node:fs");
+  const fixture = pathMod.join(dir, "og-http-fixture.json");
+  fs.writeFileSync(
+    fixture,
+    JSON.stringify({
+      "the-quote-was-a-trap": {
+        title: "The Quote Was a Trap",
+        teaser: "A short free preview everyone can read.",
+        priceWei: "500000",
+        paymentAsset: "usdc",
+      },
+    })
+  );
+  process.env.OG_LISTING_FIXTURES = fixture;
+  process.env.OG_CACHE_DIR = fs.mkdtempSync(pathMod.join(dir, "og-http-cache-"));
+  try {
+    const htmlRes = mockRes();
+    const handledHtml = await tryHandleOgRequest(
+      { method: "GET", url: "/articles/the-quote-was-a-trap", headers: { host: "127.0.0.1:5173" } },
+      htmlRes
+    );
+    assert.equal(handledHtml, true);
+    const html = htmlRes.body.toString("utf8");
+    assert.match(html, /\/og\/the-quote-was-a-trap\.jpg\?v=[a-f0-9]{16}/);
+    assert.match(html, /property="og:title" content="The Quote Was a Trap"/);
+
+    const imgRes = mockRes();
+    const handledImg = await tryHandleOgRequest(
+      { method: "GET", url: "/og/the-quote-was-a-trap.jpg?v=deadbeef", headers: { host: "127.0.0.1:5173" } },
+      imgRes
+    );
+    assert.equal(handledImg, true);
+    assert.equal(imgRes.headers["Content-Type"], "image/jpeg");
+    const { defaultOgJpegBuffer } = await import("./og-card.mjs");
+    assert.equal(imgRes.body.equals(defaultOgJpegBuffer()), false);
+  } finally {
+    if (prev === undefined) delete process.env.OG_LISTING_FIXTURES;
+    else process.env.OG_LISTING_FIXTURES = prev;
+    if (prevCache === undefined) delete process.env.OG_CACHE_DIR;
+    else process.env.OG_CACHE_DIR = prevCache;
+  }
+});
+
 function mockRes() {
   const chunks = [];
   return {

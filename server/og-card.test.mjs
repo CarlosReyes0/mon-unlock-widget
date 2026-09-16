@@ -18,6 +18,8 @@ import {
   parseOgImagePath,
   renderOgJpeg,
   layoutOgTitle,
+  measureMixed,
+  ogFontFamily,
 } from "./og-card.mjs";
 
 test("formatOgPriceLabel prefers two-decimal USDC and falls back to $0.50 USDC", () => {
@@ -130,4 +132,43 @@ test("price pill is optically centered between brand row and title", () => {
   assert.ok(OG_GAP_PILL_TO_TITLE >= 20, "pill-to-title must stay a real visual gap");
   assert.ok(OG_GAP_TITLE_TO_TEASER >= 16);
   assert.ok(OG_GAP_TEASER_TO_BUTTON >= 20);
+});
+
+test("CJK and emoji use Noto fallbacks instead of tofu boxes", async () => {
+  await renderOgJpeg({ title: "warmup", teaser: "x", priceWei: "500000", paymentAsset: "usdc" });
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const ctx = createCanvas(200, 80).getContext("2d");
+  const cjkW = measureMixed(ctx, "你好", 48, "600", ogFontFamily("cjk"));
+  const emojiW = measureMixed(ctx, "🎉", 48, "400", ogFontFamily("emoji"));
+  ctx.font = `48px "${ogFontFamily("cjk")}"`;
+  const literataCjk = (() => {
+    ctx.font = '48px "OP Literata"';
+    return ctx.measureText("你好").width;
+  })();
+  assert.ok(cjkW > literataCjk, `CJK width ${cjkW} should beat Literata tofu ${literataCjk}`);
+  ctx.font = '48px "OP Noto Emoji"';
+  assert.ok(ctx.measureText("🎉").width > 40, `emoji width ${ctx.measureText("🎉").width}`);
+  assert.ok(emojiW > 40);
+
+  const prev = process.env.OG_CACHE_DIR;
+  process.env.OG_CACHE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "og-cjk-"));
+  try {
+    const cjk = await renderOgJpeg({
+      title: "你好世界",
+      teaser: "ひらがな preview 🎉",
+      priceWei: "500000",
+      paymentAsset: "usdc",
+    });
+    const latin = await renderOgJpeg({
+      title: "Hello world",
+      teaser: "latin preview only",
+      priceWei: "500000",
+      paymentAsset: "usdc",
+    });
+    assert.notEqual(cjk.equals(latin), true);
+    assert.deepEqual(jpegDimensions(cjk), { width: 1200, height: 630 });
+  } finally {
+    if (prev === undefined) delete process.env.OG_CACHE_DIR;
+    else process.env.OG_CACHE_DIR = prev;
+  }
 });

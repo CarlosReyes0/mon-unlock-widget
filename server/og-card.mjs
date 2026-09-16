@@ -5,9 +5,9 @@
  * without running article page JS. No Supabase image column — cards are derived
  * from listing title / teaser / price and cached on disk.
  *
- * Fonts in og-fonts/ are SIL OFL (DM Sans + Literata). See og-fonts/OFL.txt.
+ * Fonts in og-fonts/ are SIL OFL (DM Sans + Literata + Noto Sans / JP / Emoji).
+ * See og-fonts/OFL.txt. Title and teaser mix CJK + emoji via Noto fallbacks.
  */
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +17,7 @@ import {
   OG_IMAGE_HEIGHT,
   OG_IMAGE_WIDTH,
   SITE_NAME,
+  ogCardFingerprint,
   plainText,
 } from "./article-og.mjs";
 
@@ -40,6 +41,9 @@ const FONT_LITERATA = "OP Literata";
 const FONT_SANS = "OP DM Sans";
 const FONT_SANS_MED = "OP DM Sans Medium";
 const FONT_SANS_SEMI = "OP DM Sans SemiBold";
+const FONT_NOTO = "OP Noto Sans";
+const FONT_CJK = "OP Noto CJK";
+const FONT_EMOJI = "OP Noto Emoji";
 
 const BG = "#f4f3f0";
 const INK = "#111827";
@@ -144,13 +148,115 @@ export function jpegDimensions(buf) {
   return null;
 }
 
+function tryRegisterFont(file, family) {
+  const full = path.join(FONT_DIR, file);
+  if (!fs.existsSync(full)) return false;
+  try {
+    GlobalFonts.registerFromPath(full, family);
+    return true;
+  } catch (err) {
+    console.error("[og-card] font register failed:", file, err?.message || err);
+    return false;
+  }
+}
+
 function ensureFonts() {
   if (fontsRegistered) return;
   GlobalFonts.registerFromPath(path.join(FONT_DIR, "Literata-SemiBold.ttf"), FONT_LITERATA);
   GlobalFonts.registerFromPath(path.join(FONT_DIR, "DMSans-Regular.ttf"), FONT_SANS);
   GlobalFonts.registerFromPath(path.join(FONT_DIR, "DMSans-Medium.ttf"), FONT_SANS_MED);
   GlobalFonts.registerFromPath(path.join(FONT_DIR, "DMSans-SemiBold.ttf"), FONT_SANS_SEMI);
+  tryRegisterFont("NotoSans-Regular.ttf", FONT_NOTO);
+  tryRegisterFont("NotoSansJP-Regular.otf", FONT_CJK);
+  tryRegisterFont("NotoEmoji-Regular.ttf", FONT_EMOJI);
   fontsRegistered = true;
+}
+
+export function ogFontFamily(kind) {
+  ensureFonts();
+  if (kind === "cjk") return FONT_CJK;
+  if (kind === "emoji") return FONT_EMOJI;
+  if (kind === "noto") return FONT_NOTO;
+  return FONT_SANS;
+}
+
+function classifyCp(cp) {
+  if (
+    cp === 0x200d ||
+    cp === 0xfe0e ||
+    cp === 0xfe0f ||
+    cp === 0x20e3 ||
+    (cp >= 0x1f1e6 && cp <= 0x1f1ff) ||
+    (cp >= 0x1f300 && cp <= 0x1faff) ||
+    (cp >= 0x1f600 && cp <= 0x1f64f) ||
+    (cp >= 0x1f680 && cp <= 0x1f6ff) ||
+    (cp >= 0x2300 && cp <= 0x23ff) ||
+    (cp >= 0x2600 && cp <= 0x27bf) ||
+    (cp >= 0x2b50 && cp <= 0x2b55)
+  ) {
+    return "emoji";
+  }
+  if (
+    (cp >= 0x1100 && cp <= 0x11ff) ||
+    (cp >= 0x2e80 && cp <= 0x9fff) ||
+    (cp >= 0xa960 && cp <= 0xa97f) ||
+    (cp >= 0xac00 && cp <= 0xd7af) ||
+    (cp >= 0xf900 && cp <= 0xfaff) ||
+    (cp >= 0xfe30 && cp <= 0xfe4f) ||
+    (cp >= 0xff00 && cp <= 0xffef) ||
+    (cp >= 0x20000 && cp <= 0x2fa1f)
+  ) {
+    return "cjk";
+  }
+  return "latin";
+}
+
+function runFamily(kind, latinFamily) {
+  if (kind === "emoji") return FONT_EMOJI;
+  if (kind === "cjk") return FONT_CJK;
+  return latinFamily;
+}
+
+function setFont(ctx, sizePx, style, family) {
+  ctx.font = `${style} ${sizePx}px "${family}", "${FONT_NOTO}", "${FONT_CJK}", "${FONT_EMOJI}"`;
+}
+
+function forEachTextRun(text, latinFamily, fn) {
+  let run = "";
+  let kind = null;
+  const flush = () => {
+    if (!run) return;
+    fn(run, runFamily(kind, latinFamily));
+    run = "";
+  };
+  for (const ch of String(text || "")) {
+    const next = classifyCp(ch.codePointAt(0));
+    if (kind && next !== kind) flush();
+    kind = next;
+    run += ch;
+  }
+  flush();
+}
+
+export function measureMixed(ctx, text, sizePx, style, latinFamily) {
+  ensureFonts();
+  let w = 0;
+  forEachTextRun(text, latinFamily, (run, family) => {
+    setFont(ctx, sizePx, style, family);
+    w += ctx.measureText(run).width;
+  });
+  return w;
+}
+
+function fillMixed(ctx, text, x, y, sizePx, style, latinFamily) {
+  ensureFonts();
+  let cx = x;
+  forEachTextRun(text, latinFamily, (run, family) => {
+    setFont(ctx, sizePx, style, family);
+    ctx.fillText(run, cx, y);
+    cx += ctx.measureText(run).width;
+  });
+  return cx - x;
 }
 
 function loadPhoto() {
@@ -179,8 +285,9 @@ function inkTopPad(ctx, sample = "H") {
   return Number.isFinite(pad) ? Math.max(0, Math.round(pad)) : 0;
 }
 
-function wrapLines(ctx, text, maxWidth, maxLines) {
-  const fits = (s) => ctx.measureText(s).width <= maxWidth;
+function wrapLines(ctx, text, maxWidth, maxLines, widthOf) {
+  const width = widthOf || ((s) => ctx.measureText(s).width);
+  const fits = (s) => width(s) <= maxWidth;
   const tokens = String(text || "")
     .split(/\s+/)
     .filter(Boolean)
@@ -236,8 +343,8 @@ export function layoutOgTitle(ctx, title, maxWidth) {
   let titleLines = [];
   let titleLh = 40;
   for (const size of [56, 50, 44, 38, 34]) {
-    ctx.font = `600 ${size}px "${FONT_LITERATA}"`;
-    titleLines = wrapLines(ctx, title, maxWidth, 3);
+    const widthOf = (s) => measureMixed(ctx, s, size, "600", FONT_LITERATA);
+    titleLines = wrapLines(ctx, title, maxWidth, 3, widthOf);
     titleLh = Math.round(size * 1.18);
     titleSize = size;
     if (!titleLines.some((line) => line.endsWith("…"))) break;
@@ -274,21 +381,6 @@ function drawLock(ctx, x, y, size = 18) {
   roundRect(ctx, cx - bodyW / 2, y + size * 0.4, bodyW, bodyH, 3.5);
   ctx.fill();
   ctx.restore();
-}
-
-function articleFingerprint(article) {
-  return createHash("sha1")
-    .update(
-      JSON.stringify({
-        t: article?.title || "",
-        s: article?.teaser || "",
-        p: String(article?.priceWei ?? article?.price_wei ?? ""),
-        a: article?.paymentAsset || article?.payment_asset || "",
-        l: article?.priceLabel || "",
-      })
-    )
-    .digest("hex")
-    .slice(0, 16);
 }
 
 /**
@@ -347,7 +439,7 @@ export async function renderOgJpeg(article = {}) {
   ctx.fillRect(px, py, photoSize, photoSize);
 
   ctx.textBaseline = "alphabetic";
-  ctx.font = `600 52px "${FONT_LITERATA}"`;
+  setFont(ctx, 52, "600", FONT_LITERATA);
   ctx.fillStyle = "#ffffff";
   const word = "Paywall";
   const wx = px + 36;
@@ -368,12 +460,12 @@ export async function renderOgJpeg(article = {}) {
 
   const brandRowH = 24;
   drawLock(ctx, rx, y + 1, 22);
-  ctx.font = `500 22px "${FONT_SANS_MED}"`;
+  setFont(ctx, 22, "500", FONT_SANS_MED);
   ctx.fillStyle = BRAND;
   ctx.fillText(SITE_NAME, rx + 32, y + 1);
   y += brandRowH + OG_GAP_BRAND_TO_PILL;
 
-  ctx.font = `600 20px "${FONT_SANS_SEMI}"`;
+  setFont(ctx, 20, "600", FONT_SANS_SEMI);
   const pillPadX = 18;
   const pillH = OG_PILL_HEIGHT;
   const pillW = Math.ceil(ctx.measureText(priceLabel).width) + pillPadX * 2;
@@ -387,22 +479,23 @@ export async function renderOgJpeg(article = {}) {
   y += pillH + OG_GAP_PILL_TO_TITLE;
 
   const { titleSize, titleLines, titleLh } = layoutOgTitle(ctx, title, rw);
-  ctx.font = `600 ${titleSize}px "${FONT_LITERATA}"`;
+  setFont(ctx, titleSize, "600", FONT_LITERATA);
   ctx.fillStyle = INK;
   // Pull the title up by the em-box padding so GAP_PILL_TO_TITLE is pill→ink, not pill→em-top.
   y -= inkTopPad(ctx, titleLines[0] || "H");
   for (const line of titleLines) {
-    ctx.fillText(line, rx, y);
+    fillMixed(ctx, line, rx, y, titleSize, "600", FONT_LITERATA);
     y += titleLh;
   }
   y += OG_GAP_TITLE_TO_TEASER;
 
-  ctx.font = `400 22px "${FONT_SANS}"`;
   ctx.fillStyle = MUTED;
-  const teaserLines = wrapLines(ctx, teaser, rw, 3);
+  const teaserLines = wrapLines(ctx, teaser, rw, 3, (s) =>
+    measureMixed(ctx, s, 22, "400", FONT_SANS)
+  );
   const teaserLh = 32;
   for (const line of teaserLines) {
-    ctx.fillText(line, rx, y);
+    fillMixed(ctx, line, rx, y, 22, "400", FONT_SANS);
     y += teaserLh;
   }
 
@@ -414,7 +507,7 @@ export async function renderOgJpeg(article = {}) {
   roundRect(ctx, rx, y, btnW, btnH, 12);
   ctx.fillStyle = BUTTON;
   ctx.fill();
-  ctx.font = `500 20px "${FONT_SANS_MED}"`;
+  ctx.font = `500 20px "${FONT_SANS_MED}", "${FONT_NOTO}"`;
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -435,7 +528,7 @@ async function writeCache(filePath, buf) {
 
 export async function renderArticleOgJpeg(slug, article) {
   const safe = cacheFileSlug(slug);
-  const fp = articleFingerprint(article);
+  const fp = ogCardFingerprint(article);
   const filePath = path.join(cacheDir(), `${safe}-${fp}.jpg`);
   try {
     const cached = await fs.promises.readFile(filePath);

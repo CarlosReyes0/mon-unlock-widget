@@ -8,6 +8,7 @@ import {
   OG_IMAGE_PATH,
   absoluteHttpUrl,
   articleOgImagePath,
+  ogCardFingerprint,
   buildShareMetaTags,
   defaultShareMeta,
   injectShareMeta,
@@ -113,8 +114,16 @@ test("share descriptions stay within the mobile OG cap", () => {
   assert.ok(share.description.endsWith("…"));
 });
 
-test("articleOgImagePath is a stable public /og/{slug}.jpg URL", () => {
+test("articleOgImagePath is a stable /og/{slug}.jpg path with a content-hash query", () => {
   assert.equal(articleOgImagePath("the-quote-was-a-trap"), "/og/the-quote-was-a-trap.jpg");
+  const article = { title: "The Quote Was a Trap", teaser: "A short preview." };
+  const withV = articleOgImagePath("the-quote-was-a-trap", article);
+  const fp = ogCardFingerprint(article);
+  assert.equal(withV, `/og/the-quote-was-a-trap.jpg?v=${fp}`);
+  assert.notEqual(
+    articleOgImagePath("s", { title: "One" }),
+    articleOgImagePath("s", { title: "Two" })
+  );
 });
 
 test("buildShareMetaTags emits OG + Twitter Card tags with absolute image URL", () => {
@@ -150,11 +159,11 @@ test("renderArticlePage injects crawler-visible tags into article.html", async (
   assert.match(html, /property="og:description" content="A short free preview everyone can read\."/);
   assert.match(
     html,
-    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg"/
+    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg\?v=[a-f0-9]{16}"/
   );
   assert.match(
     html,
-    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg"/
+    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg\?v=[a-f0-9]{16}"/
   );
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
   assert.match(

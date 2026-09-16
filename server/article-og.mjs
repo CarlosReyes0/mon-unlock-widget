@@ -9,7 +9,12 @@
  * or generator failure fall back to assets/og-default.jpg. A listing object's
  * own https imageUrl / ogImage / coverImage still wins (extension point —
  * do not select a missing Supabase column).
+ *
+ * The path `/og/{slug}.jpg` is stable; `?v={fingerprint}` changes when title /
+ * teaser / price change so Twitter/iMessage do not keep a stale card.
  */
+
+import { createHash } from "node:crypto";
 
 export const OG_IMAGE_PATH = "/assets/og-default.jpg";
 export const OG_IMAGE_WIDTH = 1200;
@@ -20,9 +25,34 @@ export const SITE_NAME = "Open Paywall";
 export const DEFAULT_DESCRIPTION =
   "Read this article on Open Paywall. One unlock works here and on the publisher’s site.";
 
-/** Stable public path for a per-article share card. */
-export function articleOgImagePath(slug) {
-  return `/og/${encodeURIComponent(String(slug || "").trim())}.jpg`;
+/** Short content hash for disk cache keys and og:image cache-busting. */
+export function ogCardFingerprint(article) {
+  return createHash("sha1")
+    .update(
+      JSON.stringify({
+        t: article?.title || "",
+        s: article?.teaser || "",
+        p: String(article?.priceWei ?? article?.price_wei ?? ""),
+        a: article?.paymentAsset || article?.payment_asset || "",
+        l: article?.priceLabel || "",
+      })
+    )
+    .digest("hex")
+    .slice(0, 16);
+}
+
+/**
+ * Stable public path for a per-article share card.
+ * Pass the listing (or a fingerprint string) to append `?v=` so crawlers refetch
+ * after edits. The image route ignores the query string.
+ */
+export function articleOgImagePath(slug, article) {
+  const base = `/og/${encodeURIComponent(String(slug || "").trim())}.jpg`;
+  if (!article) return base;
+  const v =
+    typeof article === "string" ? article : ogCardFingerprint(article);
+  const safe = String(v || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
+  return safe ? `${base}?v=${safe}` : base;
 }
 
 function headerFirst(value, fallback = "") {
@@ -217,7 +247,7 @@ export async function renderArticlePage({ html, slug, origin, loadArticle, artic
       listing = null;
     }
   }
-  const generatedImage = listing ? `${origin}${articleOgImagePath(slugNorm)}` : null;
+  const generatedImage = listing ? `${origin}${articleOgImagePath(slugNorm, listing)}` : null;
   const share = listing
     ? shareMetaFromArticle(listing, { canonical, fallbackImage, generatedImage })
     : defaultShareMeta({ canonical, fallbackImage });

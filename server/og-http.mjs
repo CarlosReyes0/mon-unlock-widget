@@ -10,7 +10,22 @@ import { getPublicArticle, listingsSupabaseConfigured } from "./listings-api.mjs
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+function listingFixtures() {
+  const p = String(process.env.OG_LISTING_FIXTURES || "").trim();
+  if (!p) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(p, "utf8"));
+    return data && typeof data === "object" ? data : null;
+  } catch {
+    return null;
+  }
+}
+
 export function listingLoader() {
+  const fixtures = listingFixtures();
+  if (fixtures) {
+    return async (id) => (Object.prototype.hasOwnProperty.call(fixtures, id) ? fixtures[id] : null);
+  }
   if (!listingsSupabaseConfigured()) return null;
   return async (id) => {
     const { article } = await getPublicArticle(id);
