@@ -68,6 +68,7 @@ import {
   upsertWriterPlan,
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
+import { publicOrigin, renderArticlePage } from "./article-og.mjs";
 import { relayGasDrip } from "./relay-gas.mjs";
 import {
   MONAD_BLOCKCHAIN,
@@ -299,6 +300,45 @@ function safeJoin(root, urlPath) {
   const full = path.join(root, cleaned);
   if (!full.startsWith(root)) return null;
   return full;
+}
+
+async function serveArticleHtml(req, res, slug) {
+  const filePath = path.join(ROOT, "article.html");
+  let html;
+  try {
+    html = fs.readFileSync(filePath, "utf8");
+  } catch {
+    cors(res);
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("Not found");
+  }
+
+  try {
+    const origin = publicOrigin(req);
+    const body = await renderArticlePage({
+      html,
+      slug,
+      origin,
+      loadArticle: listingsSupabaseConfigured()
+        ? async (id) => {
+            const { article } = await getPublicArticle(id);
+            return article;
+          }
+        : null,
+    });
+    const buf = Buffer.from(body, "utf8");
+    cors(res);
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=60",
+      "Content-Length": buf.length,
+    });
+    if ((req.method || "GET") === "HEAD") return res.end();
+    return res.end(buf);
+  } catch (e) {
+    console.error("[article-og] inject failed:", e?.message || e);
+    return serveStatic(req, res, "/article.html");
+  }
 }
 
 function serveStatic(req, res, urlPath) {
@@ -1112,10 +1152,16 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(req, res, "/publisher-auth.html");
   }
   if ((method === "GET" || method === "HEAD") && url.pathname.startsWith("/articles/")) {
-    const slug = url.pathname.slice("/articles/".length);
-    if (slug && !slug.includes("/")) {
-      // Serve article.html; client reads slug from pathname or ?slug=
-      return serveStatic(req, res, "/article.html");
+    const raw = url.pathname.slice("/articles/".length);
+    if (raw && !raw.includes("/")) {
+      let slug = raw;
+      try {
+        slug = decodeURIComponent(raw);
+      } catch {
+        /* keep raw slug */
+      }
+      // Inject OG/Twitter tags so crawlers see title + photo without running JS.
+      return serveArticleHtml(req, res, slug);
     }
   }
 
