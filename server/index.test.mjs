@@ -132,6 +132,13 @@ test("GET /api/access without reader returns 400", async () => {
   assert.equal(body.error, "reader_or_fiat_session_required");
 });
 
+test("GET /api/article-body without reader or fiat session returns 400", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/article-body?article_id=demo`);
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.error, "reader_or_fiat_session_required");
+});
+
 test("POST /api/subscriptions/stripe/checkout returns 503 without secrets", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/subscriptions/stripe/checkout`, {
     method: "POST",
