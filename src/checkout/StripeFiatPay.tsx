@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
+import { loadStripe, type Stripe, type StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
 import {
   BillingAddressElement,
   CheckoutElementsProvider,
@@ -131,8 +131,12 @@ type InnerProps = {
 function TaxLine() {
   const state = useCheckoutElements();
   if (state.type !== "success") return null;
+  // Stripe throws on confirm unless the UI has read the session total.
+  const due = state.checkout.total?.total?.amount;
   const tax = state.checkout.total?.taxExclusive;
-  if (!tax || tax.minorUnitsAmount <= 0) return null;
+  if (!tax || tax.minorUnitsAmount <= 0) {
+    return due ? <span hidden>{due}</span> : null;
+  }
   return <p className="checkout-hint">Tax {tax.amount}</p>;
 }
 
@@ -145,23 +149,33 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
     onUnlocked(sessionToken);
   }, [onUnlocked, sessionId]);
 
-  const onConfirm = useCallback(async () => {
-    if (checkoutState.type !== "success") return;
-    onBusy(true);
-    onError("");
-    try {
-      const result = await checkoutState.checkout.confirm();
-      if (result.type === "error") {
-        onError(result.error.message || "Payment cancelled.");
-        return;
+  const onConfirm = useCallback(
+    async (event?: StripeExpressCheckoutElementConfirmEvent) => {
+      if (checkoutState.type !== "success") return;
+      onBusy(true);
+      onError("");
+      try {
+        const result = await checkoutState.checkout.confirm({
+          redirect: "if_required",
+          ...(event ? { expressCheckoutConfirmEvent: event } : {}),
+        });
+        if (result.type === "error") {
+          const message = result.error.message || "Payment cancelled.";
+          event?.paymentFailed?.({ reason: "fail", message });
+          onError(message);
+          return;
+        }
+        await finish();
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Payment failed.";
+        event?.paymentFailed?.({ reason: "fail", message });
+        onError(message);
+      } finally {
+        onBusy(false);
       }
-      await finish();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Payment failed.");
-    } finally {
-      onBusy(false);
-    }
-  }, [checkoutState, finish, onBusy, onError]);
+    },
+    [checkoutState, finish, onBusy, onError]
+  );
 
   if (checkoutState.type === "loading") {
     return <p className="checkout-status">Preparing card checkout…</p>;
@@ -199,8 +213,8 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
             );
           }
         }}
-        onConfirm={() => {
-          void onConfirm();
+        onConfirm={(event) => {
+          void onConfirm(event);
         }}
       />
       <BillingAddressElement />
