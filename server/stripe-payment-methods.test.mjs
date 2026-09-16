@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   checkoutMethodVisibility,
+  checkoutMethodVisibilityOrFallback,
   inactivePaymentMethodTypesFromConfig,
   sessionExcludedPaymentMethodTypes,
 } from "./stripe-payment-methods.mjs";
@@ -62,4 +63,16 @@ test("checkoutMethodVisibility with no config leaves Express Checkout on auto", 
   assert.deepEqual(vis.excludedPaymentMethodTypes, []);
   assert.equal(vis.expressPaymentMethods.link, "auto");
   assert.equal(vis.expressPaymentMethods.applePay, "auto");
+});
+
+test("fallback hides test-mode preview methods when Dashboard config is unread", () => {
+  const vis = checkoutMethodVisibilityOrFallback(null);
+  assert.equal(vis.expressPaymentMethods.link, "never");
+  assert.equal(vis.expressPaymentMethods.amazonPay, "never");
+  assert.equal(vis.expressPaymentMethods.klarna, "never");
+  assert.ok(vis.excludedPaymentMethodTypes.includes("klarna"));
+  assert.ok(vis.excludedPaymentMethodTypes.includes("amazon_pay"));
+  assert.ok(vis.excludedPaymentMethodTypes.includes("cashapp"));
+  assert.equal(vis.expressPaymentMethods.applePay, "auto");
+  assert.equal(vis.expressPaymentMethods.googlePay, "auto");
 });

@@ -20,6 +20,12 @@ function expressCheckoutPaymentMethods(inactiveTypes) {
   };
 }
 
+/**
+ * Shown in test mode even when the live account has not activated them.
+ * Hide these unless Payment Method Configurations says they are available.
+ */
+export const UNACTIVATED_PREVIEW_METHODS = ["link", "amazon_pay", "klarna", "cashapp"];
+
 /** Checkout Session `excluded_payment_method_types` (no wallets, no card). */
 export const SESSION_EXCLUDABLE_PAYMENT_METHOD_TYPES = new Set([
   "acss_debit",
@@ -120,11 +126,25 @@ export function sessionExcludedPaymentMethodTypes(inactiveTypes) {
  */
 export function checkoutMethodVisibility(config) {
   const inactiveTypes = inactivePaymentMethodTypesFromConfig(config);
+  return visibilityFromInactive(inactiveTypes);
+}
+
+function visibilityFromInactive(inactiveTypes) {
   return {
-    inactiveTypes,
+    inactiveTypes: [...inactiveTypes],
     excludedPaymentMethodTypes: sessionExcludedPaymentMethodTypes(inactiveTypes),
     expressPaymentMethods: expressCheckoutPaymentMethods(inactiveTypes),
   };
+}
+
+/**
+ * When the Dashboard config cannot be read, hide methods Stripe only previews
+ * in test mode so checkout matches live (inactive methods stay hidden).
+ * @param {object | null | undefined} config
+ */
+export function checkoutMethodVisibilityOrFallback(config) {
+  if (config) return checkoutMethodVisibility(config);
+  return visibilityFromInactive(UNACTIVATED_PREVIEW_METHODS);
 }
 
 let pmcCache = { at: 0, config: null };
@@ -154,7 +174,7 @@ export async function loadDefaultPaymentMethodConfiguration(stripe) {
  */
 export async function checkoutMethodVisibilityForAccount(stripe) {
   const config = await loadDefaultPaymentMethodConfiguration(stripe);
-  return checkoutMethodVisibility(config);
+  return checkoutMethodVisibilityOrFallback(config);
 }
 
 /** Test helper — drop the PMC cache. */
