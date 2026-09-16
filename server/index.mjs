@@ -68,8 +68,8 @@ import {
   upsertWriterPlan,
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
-import { publicOrigin, renderArticlePage } from "./article-og.mjs";
-import { getArticleOgJpeg, parseOgImagePath, warmupOgCard } from "./og-card.mjs";
+import { articleHtmlForSlug, ogJpegForSlug, parseArticleSlug } from "./og-http.mjs";
+import { parseOgImagePath } from "./og-card.mjs";
 import { relayGasDrip } from "./relay-gas.mjs";
 import {
   MONAD_BLOCKCHAIN,
@@ -304,29 +304,8 @@ function safeJoin(root, urlPath) {
 }
 
 async function serveArticleHtml(req, res, slug) {
-  const filePath = path.join(ROOT, "article.html");
-  let html;
   try {
-    html = fs.readFileSync(filePath, "utf8");
-  } catch {
-    cors(res);
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    return res.end("Not found");
-  }
-
-  try {
-    const origin = publicOrigin(req);
-    let article;
-    if (listingsSupabaseConfigured()) {
-      try {
-        article = (await getPublicArticle(slug)).article;
-      } catch {
-        article = null;
-      }
-    }
-    const body = await renderArticlePage({ html, slug, origin, article });
-    if (article) warmupOgCard(slug, article);
-    const buf = Buffer.from(body, "utf8");
+    const buf = await articleHtmlForSlug(req, slug);
     cors(res);
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
@@ -1139,14 +1118,7 @@ const server = http.createServer(async (req, res) => {
   const ogSlug = parseOgImagePath(url.pathname);
   if ((method === "GET" || method === "HEAD") && ogSlug) {
     try {
-      const buf = await getArticleOgJpeg(ogSlug, {
-        loadArticle: listingsSupabaseConfigured()
-          ? async (id) => {
-              const { article } = await getPublicArticle(id);
-              return article;
-            }
-          : null,
-      });
+      const buf = await ogJpegForSlug(ogSlug);
       cors(res);
       res.writeHead(200, {
         "Content-Type": "image/jpeg",
@@ -1178,15 +1150,8 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(req, res, "/publisher-auth.html");
   }
   if ((method === "GET" || method === "HEAD") && url.pathname.startsWith("/articles/")) {
-    const raw = url.pathname.slice("/articles/".length);
-    if (raw && !raw.includes("/")) {
-      let slug = raw;
-      try {
-        slug = decodeURIComponent(raw);
-      } catch {
-        /* keep raw slug */
-      }
-      // Inject OG/Twitter tags so crawlers see title + photo without running JS.
+    const slug = parseArticleSlug(url.pathname);
+    if (slug) {
       return serveArticleHtml(req, res, slug);
     }
   }

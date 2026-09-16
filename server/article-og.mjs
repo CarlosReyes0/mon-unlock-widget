@@ -25,15 +25,38 @@ export function articleOgImagePath(slug) {
   return `/og/${encodeURIComponent(String(slug || "").trim())}.jpg`;
 }
 
+function headerFirst(value, fallback = "") {
+  const s = String(value || "")
+    .split(",")[0]
+    .trim();
+  return s || fallback;
+}
+
+function inferProto(req, host) {
+  if (req?.socket?.encrypted) return "https";
+  const h = String(host || "").toLowerCase();
+  if (h.endsWith(".up.railway.app") || h.endsWith(".railway.app")) return "https";
+  const envOrigin = String(process.env.PUBLIC_ORIGIN || "").trim();
+  if (envOrigin) {
+    try {
+      const u = new URL(envOrigin);
+      if (
+        (u.protocol === "https:" || u.protocol === "http:") &&
+        u.host.toLowerCase() === h
+      ) {
+        return u.protocol.replace(":", "");
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return "http";
+}
+
 export function publicOrigin(req) {
-  const proto =
-    String(req?.headers?.["x-forwarded-proto"] || "http")
-      .split(",")[0]
-      .trim() || "http";
-  const host =
-    String(req?.headers?.host || "localhost")
-      .split(",")[0]
-      .trim() || "localhost";
+  const host = headerFirst(req?.headers?.["x-forwarded-host"] || req?.headers?.host, "localhost");
+  const forwarded = headerFirst(req?.headers?.["x-forwarded-proto"]).toLowerCase();
+  const proto = forwarded === "https" || forwarded === "http" ? forwarded : inferProto(req, host);
   return `${proto}://${host}`;
 }
 

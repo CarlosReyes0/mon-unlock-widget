@@ -222,6 +222,68 @@ test("publicOrigin prefers forwarded proto", () => {
   );
 });
 
+test("publicOrigin infers https on Railway when proto is omitted", () => {
+  assert.equal(
+    publicOrigin({
+      headers: { host: "mon-unlock-widget-production.up.railway.app" },
+    }),
+    "https://mon-unlock-widget-production.up.railway.app"
+  );
+  assert.equal(
+    publicOrigin({ headers: { host: "127.0.0.1:8080" } }),
+    "http://127.0.0.1:8080"
+  );
+  assert.equal(
+    publicOrigin({
+      headers: { "x-forwarded-proto": "http", host: "preview.up.railway.app" },
+    }),
+    "http://preview.up.railway.app"
+  );
+});
+
+test("publicOrigin uses PUBLIC_ORIGIN protocol when proto is omitted", () => {
+  const prev = process.env.PUBLIC_ORIGIN;
+  process.env.PUBLIC_ORIGIN = "https://pay.example";
+  try {
+    assert.equal(
+      publicOrigin({ headers: { host: "pay.example" } }),
+      "https://pay.example"
+    );
+    // Do not apply a production PUBLIC_ORIGIN protocol to a different host
+    // (local Vite would otherwise emit https://127.0.0.1/... cards).
+    assert.equal(
+      publicOrigin({ headers: { host: "127.0.0.1:5173" } }),
+      "http://127.0.0.1:5173"
+    );
+  } finally {
+    if (prev === undefined) delete process.env.PUBLIC_ORIGIN;
+    else process.env.PUBLIC_ORIGIN = prev;
+  }
+});
+
+test("publicOrigin infers https from a TLS socket when proto is omitted", () => {
+  assert.equal(
+    publicOrigin({
+      headers: { host: "pay.example" },
+      socket: { encrypted: true },
+    }),
+    "https://pay.example"
+  );
+});
+
+test("publicOrigin prefers x-forwarded-host over Host", () => {
+  assert.equal(
+    publicOrigin({
+      headers: {
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "openpaywall.example",
+        host: "localhost:8080",
+      },
+    }),
+    "https://openpaywall.example"
+  );
+});
+
 test("default OG asset is a 1200x630 JPEG in assets/", () => {
   const file = path.join(ROOT, OG_IMAGE_PATH.replace(/^\//, ""));
   assert.equal(fs.existsSync(file), true, `missing ${OG_IMAGE_PATH}`);
