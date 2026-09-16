@@ -9,6 +9,7 @@ import {
   parseUnits,
   toBytes,
   type Address,
+  type Hash,
 } from "viem";
 import { buildEmbedSignMessage } from "../core/embed-signature.js";
 import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
@@ -22,6 +23,13 @@ const PRICE_USDC = "0.50";
 const ZERO = "0x0000000000000000000000000000000000000000";
 /** registerArticle is free except gas; dust below this cannot pay the Monad fee. */
 const MIN_MON_FOR_GAS = parseEther("0.001");
+
+function relayRegisterUrl(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/api/relay/register`;
+  }
+  return "/api/relay/register";
+}
 
 const GET_ARTICLE_ABI = [
   {
@@ -62,6 +70,10 @@ export type PublishPostInput = {
 type ReserveResult =
   | { ok: true }
   | { ok: false; error: string; taken?: boolean };
+
+type RelayResult =
+  | { ok: true; alreadyRegistered?: boolean; txHash?: string | null }
+  | { ok: false; fallback: boolean; error: string; taken?: boolean };
 
 async function ensureMonad(eth: Eip1193Provider, onStatus?: (msg: string) => void) {
   const current = await eth.request({ method: "eth_chainId" });
@@ -138,6 +150,56 @@ async function syncMetadata(payload: Record<string, unknown>): Promise<ReserveRe
   return { ok: false, error: err.error || `HTTP ${res.status}`, taken: err.error === "slug_taken" };
 }
 
+export async function tryRelayRegister(input: {
+  slug: string;
+  articleIdHash: `0x${string}`;
+  priceWei: bigint;
+  publisher: Address;
+  embedSig: `0x${string}`;
+  contract: Address;
+}): Promise<RelayResult> {
+  try {
+    const res = await fetch(relayRegisterUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: input.slug,
+        articleIdHash: input.articleIdHash,
+        priceWei: input.priceWei.toString(),
+        publisher: input.publisher,
+        embedSig: input.embedSig,
+        paymentAsset: "usdc",
+        contract: input.contract,
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      fallback?: boolean;
+      txHash?: string | null;
+      alreadyRegistered?: boolean;
+    };
+    if (res.ok) {
+      return {
+        ok: true,
+        alreadyRegistered: Boolean(body.alreadyRegistered),
+        txHash: body.txHash,
+      };
+    }
+    if (res.status === 404 || res.status === 405) {
+      return { ok: false, fallback: true, error: "relayer_unavailable" };
+    }
+    if (res.status === 409 || body.error === "slug_taken") {
+      return { ok: false, fallback: false, taken: true, error: "slug_taken" };
+    }
+    if (res.status === 503 || body.fallback) {
+      return { ok: false, fallback: true, error: body.error || "relayer_not_configured" };
+    }
+    return { ok: false, fallback: false, error: body.error || `HTTP ${res.status}` };
+  } catch {
+    return { ok: false, fallback: true, error: "relayer_unavailable" };
+  }
+}
+
 export async function publishPost(input: PublishPostInput): Promise<{ slug: string }> {
   const title = input.title.trim();
   const { teaser, body } = splitPost(input.rawBody);
@@ -151,27 +213,10 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
   const eth = mapWalletSendToEthSend(input.provider);
   const status = input.onStatus;
 
-  await ensureMonad(eth, status);
-
   const publicClient = createPublicClient({
     chain: monadMainnet,
     transport: http("https://rpc.monad.xyz"),
   });
-  const walletClient = createWalletClient({
-    account: publisher,
-    chain: monadMainnet,
-    transport: custom(eth),
-  });
-
-  status?.("Checking wallet…");
-  const monBal = await publicClient.getBalance({ address: publisher });
-  if (monBal < MIN_MON_FOR_GAS) {
-    throw new Error(
-      `Wallet ${publisher} has no MON for the network fee. ` +
-        `If you funded a different address, tap “Use a different wallet” and connect that one, ` +
-        `or send a little MON here and try Publish again.`
-    );
-  }
 
   let lastTaken = "";
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -198,7 +243,6 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       throw new Error(reserved.error || "Could not save the post.");
     }
 
-    status?.("Registering on Monad…");
     let alreadyOurs = false;
     try {
       const existing = (await publicClient.readContract({
@@ -219,14 +263,6 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       /* unknown article — register */
     }
 
-    if (!alreadyOurs) {
-      try {
-        await sendRegisterArticle(eth, publisher, contract, articleIdHash, priceWei);
-      } catch (e) {
-        throw publishTxError(e, publisher);
-      }
-    }
-
     status?.("Signing…");
     const message = buildEmbedSignMessage({
       chainId: monadMainnet.id,
@@ -234,7 +270,55 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       articleId: slug,
       priceWei,
     });
+    const walletClient = createWalletClient({
+      account: publisher,
+      chain: monadMainnet,
+      transport: custom(eth),
+    });
     const embedSig = await walletClient.signMessage({ account: publisher, message });
+
+    if (!alreadyOurs) {
+      status?.("Registering on Monad…");
+      const relayed = await tryRelayRegister({
+        slug,
+        articleIdHash,
+        priceWei,
+        publisher,
+        embedSig,
+        contract,
+      });
+      if (relayed.ok) {
+        alreadyOurs = true;
+      } else if (relayed.taken) {
+        lastTaken = slug;
+        continue;
+      } else if (relayed.fallback) {
+        await ensureMonad(eth, status);
+        status?.("Checking wallet…");
+        const monBal = await publicClient.getBalance({ address: publisher });
+        if (monBal < MIN_MON_FOR_GAS) {
+          throw new Error(
+            `Wallet ${publisher} has no MON for the network fee. ` +
+              `If you funded a different address, tap “Use a different wallet” and connect that one, ` +
+              `or send a little MON here and try Publish again.`
+          );
+        }
+        try {
+          const hash = (await sendRegisterArticle(
+            eth,
+            publisher,
+            contract,
+            articleIdHash,
+            priceWei
+          )) as Hash;
+          await publicClient.waitForTransactionReceipt({ hash });
+        } catch (e) {
+          throw publishTxError(e, publisher);
+        }
+      } else {
+        throw new Error(relayed.error || "Could not register on Monad.");
+      }
+    }
 
     status?.("Saving…");
     const saved = await syncMetadata({

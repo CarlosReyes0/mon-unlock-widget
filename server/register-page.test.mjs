@@ -45,6 +45,8 @@ test("register.html exposes Copy signed embed UI", async () => {
   assert.match(html, /function buildSignedEmbed/);
   assert.match(html, /function showSignedEmbed/);
   assert.match(html, /Approve the embed signature/);
+  assert.match(html, /tryRelayRegister/);
+  assert.match(html, /\/api\/relay\/register/);
   // Literal </script> inside the inline module would truncate the page script in browsers.
   const moduleStart = html.indexOf('<script type="module">');
   assert.ok(moduleStart > 0);

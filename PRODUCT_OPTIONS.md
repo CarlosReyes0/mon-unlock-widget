@@ -9,6 +9,7 @@ Check off or delete items as you decide.
 
 - [x] **One-click Copy signed embed** after agent registration (`/register.html`)
 - [x] **Skill/docs: stop after first unpaid 402** — ask the human; don’t chase faucets
+- [x] **On-chain register + gas relayer** — keep articles on-chain (required for crypto unlock); writers sign, platform pays gas via `registerArticleFor`
 
 ---
 
@@ -22,6 +23,16 @@ Check off or delete items as you decide.
 - [ ] Keep **$0.05 for outside/public agents**; don’t make your own dogfood depend on it
 
 **Suggested order:** free-publish for you first; clearer 402 / docs as polish.
+
+---
+
+## On-chain registration (locked)
+
+**Yes, register articles on-chain.** Crypto unlock (`unlock` / `hasUnlocked`) and embed-sig checks read the contract. Skipping that would make card-only posts work and break MON/USDC pay.
+
+**No, writers should not pay gas to publish.** `/write`, generator, and `/register.html` sign the embed (free), then `POST /api/relay/register` calls `registerArticleFor` as the contract owner. If `RELAYER_PRIVATE_KEY` is unset, the writer’s wallet still submits `registerArticle` (old path).
+
+Set `RELAYER_PRIVATE_KEY` on Railway to the **contract owner** wallet, funded with a little MON. That key can also `updatePrice` / `setActive` (owner privileges) — use a dedicated hot wallet, not a cold deployer that holds other funds.
 
 ---
 

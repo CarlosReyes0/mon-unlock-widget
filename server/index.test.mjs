@@ -29,6 +29,7 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     MPP_SECRET_KEY: "",
     MPP_TEMPO_RECIPIENT: "",
     MPP_DEV_BYPASS: "",
+    RELAYER_PRIVATE_KEY: "",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -128,6 +129,27 @@ test("POST /api/subscriptions/stripe/checkout returns 503 without secrets", asyn
   assert.ok(
     body.error === "stripe_not_configured" || body.error === "supabase_not_configured"
   );
+});
+
+test("GET /api/relay/health reports relayerConfigured=false without key", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/relay/health`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.relayerConfigured, false);
+  assert.equal(body.relayerAddress, null);
+});
+
+test("POST /api/relay/register returns 503 without relayer key", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/relay/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug: "demo" }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "relayer_not_configured");
+  assert.equal(body.fallback, true);
 });
 
 test("GET /api/listings/health reports supabaseConfigured=false without secrets", async () => {

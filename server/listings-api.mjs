@@ -23,6 +23,46 @@ export function listingAdminConfigured() {
   return Boolean(LISTING_ADMIN_SECRET);
 }
 
+const RESERVE_COLS =
+  "article_id,article_id_hash,publisher,price_wei,registration_status,payment_asset,listing_status";
+
+/** Internal row lookup (any listing status) — used by the gas relayer. */
+export async function fetchArticleRow(slug) {
+  const slugNorm = String(slug || "").trim();
+  if (!slugNorm) return null;
+  const path =
+    `articles?select=${RESERVE_COLS}` +
+    `&article_id=eq.${encodeURIComponent(slugNorm)}` +
+    `&limit=1`;
+  const rows = await supabase(path);
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+export async function markArticleRegistered({ slug, publisher, embedSig, priceWei }) {
+  const slugNorm = String(slug || "").trim();
+  const publisherNorm = String(publisher || "").trim().toLowerCase();
+  if (!slugNorm || !publisherNorm) {
+    const err = new Error("invalid_article");
+    err.status = 400;
+    throw err;
+  }
+  const patch = {
+    registration_status: "registered",
+    updated_at: new Date().toISOString(),
+  };
+  if (typeof embedSig === "string" && embedSig.trim()) {
+    patch.embed_sig = embedSig.trim();
+  }
+  if (priceWei != null && priceWei !== "") {
+    patch.price_wei = String(priceWei);
+  }
+  const path =
+    `articles?article_id=eq.${encodeURIComponent(slugNorm)}` +
+    `&publisher=eq.${encodeURIComponent(publisherNorm)}`;
+  const rows = await supabase(path, { method: "PATCH", body: patch });
+  return Array.isArray(rows) ? rows[0] || null : rows;
+}
+
 /**
  * @param {string} path
  * @param {object} [opts]

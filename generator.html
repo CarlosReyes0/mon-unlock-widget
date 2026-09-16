@@ -1377,6 +1377,33 @@
         return result?.message || `Article id "${slug}" is already taken. Pick a different id.`;
       }
 
+      async function tryRelayRegister({ slug, articleIdHash, priceWei, publisher, embedSig, paymentAsset, contract }) {
+        try {
+          const res = await fetch(`${location.origin}/api/relay/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              slug,
+              articleIdHash,
+              priceWei: priceWei.toString(),
+              publisher,
+              embedSig,
+              paymentAsset,
+              contract,
+            }),
+          });
+          if (res.status === 404 || res.status === 405) return { ok: false, fallback: true };
+          const body = await res.json().catch(() => ({}));
+          if (res.ok) return { ok: true, ...body };
+          if (res.status === 503 || body.fallback) {
+            return { ok: false, fallback: true, error: body.error };
+          }
+          return { ok: false, fallback: false, error: body.error || `HTTP ${res.status}` };
+        } catch {
+          return { ok: false, fallback: true };
+        }
+      }
+
       function buildEmbedSignMessage(chainId, contract, articleId, priceWei) {
         return `MON Unlock v1\nchain:${chainId}\ncontract:${contract.toLowerCase()}\narticle:${articleId.trim()}\npriceWei:${priceWei.toString()}`;
       }
@@ -1516,6 +1543,7 @@ ${teaserEsc}
             status.style.display = "inline";
             status.textContent = "Registering article on Monad…";
             syncMobileStatusMirror();
+            let embedSig = "";
 
             try {
               const eth = getInjectedProvider();
@@ -1528,9 +1556,99 @@ ${teaserEsc}
                 ? (await import("https://esm.sh/viem@2")).parseUnits(v.price || "0.50", 6)
                 : parseEther(v.price || "1");
 
-              // Helper that performs the actual registration (chain switch + write)
+              status.textContent = "Saving draft…";
+              syncMobileStatusMirror();
+              const reserved = await syncMetadataToSupabase({
+                slug: v.articleId,
+                articleIdHash: articleIdBytes,
+                priceWei: priceWei.toString(),
+                publisher: connectedWallet,
+                teaser: v.teaser,
+                body: v.body,
+                title: v.title,
+                author: v.author,
+                paymentAsset: selectedAsset(),
+                ...(v.listOnOpenPaywall
+                  ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
+                  : v.externalUrl
+                    ? { externalUrl: v.externalUrl }
+                    : {}),
+              });
+              if (!reserved.ok && reserved.error === "slug_taken") {
+                status.textContent = slugTakenMessage(reserved, v.articleId);
+                status.style.color = "#ef4444";
+                return;
+              }
+
+              status.textContent = "Signing embed…";
+              syncMobileStatusMirror();
+              try {
+                embedSig = await signEmbed(eth, connectedWallet, v.articleId, priceWei);
+              } catch (e) {
+                status.textContent = e.message || "Could not sign embed";
+                status.style.color = "#ef4444";
+                return;
+              }
+
+              // Helper that performs the actual registration (relayer, else wallet gas)
               async function doRegister() {
-                // Ensure the user's wallet is on Monad mainnet (chain 143) before registering
+                status.textContent = "Registering on Monad…";
+                syncMobileStatusMirror();
+                const relayed = await tryRelayRegister({
+                  slug: v.articleId,
+                  articleIdHash: articleIdBytes,
+                  priceWei,
+                  publisher: connectedWallet,
+                  embedSig,
+                  paymentAsset: selectedAsset(),
+                  contract: activeContract(),
+                });
+                if (relayed.ok) {
+                  status.textContent = "Registered on Monad ✓";
+                  status.style.color = "#16a34a";
+                  const metaStatus = document.getElementById("metadataStatus");
+                  metaStatus.style.display = "inline";
+                  metaStatus.textContent = "Syncing metadata…";
+                  metaStatus.style.color = "#6b7280";
+                  const metaPayload = {
+                    slug: v.articleId,
+                    articleIdHash: articleIdBytes,
+                    priceWei: priceWei.toString(),
+                    publisher: connectedWallet,
+                    teaser: v.teaser,
+                    body: v.body,
+                    confirmRegistered: true,
+                    title: v.title,
+                    author: v.author,
+                    paymentAsset: selectedAsset(),
+                    embedSig,
+                    ...(v.listOnOpenPaywall
+                      ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
+                      : v.externalUrl
+                        ? { externalUrl: v.externalUrl }
+                        : {}),
+                  };
+                  const metaResult = await syncMetadataToSupabase(metaPayload);
+                  if (metaResult.ok) {
+                    metaStatus.textContent = "Metadata saved ✓";
+                    metaStatus.style.color = "#16a34a";
+                  } else if (metaResult.error === "slug_taken") {
+                    status.textContent = slugTakenMessage(metaResult, v.articleId);
+                    status.style.color = "#ef4444";
+                    metaStatus.textContent = "Article id taken";
+                    metaStatus.style.color = "#ef4444";
+                    return;
+                  } else {
+                    metaStatus.textContent = `Metadata sync failed: ${metaResult.error}`;
+                    metaStatus.style.color = "#b45309";
+                  }
+                  return;
+                }
+                if (!relayed.fallback) {
+                  throw new Error(relayed.error || "Registration failed.");
+                }
+
+                // Relayer off — writer pays gas.
                 try {
                   const currentChain = await eth.request({ method: "eth_chainId" });
                   if (parseInt(currentChain, 16) !== 143) {
@@ -1766,21 +1884,6 @@ ${teaserEsc}
               status.style.color = "#b45309";
               // Continue to generate the embed block and attempt metadata sync.
               // Transient RPC errors often allow the embed + metadata to succeed on retry or partial path.
-            }
-
-            let embedSig = "";
-            try {
-              const eth = getInjectedProvider();
-              const _viem = await import("https://esm.sh/viem@2");
-              const priceWei = selectedAsset() === "usdc"
-                ? _viem.parseUnits(v.price || "0.50", 6)
-                : _viem.parseEther(v.price || "1");
-              status.textContent = "Signing embed…";
-              embedSig = await signEmbed(eth, connectedWallet, v.articleId, priceWei);
-            } catch (e) {
-              status.textContent = e.message || "Could not sign embed";
-              status.style.color = "#ef4444";
-              return;
             }
 
             // Best-effort metadata sync (teaser + body) so the dashboard and article-body

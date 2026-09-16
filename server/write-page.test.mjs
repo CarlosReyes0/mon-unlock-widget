@@ -26,6 +26,9 @@ test("publishPost lists USDC posts on Open Paywall", () => {
   assert.match(src, /listOnOpenPaywall: true/);
   assert.match(src, /paymentAsset: "usdc"/);
   assert.match(src, /parseUnits\(PRICE_USDC, 6\)/);
+  assert.match(src, /\/api\/relay\/register/);
+  assert.match(src, /tryRelayRegister/);
+  assert.match(src, /registerArticleFor|relayer_not_configured|fallback/);
 });
 
 test("publish sends registerArticle via eth_sendTransaction and checks MON for gas", () => {
