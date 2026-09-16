@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import fs from "node:fs";
 import { test, after } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,6 +214,41 @@ test("GET /write serves the write page", async () => {
   assert.equal(res.status, 200);
   const text = await res.text();
   assert.match(text, /Write — Open Paywall/);
+});
+
+test("pretty URL aliases for /account, /dashboard, and /publisher-auth exist in index.mjs", () => {
+  const src = fs.readFileSync(path.join(ROOT, "server/index.mjs"), "utf8");
+  // Strip comments so a comment-only mention cannot pass.
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  for (const page of ["write", "account", "dashboard", "publisher-auth"]) {
+    const pathCheck = new RegExp(
+      String.raw`url\.pathname === "/${page}" \|\| url\.pathname === "/${page}\.html"`
+    );
+    assert.match(code, pathCheck, `missing pretty URL path check for /${page}`);
+    const serve = new RegExp(String.raw`serveStatic\(req, res, "/${page}\.html"\)`);
+    assert.match(code, serve, `missing serveStatic target for /${page}.html`);
+  }
+});
+
+test("GET /account serves the account page", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/account`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Account — Open Paywall/);
+});
+
+test("GET /dashboard serves the dashboard page", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/dashboard`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Writer Dashboard — Open Paywall/);
+});
+
+test("GET /publisher-auth serves the publisher auth mount page", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/publisher-auth`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Publisher auth mount/);
 });
 
 test("GET /articles/demo-slug serves article.html", async () => {

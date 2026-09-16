@@ -1102,6 +1102,15 @@ const server = http.createServer(async (req, res) => {
   if ((method === "GET" || method === "HEAD") && (url.pathname === "/write" || url.pathname === "/write.html")) {
     return serveStatic(req, res, "/write.html");
   }
+  if ((method === "GET" || method === "HEAD") && (url.pathname === "/account" || url.pathname === "/account.html")) {
+    return serveStatic(req, res, "/account.html");
+  }
+  if ((method === "GET" || method === "HEAD") && (url.pathname === "/dashboard" || url.pathname === "/dashboard.html")) {
+    return serveStatic(req, res, "/dashboard.html");
+  }
+  if ((method === "GET" || method === "HEAD") && (url.pathname === "/publisher-auth" || url.pathname === "/publisher-auth.html")) {
+    return serveStatic(req, res, "/publisher-auth.html");
+  }
   if ((method === "GET" || method === "HEAD") && url.pathname.startsWith("/articles/")) {
     const slug = url.pathname.slice("/articles/".length);
     if (slug && !slug.includes("/")) {

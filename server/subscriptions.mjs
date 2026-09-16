@@ -20,6 +20,7 @@ import {
   isUniqueViolation,
   supabaseConfigured,
 } from "./stripe.mjs";
+import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -40,6 +41,7 @@ export function subscriptionContractAddress() {
  *   successUrl: string,
  *   cancelUrl: string,
  *   integrationId?: string,
+ *   excludedPaymentMethodTypes?: string[],
  * }} input
  */
 export function writerSubscriptionCheckoutSessionParams(input) {
@@ -63,6 +65,9 @@ export function writerSubscriptionCheckoutSessionParams(input) {
         product: "writer_subscription",
       },
     },
+    ...(input.excludedPaymentMethodTypes?.length
+      ? { excluded_payment_method_types: input.excludedPaymentMethodTypes }
+      : {}),
   };
 }
 
@@ -389,6 +394,7 @@ export async function createStripeSubscriptionCheckout(input) {
 
   const { priceId } = await ensureStripePrice(row, writer);
   const stripe = getStripe();
+  const methods = await checkoutMethodVisibilityForAccount(stripe);
   const session = await stripe.checkout.sessions.create(
     writerSubscriptionCheckoutSessionParams({
       reader,
@@ -396,6 +402,7 @@ export async function createStripeSubscriptionCheckout(input) {
       priceId,
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
+      excludedPaymentMethodTypes: methods.excludedPaymentMethodTypes,
     })
   );
 

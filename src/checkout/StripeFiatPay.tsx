@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe, type Stripe, type StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
+import { checkoutConfirmOptions, DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS } from "../core/stripe-confirm.js";
 import {
   BillingAddressElement,
   CheckoutElementsProvider,
@@ -28,6 +29,7 @@ type CreateCheckoutResult = {
   sessionId: string;
   sessionToken: string;
   amountUsdCents: number;
+  expressPaymentMethods?: typeof DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS;
 };
 
 function fiatIntentErrorMessage(code: string | undefined): string {
@@ -123,6 +125,7 @@ function readReturnedCheckout(): { sessionId: string } | { paymentIntentId: stri
 
 type InnerProps = {
   sessionId: string;
+  expressPaymentMethods: typeof DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS;
   onUnlocked: (sessionToken: string) => void;
   onError: (message: string) => void;
   onBusy: (busy: boolean) => void;
@@ -131,16 +134,19 @@ type InnerProps = {
 function TaxLine() {
   const state = useCheckoutElements();
   if (state.type !== "success") return null;
-  // Stripe throws on confirm unless the UI has read the session total.
-  const due = state.checkout.total?.total?.amount;
+  // Stripe throws on confirm unless the UI has read and shown the session total.
+  const due = state.checkout.total?.total;
   const tax = state.checkout.total?.taxExclusive;
-  if (!tax || tax.minorUnitsAmount <= 0) {
-    return due ? <span hidden>{due}</span> : null;
-  }
-  return <p className="checkout-hint">Tax {tax.amount}</p>;
+  if (!due) return null;
+  return (
+    <p className="checkout-hint">
+      {tax && tax.minorUnitsAmount > 0 ? `Tax ${tax.amount} · ` : ""}
+      Due {due.amount}
+    </p>
+  );
 }
 
-function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps) {
+function ExpressPayInner({ sessionId, expressPaymentMethods, onUnlocked, onError, onBusy }: InnerProps) {
   const checkoutState = useCheckoutElements();
   const [methodsReady, setMethodsReady] = useState(false);
 
@@ -155,10 +161,7 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
       onBusy(true);
       onError("");
       try {
-        const result = await checkoutState.checkout.confirm({
-          redirect: "if_required",
-          ...(event ? { expressCheckoutConfirmEvent: event } : {}),
-        });
+        const result = await checkoutState.checkout.confirm(checkoutConfirmOptions(event));
         if (result.type === "error") {
           const message = result.error.message || "Payment cancelled.";
           event?.paymentFailed?.({ reason: "fail", message });
@@ -188,14 +191,7 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
     <div className="checkout-fiat">
       <ExpressCheckoutElement
         options={{
-          paymentMethods: {
-            applePay: "always",
-            googlePay: "always",
-            link: "auto",
-            paypal: "never",
-            amazonPay: "auto",
-            klarna: "auto",
-          },
+          paymentMethods: expressPaymentMethods,
           buttonTheme: {
             applePay: "black",
           },
@@ -218,7 +214,15 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
         }}
       />
       <BillingAddressElement />
-      <PaymentElement />
+      <PaymentElement
+        options={{
+          wallets: {
+            applePay: "never",
+            googlePay: "never",
+            link: expressPaymentMethods.link,
+          },
+        }}
+      />
       <TaxLine />
       <button
         type="button"
@@ -364,6 +368,7 @@ export function StripeFiatPay({
     >
       <ExpressPayInner
         sessionId={session.sessionId}
+        expressPaymentMethods={session.expressPaymentMethods ?? DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS}
         onUnlocked={onUnlocked}
         onError={onError}
         onBusy={onBusy}

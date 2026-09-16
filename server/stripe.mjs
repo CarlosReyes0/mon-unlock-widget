@@ -17,6 +17,7 @@ import Stripe from "stripe";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { keccak256, toBytes } from "viem";
 import { authorizeFiatUnlock } from "./embed-signature.mjs";
+import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
@@ -259,6 +260,7 @@ function normalizeCheckoutReturnUrl(returnUrl) {
  *   returnUrl: string,
  *   buyerEmail?: string,
  *   integrationId?: string,
+ *   excludedPaymentMethodTypes?: string[],
  * }} input
  */
 export function articleUnlockCheckoutSessionParams(input) {
@@ -297,6 +299,9 @@ export function articleUnlockCheckoutSessionParams(input) {
       description: title,
       metadata,
     },
+    ...(input.excludedPaymentMethodTypes?.length
+      ? { excluded_payment_method_types: input.excludedPaymentMethodTypes }
+      : {}),
   };
 }
 
@@ -316,10 +321,12 @@ export async function createArticleCheckoutSession(input) {
   const stripe = getStripe();
   const prepared = await prepareArticleFiatCharge(input);
   const returnUrl = normalizeCheckoutReturnUrl(input.returnUrl);
+  const methods = await checkoutMethodVisibilityForAccount(stripe);
   const session = await stripe.checkout.sessions.create(
     articleUnlockCheckoutSessionParams({
       ...prepared,
       returnUrl,
+      excludedPaymentMethodTypes: methods.excludedPaymentMethodTypes,
     })
   );
 
@@ -330,6 +337,7 @@ export async function createArticleCheckoutSession(input) {
     amountUsdCents: prepared.amountUsdCents,
     publisher: prepared.publisher,
     articleIdHash: prepared.hash,
+    expressPaymentMethods: methods.expressPaymentMethods,
   };
 }
 
