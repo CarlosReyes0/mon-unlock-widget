@@ -136,9 +136,9 @@ export async function openCardBuy(
 }
 
 /**
- * Platform sends ~0.05 MON for approve/unlock gas so Coinbase stays on USDC.
- * Returns true when funded, a drip was submitted, or a drip is already in flight
- * (429) — caller should poll the MON balance before opening Coinbase.
+ * Same relayer as article registration: send ~0.05 MON so the reader can pay
+ * approve/unlock gas. Coinbase is not used for this.
+ * Returns true when funded, a drip was submitted, or rate-limited (in flight).
  */
 export async function requestGasDrip(address: string): Promise<boolean> {
   try {

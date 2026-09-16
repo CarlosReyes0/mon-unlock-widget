@@ -11,7 +11,6 @@ import { formatMon, formatUsd, parseMonAmount, parseUsdAmount } from "../core/ty
 import { monadMainnet } from "../core/chains.js";
 import { normalizePaymentAsset, type PaymentAsset } from "../core/payment-asset.js";
 import {
-  cardFundGasMonConfig,
   cardFundUsdcConfig,
   openCardBuy,
   openRampBuy,
@@ -102,8 +101,8 @@ export function CryptoPaySection({
     setPhase("funding");
     setError(null);
 
-    // Prefer a platform drip. Coinbase will not sell 0.05 MON (their min is ~$1 / ~45 MON),
-    // and opening that sheet is what made "Pay with USDC" look like "Buy Monad".
+    // Same RELAYER_PRIVATE_KEY as writer registration. Do not open Coinbase for MON —
+    // that is what showed "Buy Monad" on Pay with USDC.
     const dripped = await requestGasDrip(address);
     if (dripped) {
       for (let i = 0; i < 20; i++) {
@@ -112,30 +111,9 @@ export function CryptoPaySection({
         if (m >= GAS_RESERVE) return true;
       }
     }
-
-    const viaCoinbase = await openCardBuy(address, "MON", "1");
-    if (!viaCoinbase) {
-      try {
-        await fundWallet({ address, options: cardFundGasMonConfig("0.05") });
-      } catch {
-        openRampBuy(address, "MONAD_MON");
-        setError(
-          "Need a little MON for network fees (not the article). Finish the buy tab, then tap Pay with USDC again."
-        );
-        setPhase("ready");
-        return false;
-      }
-    } else {
-      setError(
-        "Coinbase’s minimum is about $1 of MON for network fees — that is not the article payment. Finish that buy, then tap Pay with USDC again to pay in USDC."
-      );
-    }
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 1500));
-      const { mon: m } = await refreshBalances();
-      if (m >= GAS_RESERVE) return true;
-    }
-    setError("MON for fees is still arriving. Wait a moment, then try again.");
+    setError(
+      "Could not add MON for network fees. Try Pay with USDC again, or Receive MON (gas)."
+    );
     setPhase("ready");
     return false;
   };
@@ -500,7 +478,7 @@ export function CryptoPaySection({
       </div>
       <p className="checkout-hint">
         {settleUsdc
-          ? "You pay USDC. The writer receives USDC. Network fees are a tiny bit of MON (we add that when we can)."
+          ? "You pay USDC. The writer receives USDC. Network fees come from the platform relayer, not Coinbase."
           : "Legacy path: may convert USDC to MON, then pay on-chain."}
       </p>
       <button type="button" className="checkout-link" onClick={() => logout()}>

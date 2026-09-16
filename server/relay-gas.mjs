@@ -1,8 +1,9 @@
 /**
- * Reader gas drip — tiny native MON so USDC unlocks can pay approve/unlock fees
- * without opening Coinbase on a 0.05 MON buy (below their ~$1 minimum).
+ * Reader gas drip — the other half of RELAYER_PRIVATE_KEY.
  *
- * Uses the same RELAYER_PRIVATE_KEY as article registration.
+ * Writers already skip gas via registerArticleFor. Readers paying USDC still
+ * need a tiny bit of native MON for approve/unlock; this sends it so checkout
+ * does not open Coinbase on a dust MON buy.
  */
 import { createPublicClient, createWalletClient, http, parseEther } from "viem";
 import {
