@@ -244,6 +244,35 @@ test("GET /articles/demo-slug serves article.html", async () => {
   assert.match(text, /open-paywall|Loading article/i);
 });
 
+test("GET /articles/demo-slug includes Open Graph and Twitter Card tags", async () => {
+  const origin = `http://127.0.0.1:${PORT}`;
+  const res = await fetch(`${origin}/articles/demo-slug`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type") || "", /text\/html/);
+  const text = await res.text();
+  assert.match(text, /property="og:title"/);
+  assert.match(text, /property="og:description"/);
+  assert.match(text, /property="og:url" content="http:\/\/127\.0\.0\.1:\d+\/articles\/demo-slug"/);
+  assert.match(
+    text,
+    /property="og:image" content="http:\/\/127\.0\.0\.1:\d+\/assets\/og-default\.jpg"/
+  );
+  assert.match(text, /name="twitter:card" content="summary_large_image"/);
+  assert.match(text, /name="twitter:image" content="http:\/\/127\.0\.0\.1:\d+\/assets\/og-default\.jpg"/);
+  assert.match(text, /name="twitter:site" content="@openpaywall"/);
+  assert.doesNotMatch(text, /property="og:image" content="\/assets\//);
+});
+
+test("GET /assets/og-default.jpg is a public JPEG share card", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/assets/og-default.jpg`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/jpeg");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf[0], 0xff);
+  assert.equal(buf[1], 0xd8);
+  assert.ok(buf.length > 10_000);
+});
+
 test("POST /api/listings/hide returns 503 without admin secret", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/listings/hide`, {
     method: "POST",
