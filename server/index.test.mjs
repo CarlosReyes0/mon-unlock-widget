@@ -419,7 +419,36 @@ test("GET /api/agents/health reports mpp status", async () => {
   const body = await res.json();
   assert.equal(body.ok, true);
   assert.equal(body.mpp.configured, false);
+  assert.equal(body.x402.configured, false);
   assert.equal(body.docs.llms, "/llms.txt");
+  assert.equal(body.docs.x402Skill, "/.well-known/skills/open-paywall-x402/SKILL.md");
+});
+
+test("GET /.well-known/skills/open-paywall-x402/SKILL.md is served", async () => {
+  const res = await fetch(
+    `http://127.0.0.1:${PORT}/.well-known/skills/open-paywall-x402/SKILL.md`
+  );
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /name: open-paywall-x402/);
+  assert.match(text, /bankr x402 call/);
+});
+
+test("POST /api/x402/publish returns 503 when x402 is not configured", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/x402/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Agent demo",
+      articleId: "agent-demo-x402",
+      teaser: "Preview",
+      body: "Full body",
+      publisher: "0x1111111111111111111111111111111111111111",
+    }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "x402_not_configured");
 });
 
 test("POST /api/agents/publish/validate rejects bad payload", async () => {

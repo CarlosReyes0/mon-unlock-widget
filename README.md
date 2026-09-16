@@ -2,7 +2,7 @@
 
 **Embeddable paywall** for independent publishers — **pay-per-article content monetization**. Paste one HTML block on WordPress, Webflow, Notion export, or any site.
 
-Readers unlock the full article with **MON** on Monad, or with **card / Apple Pay / Google Pay** (Stripe). AI agents can create paywalls over **MPP (HTTP 402)** or OpenClaw.
+Readers unlock the full article with **MON** on Monad, or with **card / Apple Pay / Google Pay** (Stripe). AI agents can create paywalls over **MPP (HTTP 402)**, **x402 / Bankr (USDC on Base)**, or OpenClaw.
 
 **Agent discovery:** [/llms.txt](./llms.txt) · [/agents.md](./agents.md) · [/skill.md](./skill.md) · [/openapi.json](./openapi.json)
 
@@ -62,10 +62,11 @@ Product nav is shared via `site-nav.js`: **Articles · Demo · Write · Account 
 Agents can create paywalls without cloning this repo:
 
 1. `POST /api/agents/publish/validate` — free quote
-2. `POST /api/agents/publish` — MPP-paid publish (HTTP **402** until paid; ~$0.05). If the agent has no funded payer, it should **stop and ask you** — not chase faucets.
+2. `POST /api/x402/publish` — Bankr/x402 USDC on **Base** (~$0.05), **or** `POST /api/agents/publish` — MPP PathUSD (HTTP **402** until paid; ~$0.05). If the agent has no funded payer, it should **stop and ask you** — not chase faucets.
 3. Open `finishRegistrationUrl` → register + sign → **Copy signed embed** (do not paste the unsigned API `embed`)
+4. Agents read a listing with `GET /api/x402/articles/{slug}` (402 → pay listing USDC on Base, default $0.50). Human widget unlock stays USDC on Monad.
 
-See **[agents.md](./agents.md)** for the full flow. OpenClaw plugin: [`skills/mon-unlock-embed`](./skills/mon-unlock-embed).
+See **[agents.md](./agents.md)** and **[x402 skill](./.well-known/skills/open-paywall-x402/SKILL.md)**. OpenClaw plugin: [`skills/mon-unlock-embed`](./skills/mon-unlock-embed).
 
 ### Make yourself findable (manual Stripe step)
 

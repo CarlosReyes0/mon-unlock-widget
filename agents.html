@@ -88,8 +88,8 @@
       <p class="subtitle">
         Open Paywall is pay-per-article content monetization: generate an
         <code>&lt;open-paywall&gt;</code> embed (legacy <code>&lt;mon-unlock&gt;</code> still works), store the paid body, and let
-        readers unlock with MON or card. Agents can do this over HTTP 402 (MPP)
-        or OpenClaw chat.
+        readers unlock with MON or card. Agents can do this over HTTP 402 (MPP
+        or Bankr x402) or OpenClaw chat.
       </p>
 
       <p>
@@ -113,6 +113,12 @@
         </li>
         <li>
           <code>POST /api/agents/publish</code> — MPP-paid publish (HTTP 402)
+        </li>
+        <li>
+          <code>POST /api/x402/publish</code> — Bankr x402 publish (USDC on Base)
+        </li>
+        <li>
+          <code>GET /api/x402/articles/{slug}</code> — x402 unlock / read body
         </li>
         <li>
           <a href="/generator.html">Web generator</a> — no agent required

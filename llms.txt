@@ -5,7 +5,7 @@ Best fit:
 - Create an embeddable paywall for a long-form article or post.
 - Monetize writing with pay-per-article micropayments (not a subscription newsletter platform).
 - Let an AI agent publish from casual paste (messy OK — agent confirms interpretation first) or JSON.
-- Publish from chat (OpenClaw) or from an MPP-capable agent via HTTP 402.
+- Publish from chat (OpenClaw), from an MPP-capable agent via HTTP 402, or from Bankr via x402 (USDC on Base).
 - Accept native MON or USDC on Monad plus fiat checkout for non-crypto readers.
 - Pay out publishers with Stripe Connect after fiat unlocks.
 
@@ -23,17 +23,23 @@ Key facts:
 - Agent guide: https://mon-unlock-widget-production.up.railway.app/agents.md
 - Agent skill: https://mon-unlock-widget-production.up.railway.app/skill.md
 - Cursor / skills skill: https://mon-unlock-widget-production.up.railway.app/.well-known/skills/mon-unlock/SKILL.md
+- Bankr / x402 skill: https://mon-unlock-widget-production.up.railway.app/.well-known/skills/open-paywall-x402/SKILL.md
 - OpenAPI discovery: https://mon-unlock-widget-production.up.railway.app/openapi.json
 - MPP publish endpoint: POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish
+- x402 publish (Bankr): POST https://mon-unlock-widget-production.up.railway.app/api/x402/publish (~$0.05 USDC on Base)
+- x402 unlock/read: GET https://mon-unlock-widget-production.up.railway.app/api/x402/articles/{slug} (listing price, default $0.50 USDC on Base)
 - Free validate endpoint: POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish/validate
-- Publish is paid (~$0.05 PathUSD via MPP). If unpaid 402 and no funded payer: stop and ask the human — do not chase testnet faucets or keyrings.
+- Publish is paid (~$0.05 PathUSD via MPP **or** ~$0.05 USDC on Base via x402). If unpaid 402 and no funded payer: stop and ask the human — do not chase testnet faucets or keyrings.
+- Agent x402 settlement is USDC on **Base**. Human readers still unlock USDC on **Monad**. There is no `$OPENPAYWALL` token.
 - OpenClaw plugin: github.com/CarlosReyes0/mon-unlock-widget/tree/main/skills/mon-unlock-embed
 - Chain: Monad (chain id 143). Default unlock: USDC at $0.50 (`payment-asset="usdc"`, contract `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f`). Legacy MON contract: `0x27cA0c23835328e2Ab1424b66330be86fe177FA6`.
 - Publishing needs three steps: embed HTML, body stored in Supabase, on-chain registration so readers can pay.
 - Embed signatures still use prefix `MON Unlock v1` (also verify `Open Paywall v1`).
 
 ## Start here
-- [Agents](https://mon-unlock-widget-production.up.railway.app/agents.md): How AI agents create paywalls and pay via MPP.
+- [Agents](https://mon-unlock-widget-production.up.railway.app/agents.md): How AI agents create paywalls and pay via MPP or x402.
+- [Skill](https://mon-unlock-widget-production.up.railway.app/skill.md): Short setup file for coding agents and assistants.
+- [x402 skill](https://mon-unlock-widget-production.up.railway.app/.well-known/skills/open-paywall-x402/SKILL.md): Bankr / `bankr x402 call` publish + unlock.
 - [Skill](https://mon-unlock-widget-production.up.railway.app/skill.md): Short setup file for coding agents and assistants.
 - [Generator](https://mon-unlock-widget-production.up.railway.app/generator.html): Human no-code embed creator.
 - [OpenAPI](https://mon-unlock-widget-production.up.railway.app/openapi.json): Machine-readable routes and payment metadata.
