@@ -51,6 +51,20 @@ test("writer subscription Checkout enables automatic tax on the platform", () =>
   assert.equal("payment_method_types" in params, false);
 });
 
+test("writer subscription Checkout excludes inactive payment methods when provided", () => {
+  const params = writerSubscriptionCheckoutSessionParams({
+    reader: "0x1111111111111111111111111111111111111111",
+    writer: "0x2222222222222222222222222222222222222222",
+    priceId: "price_test",
+    successUrl: "https://example.com/ok",
+    cancelUrl: "https://example.com/no",
+    integrationId: "op_writer_sub_abcdefgh",
+    excludedPaymentMethodTypes: ["klarna", "cashapp"],
+  });
+  assert.deepEqual(params.excluded_payment_method_types, ["klarna", "cashapp"]);
+  assert.equal("payment_method_types" in params, false);
+});
+
 test("checkoutIntegrationId uses a prefix plus 8 letters", () => {
   const id = checkoutIntegrationId("op_writer_sub");
   assert.match(id, /^op_writer_sub_[a-z]{8}$/);

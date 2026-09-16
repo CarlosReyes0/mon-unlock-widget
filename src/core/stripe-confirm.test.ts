@@ -4,6 +4,7 @@ import {
   EXPRESS_CHECKOUT_METHODS,
   checkoutConfirmOptions,
   confirmUsesExpressEvent,
+  expressCheckoutPaymentMethods,
 } from "./stripe-confirm.js";
 
 describe("checkoutConfirmOptions", () => {
@@ -30,5 +31,25 @@ describe("confirmUsesExpressEvent", () => {
 
   it("does not require the event for card", () => {
     assert.equal(confirmUsesExpressEvent("card"), false);
+  });
+});
+
+describe("expressCheckoutPaymentMethods", () => {
+  it("hides wallets that are not active and never shows PayPal", () => {
+    assert.deepEqual(expressCheckoutPaymentMethods(["link", "amazon_pay", "klarna", "cashapp"]), {
+      applePay: "auto",
+      googlePay: "auto",
+      link: "never",
+      paypal: "never",
+      amazonPay: "never",
+      klarna: "never",
+    });
+  });
+
+  it("hides Apple Pay and Google Pay when those methods are off", () => {
+    const methods = expressCheckoutPaymentMethods(["apple_pay", "google_pay"]);
+    assert.equal(methods.applePay, "never");
+    assert.equal(methods.googlePay, "never");
+    assert.equal(methods.link, "auto");
   });
 });

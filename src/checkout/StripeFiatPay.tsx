@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe, type Stripe, type StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
-import { checkoutConfirmOptions } from "../core/stripe-confirm.js";
+import { checkoutConfirmOptions, DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS } from "../core/stripe-confirm.js";
 import {
   BillingAddressElement,
   CheckoutElementsProvider,
@@ -29,6 +29,7 @@ type CreateCheckoutResult = {
   sessionId: string;
   sessionToken: string;
   amountUsdCents: number;
+  expressPaymentMethods?: typeof DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS;
 };
 
 function fiatIntentErrorMessage(code: string | undefined): string {
@@ -124,6 +125,7 @@ function readReturnedCheckout(): { sessionId: string } | { paymentIntentId: stri
 
 type InnerProps = {
   sessionId: string;
+  expressPaymentMethods: typeof DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS;
   onUnlocked: (sessionToken: string) => void;
   onError: (message: string) => void;
   onBusy: (busy: boolean) => void;
@@ -144,7 +146,7 @@ function TaxLine() {
   );
 }
 
-function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps) {
+function ExpressPayInner({ sessionId, expressPaymentMethods, onUnlocked, onError, onBusy }: InnerProps) {
   const checkoutState = useCheckoutElements();
   const [methodsReady, setMethodsReady] = useState(false);
 
@@ -189,14 +191,7 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
     <div className="checkout-fiat">
       <ExpressCheckoutElement
         options={{
-          paymentMethods: {
-            applePay: "always",
-            googlePay: "always",
-            link: "auto",
-            paypal: "never",
-            amazonPay: "auto",
-            klarna: "auto",
-          },
+          paymentMethods: expressPaymentMethods,
           buttonTheme: {
             applePay: "black",
           },
@@ -219,7 +214,15 @@ function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps)
         }}
       />
       <BillingAddressElement />
-      <PaymentElement />
+      <PaymentElement
+        options={{
+          wallets: {
+            applePay: "never",
+            googlePay: "never",
+            link: expressPaymentMethods.link,
+          },
+        }}
+      />
       <TaxLine />
       <button
         type="button"
@@ -365,6 +368,7 @@ export function StripeFiatPay({
     >
       <ExpressPayInner
         sessionId={session.sessionId}
+        expressPaymentMethods={session.expressPaymentMethods ?? DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS}
         onUnlocked={onUnlocked}
         onError={onError}
         onBusy={onBusy}

@@ -6,6 +6,7 @@ import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
 import { randomUUID } from "node:crypto";
 import { loadEnv } from "vite";
+import { checkoutMethodVisibilityForAccount } from "../server/stripe-payment-methods.mjs";
 
 const env = { ...loadEnv("development", process.cwd(), ""), ...process.env };
 const secret = (env.STRIPE_SECRET_KEY || "").trim();
@@ -50,6 +51,7 @@ const vite = await createViteServer({
                 String(body.returnUrl || "").trim() ||
                 "http://127.0.0.1:5173/unlock.html?session_id={CHECKOUT_SESSION_ID}";
               const sessionToken = randomUUID();
+              const methods = await checkoutMethodVisibilityForAccount(stripe);
               const session = await stripe.checkout.sessions.create({
                 ui_mode: "elements",
                 mode: "payment",
@@ -64,6 +66,9 @@ const vite = await createViteServer({
                     quantity: 1,
                   },
                 ],
+                ...(methods.excludedPaymentMethodTypes.length
+                  ? { excluded_payment_method_types: methods.excludedPaymentMethodTypes }
+                  : {}),
               });
               tokens.set(session.id, sessionToken);
               res.setHeader("Content-Type", "application/json");
@@ -73,6 +78,7 @@ const vite = await createViteServer({
                   sessionId: session.id,
                   sessionToken,
                   amountUsdCents: amount,
+                  expressPaymentMethods: methods.expressPaymentMethods,
                 })
               );
               return;

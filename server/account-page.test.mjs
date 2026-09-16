@@ -61,4 +61,7 @@ test("wallet and card confirms share checkoutConfirmOptions", () => {
   assert.match(helper, /link/);
   assert.match(helper, /amazonPay/);
   assert.match(helper, /klarna/);
+  assert.match(stripe, /applePay: "never"/);
+  assert.match(stripe, /expressPaymentMethods/);
+  assert.doesNotMatch(stripe, /applePay: "always"/);
 });
