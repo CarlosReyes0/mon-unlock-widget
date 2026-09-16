@@ -320,10 +320,14 @@
         statusEl.innerHTML = originalStatus + ` <span style="color:#6b7280">(loading...)</span>`;
 
         try {
-          // 1. Fetch articles for this publisher
+          // 1. Fetch articles for this publisher.
+          // Explicit columns: anon cannot SELECT articles.body (column privileges).
+          // select('*') fails for roles without SELECT on every column.
           const { data: articlesData, error: articlesError } = await client
             .from('articles')
-            .select('*')
+            .select(
+              'article_id,article_id_hash,publisher,price_wei,payment_asset,active,title,author,teaser,listing_status,allow_a_la_carte,external_url,embed_sig'
+            )
             .eq('publisher', wallet.toLowerCase());
 
           if (articlesError) throw articlesError;
@@ -364,7 +368,6 @@
             title: a.title || a.article_id || a.article_id_hash,
             author: a.author || "",
             teaser: a.teaser,
-            body: a.body,
             hasSlug: Boolean(a.article_id),
             displayId: formatArticleIdForDisplay(a.article_id, a.article_id_hash),
             listingStatus: a.listing_status || "unlisted",
