@@ -29,7 +29,7 @@ test("resolveOnrampPreset uses fiat and floors to Coinbase's ~$1 minimum", () =>
   assert.equal(resolveOnrampPreset({}).presetFiatAmount, String(COINBASE_MIN_USD));
 });
 
-test("buildPayUrl is a one-click USDC buy, not the Monad asset picker", () => {
+test("buildPayUrl defaults to USDC with a fiat preset, not 0.05 MON crypto", () => {
   const url = buildPayUrl("tok_test", {
     asset: "USDC",
     amount: "0.50",
@@ -42,7 +42,6 @@ test("buildPayUrl is a one-click USDC buy, not the Monad asset picker", () => {
   assert.equal(parsed.searchParams.get("presetFiatAmount"), "1");
   assert.equal(parsed.searchParams.get("presetCryptoAmount"), null);
   assert.equal(parsed.searchParams.get("sessionToken"), "tok_test");
-  assert.doesNotMatch(url, /select-asset/);
 });
 
 test("buildPayUrl does not emit a 0.05 MON crypto preset", () => {

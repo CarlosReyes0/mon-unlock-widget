@@ -1,15 +1,15 @@
 /**
  * Coinbase Onramp URL helpers (no CDP credentials required).
  *
- * Checkout used /buy/select-asset with presetCryptoAmount=0.05 MON for gas.
- * That page is an asset picker, and 0.05 MON is below Coinbase's ~$1 minimum,
- * so "Pay with USDC" opened a broken "Buy Monad" sheet.
+ * Checkout used presetCryptoAmount=0.05 MON for gas before buying USDC.
+ * Coinbase's minimum is ~$1 / ~45 MON, so "Pay with USDC" opened a broken
+ * "Buy Monad" sheet and never reached USDC.
  */
 
 export const MONAD_BLOCKCHAIN = "monad";
 
-/** One-click buy — honors defaultAsset. `/buy/select-asset` is the picker. */
-export const PAY_BASE = "https://pay.coinbase.com/buy";
+/** Session-token Onramp URL. Query params pick the asset; this is not an open picker. */
+export const PAY_BASE = "https://pay.coinbase.com/buy/select-asset";
 
 /** Coinbase Onramp rejects dust buys (screenshot: min ~45 MON ≈ $1). */
 export const COINBASE_MIN_USD = 1;
