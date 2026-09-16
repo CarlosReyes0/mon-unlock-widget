@@ -1,0 +1,29 @@
+# Optional post-deploy / manual check against Railway.
+# Not on pull_request — production flakiness must not block PRs.
+name: production-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Origin to smoke (no trailing slash)
+        required: true
+        default: https://mon-unlock-widget-production.up.railway.app
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: production-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: HTTP smoke (production)
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: node --test scripts/smoke.mjs
