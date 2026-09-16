@@ -49,10 +49,19 @@ test("card checkout does not dump raw JSON parse errors", () => {
   assert.match(stripe, /readApiJson/);
 });
 
-test("Apple Pay confirm passes the Express Checkout event to checkout.confirm", () => {
+test("wallet and card confirms share checkoutConfirmOptions", () => {
   const stripe = fs.readFileSync(path.join(ROOT, "src/checkout/StripeFiatPay.tsx"), "utf8");
-  assert.match(stripe, /expressCheckoutConfirmEvent: event/);
+  const helper = fs.readFileSync(path.join(ROOT, "src/core/stripe-confirm.ts"), "utf8");
+  assert.match(stripe, /checkoutConfirmOptions\(event\)/);
   assert.match(stripe, /onConfirm=\{\(event\) =>/);
-  assert.match(stripe, /redirect: "if_required"/);
   assert.match(stripe, /paymentFailed/);
+  assert.match(helper, /expressCheckoutConfirmEvent/);
+  assert.match(helper, /applePay/);
+  assert.match(helper, /googlePay/);
+  assert.match(helper, /link/);
+  assert.match(helper, /amazonPay/);
+  assert.match(helper, /klarna/);
+  assert.match(stripe, /applePay: "never"/);
+  assert.match(stripe, /expressPaymentMethods/);
+  assert.doesNotMatch(stripe, /applePay: "always"/);
 });
