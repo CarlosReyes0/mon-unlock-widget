@@ -1,0 +1,74 @@
+# PR / main gate. HTTP smoke runs against localhost after `npm start`
+# (no per-PR deploy, no live Stripe, no card charges).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Start server and HTTP smoke
+        env:
+          PORT: "18790"
+          OG_LISTING_FIXTURES: ${{ github.workspace }}/scripts/fixtures/og-listings.json
+          OG_CACHE_DIR: /tmp/og-cache
+          STRIPE_SECRET_KEY: ""
+          STRIPE_WEBHOOK_SECRET: ""
+          SUPABASE_URL: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          CDP_API_KEY_ID: ""
+          CDP_API_KEY_SECRET: ""
+          MPP_SECRET_KEY: ""
+          MPP_TEMPO_RECIPIENT: ""
+          MPP_DEV_BYPASS: ""
+          RELAYER_PRIVATE_KEY: ""
+        run: |
+          mkdir -p /tmp/og-cache
+          npm start > /tmp/op-server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl -sf "http://127.0.0.1:${PORT}/api/agents/health" >/dev/null; then
+              BASE_URL="http://127.0.0.1:${PORT}" SMOKE_ARTICLE_SLUG=the-quote-was-a-trap npm run smoke
+              exit $?
+            fi
+            sleep 0.5
+          done
+          echo "server did not become ready"
+          cat /tmp/op-server.log || true
+          exit 1
+      - name: Server logs
+        if: failure()
+        run: cat /tmp/op-server.log || true

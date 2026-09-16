@@ -22,6 +22,20 @@ npm run dev
 
 Open the URL shown in the terminal.
 
+## CI
+
+PRs and pushes to `main` run **test** (`npm test`) and **smoke** (`npm run smoke` against a local `npm start`). Smoke is HTTP-only: feed, Write, demo, generator, pretty `/account` `/dashboard` `/publisher-auth`, agent health, listed-article `og:image` → `/og/{slug}.jpg`, and agent docs. No browser, no card charges, no Stripe Dashboard secrets (inactive payment methods stay in `server/stripe-payment-methods.test.mjs`).
+
+```bash
+npm test
+npm run smoke
+BASE_URL=https://mon-unlock-widget-production.up.railway.app npm run smoke
+```
+
+Mark **smoke** required so a `/account` 404 cannot merge: GitHub → **Settings → Branches** → add or edit the `main` protection rule → **Require status checks to pass** → search **smoke** (job name `smoke`, sometimes listed as `CI / smoke`). Require **test** as well. You need admin on the repo; the check appears in the search box after it has run once on the default branch or on this PR.
+
+Optional Railway check (does not block PRs): Actions → **production-smoke** → Run workflow.
+
 ## Live testnet demo
 
 https://mon-unlock-widget-production.up.railway.app
