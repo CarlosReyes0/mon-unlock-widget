@@ -29,9 +29,9 @@ const DEFAULT_OG_PATH = path.join(ROOT, "assets", "og-default.jpg");
 export const OG_JPEG_QUALITY = 90;
 export const DEFAULT_OG_PRICE_LABEL = "$0.50 USDC";
 
-/** Right-column gaps (px). Title uses textBaseline=top so these are visual, not baseline-to-baseline. */
-export const OG_GAP_BRAND_TO_PILL = 20;
-export const OG_GAP_PILL_TO_TITLE = 24;
+/** Right-column gaps (px). Matched so the price pill sits optically between brand and title. */
+export const OG_GAP_BRAND_TO_PILL = 28;
+export const OG_GAP_PILL_TO_TITLE = 28;
 export const OG_GAP_TITLE_TO_TEASER = 22;
 export const OG_GAP_TEASER_TO_BUTTON = 28;
 export const OG_PILL_HEIGHT = 40;
@@ -157,6 +157,12 @@ function roundRect(ctx, x, y, w, h, r) {
   const radius = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
+}
+
+/** Empty px above glyph ink when textBaseline is top (Literata’s em-box sits above the capitals). */
+function inkTopPad(ctx, sample = "H") {
+  const pad = -ctx.measureText(sample).actualBoundingBoxAscent;
+  return Number.isFinite(pad) ? Math.max(0, Math.round(pad)) : 0;
 }
 
 function wrapLines(ctx, text, maxWidth, maxLines) {
@@ -364,6 +370,8 @@ export async function renderOgJpeg(article = {}) {
   }
   ctx.font = `600 ${titleSize}px "${FONT_LITERATA}"`;
   ctx.fillStyle = INK;
+  // Pull the title up by the em-box padding so GAP_PILL_TO_TITLE is pill→ink, not pill→em-top.
+  y -= inkTopPad(ctx, titleLines[0] || "H");
   for (const line of titleLines) {
     ctx.fillText(line, rx, y);
     y += titleLh;
