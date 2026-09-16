@@ -61,9 +61,17 @@ function cacheDir() {
 
 export function isSafeOgSlug(slug) {
   const s = String(slug || "");
-  if (!s || s.length > 80) return false;
-  if (s.includes("..") || s.includes("/") || s.includes("\\")) return false;
-  return /^[a-zA-Z0-9._-]+$/.test(s);
+  if (!s || s.length > 128) return false;
+  if (s.includes("\0") || s.includes("/") || s.includes("\\")) return false;
+  if (s === ".." || s.includes("..")) return false;
+  return true;
+}
+
+function cacheFileSlug(slug) {
+  const s = String(slug || "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .slice(0, 80);
+  return s || "article";
 }
 
 /** `/og/{slug}.jpg` → slug, or null if the path is not a card URL. */
@@ -88,16 +96,17 @@ export function formatOgPriceLabel(article = {}) {
   if (wei != null && String(wei).trim() !== "") {
     try {
       const n = BigInt(wei);
+      if (n < 0n) throw new Error("negative");
       if (asset === "usdc") {
-        if (n >= 0n && n <= 10_000_000_000n) {
-          return `$${(Number(n) / 1_000_000).toFixed(2)} USDC`;
-        }
-      } else {
-        const whole = n / 10n ** 18n;
-        const frac = n % 10n ** 18n;
-        const fracStr = frac.toString().padStart(18, "0").slice(0, 4).replace(/0+$/, "");
-        return fracStr ? `${whole}.${fracStr} MON` : `${whole} MON`;
+        const whole = n / 1_000_000n;
+        const frac = n % 1_000_000n;
+        const cents = frac.toString().padStart(6, "0").slice(0, 2);
+        return `$${whole}.${cents} USDC`;
       }
+      const whole = n / 10n ** 18n;
+      const frac = n % 10n ** 18n;
+      const fracStr = frac.toString().padStart(18, "0").slice(0, 4).replace(/0+$/, "");
+      return fracStr ? `${whole}.${fracStr} MON` : `${whole} MON`;
     } catch {
       /* fall through */
     }
@@ -145,7 +154,12 @@ function ensureFonts() {
 }
 
 function loadPhoto() {
-  if (!photoPromise) photoPromise = loadImage(PHOTO_PATH);
+  if (!photoPromise) {
+    photoPromise = loadImage(PHOTO_PATH).catch((err) => {
+      photoPromise = null;
+      throw err;
+    });
+  }
   return photoPromise;
 }
 
@@ -213,6 +227,22 @@ function wrapLines(ctx, text, maxWidth, maxLines) {
     lines.push(line);
   }
   return lines;
+}
+
+/** Pick the largest title size that fits without an ellipsis (3-line cap). */
+export function layoutOgTitle(ctx, title, maxWidth) {
+  ensureFonts();
+  let titleSize = 34;
+  let titleLines = [];
+  let titleLh = 40;
+  for (const size of [56, 50, 44, 38, 34]) {
+    ctx.font = `600 ${size}px "${FONT_LITERATA}"`;
+    titleLines = wrapLines(ctx, title, maxWidth, 3);
+    titleLh = Math.round(size * 1.18);
+    titleSize = size;
+    if (!titleLines.some((line) => line.endsWith("…"))) break;
+  }
+  return { titleSize, titleLines, titleLh };
 }
 
 function drawCover(ctx, img, dx, dy, dw, dh) {
@@ -356,18 +386,7 @@ export async function renderOgJpeg(article = {}) {
   ctx.textBaseline = "top";
   y += pillH + OG_GAP_PILL_TO_TITLE;
 
-  let titleSize = 56;
-  let titleLines = [];
-  let titleLh = 64;
-  for (const size of [56, 50, 44, 38, 34]) {
-    ctx.font = `600 ${size}px "${FONT_LITERATA}"`;
-    titleLines = wrapLines(ctx, title, rw, 3);
-    titleLh = Math.round(size * 1.18);
-    if (titleLines.length * titleLh <= 200) {
-      titleSize = size;
-      break;
-    }
-  }
+  const { titleSize, titleLines, titleLh } = layoutOgTitle(ctx, title, rw);
   ctx.font = `600 ${titleSize}px "${FONT_LITERATA}"`;
   ctx.fillStyle = INK;
   // Pull the title up by the em-box padding so GAP_PILL_TO_TITLE is pill→ink, not pill→em-top.
@@ -415,7 +434,7 @@ async function writeCache(filePath, buf) {
 }
 
 export async function renderArticleOgJpeg(slug, article) {
-  const safe = isSafeOgSlug(slug) ? slug : "article";
+  const safe = cacheFileSlug(slug);
   const fp = articleFingerprint(article);
   const filePath = path.join(cacheDir(), `${safe}-${fp}.jpg`);
   try {

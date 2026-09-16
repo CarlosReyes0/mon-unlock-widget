@@ -17,11 +17,13 @@ import {
   jpegDimensions,
   parseOgImagePath,
   renderOgJpeg,
+  layoutOgTitle,
 } from "./og-card.mjs";
 
 test("formatOgPriceLabel prefers two-decimal USDC and falls back to $0.50 USDC", () => {
   assert.equal(formatOgPriceLabel({ priceWei: "500000", paymentAsset: "usdc" }), "$0.50 USDC");
   assert.equal(formatOgPriceLabel({ priceWei: "1000000", paymentAsset: "usdc" }), "$1.00 USDC");
+  assert.equal(formatOgPriceLabel({ priceWei: "11000000000", paymentAsset: "usdc" }), "$11000.00 USDC");
   assert.equal(formatOgPriceLabel({ priceWei: "1000000000000000000", paymentAsset: "mon" }), "1 MON");
   assert.equal(formatOgPriceLabel({}), DEFAULT_OG_PRICE_LABEL);
 });
@@ -29,6 +31,7 @@ test("formatOgPriceLabel prefers two-decimal USDC and falls back to $0.50 USDC",
 test("parseOgImagePath only accepts /og/{slug}.jpg", () => {
   assert.equal(parseOgImagePath("/og/the-quote-was-a-trap.jpg"), "the-quote-was-a-trap");
   assert.equal(parseOgImagePath("/og/hello.jpeg"), "hello");
+  assert.equal(parseOgImagePath("/og/foo%20bar.jpg"), "foo bar");
   assert.equal(parseOgImagePath("/og/../secret.jpg"), null);
   assert.equal(parseOgImagePath("/og/%2e%2e.jpg"), null);
   assert.equal(parseOgImagePath("/assets/og-default.jpg"), null);
@@ -105,6 +108,21 @@ test("getArticleOgJpeg generates a per-article card when a listing exists", asyn
 
 test("OG description cap is 120–125 characters", () => {
   assert.equal(OG_DESCRIPTION_MAX, 125);
+});
+
+test("long titles shrink instead of ellipsizing at 56px", async () => {
+  await renderOgJpeg({ title: "warmup", teaser: "x", priceWei: "500000", paymentAsset: "usdc" });
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const ctx = createCanvas(10, 10).getContext("2d");
+  const rw = 1200 - 52 - 510 - 48 - 52;
+  const fit = layoutOgTitle(
+    ctx,
+    "A Very Long Title That Should Wrap Across Several Lines Without Overflowing",
+    rw
+  );
+  assert.ok(fit.titleSize < 56, `expected shrink, got ${fit.titleSize}px`);
+  assert.equal(fit.titleLines.some((line) => line.endsWith("…")), false);
+  assert.ok(fit.titleLines.join(" ").includes("Overflowing"));
 });
 
 test("price pill is optically centered between brand row and title", () => {

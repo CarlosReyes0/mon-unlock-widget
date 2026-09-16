@@ -307,6 +307,15 @@ test("HEAD /og/missing-slug.jpg is a JPEG without a body", async () => {
   assert.equal(buf.length, 0);
 });
 
+test("GET /og/foo%20bar.jpg still returns a JPEG (does not 404)", async () => {
+  const { jpegDimensions } = await import("./og-card.mjs");
+  const res = await fetch(`http://127.0.0.1:${PORT}/og/foo%20bar.jpg`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/jpeg");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.deepEqual(jpegDimensions(buf), { width: 1200, height: 630 });
+});
+
 test("POST /api/listings/hide returns 503 without admin secret", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/listings/hide`, {
     method: "POST",
