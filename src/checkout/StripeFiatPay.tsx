@@ -132,13 +132,16 @@ type InnerProps = {
 function TaxLine() {
   const state = useCheckoutElements();
   if (state.type !== "success") return null;
-  // Stripe throws on confirm unless the UI has read the session total.
-  const due = state.checkout.total?.total?.amount;
+  // Stripe throws on confirm unless the UI has read and shown the session total.
+  const due = state.checkout.total?.total;
   const tax = state.checkout.total?.taxExclusive;
-  if (!tax || tax.minorUnitsAmount <= 0) {
-    return due ? <span hidden>{due}</span> : null;
-  }
-  return <p className="checkout-hint">Tax {tax.amount}</p>;
+  if (!due) return null;
+  return (
+    <p className="checkout-hint">
+      {tax && tax.minorUnitsAmount > 0 ? `Tax ${tax.amount} · ` : ""}
+      Due {due.amount}
+    </p>
+  );
 }
 
 function ExpressPayInner({ sessionId, onUnlocked, onError, onBusy }: InnerProps) {
