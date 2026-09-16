@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   normalizeExternalUrl,
+  normalizeListingTitle,
   resolveListingUpdate,
   toPublicListing,
   formatPriceLabel,
   isListingStatus,
+  dedupePublicArticles,
 } from "./listings.mjs";
 
 test("normalizeExternalUrl accepts https and clears empty", () => {
@@ -102,4 +104,24 @@ test("formatPriceLabel formats usdc and mon", () => {
 test("isListingStatus", () => {
   assert.equal(isListingStatus("listed"), true);
   assert.equal(isListingStatus("nope"), false);
+});
+
+test("normalizeListingTitle strips zero-width padding", () => {
+  assert.equal(
+    normalizeListingTitle(`The Quote Was a Trap${"\u200B".repeat(8)}`),
+    "The Quote Was a Trap"
+  );
+});
+
+test("dedupePublicArticles keeps the newest same-title listing per publisher", () => {
+  const pub = "0xabc";
+  const rows = [
+    { slug: "the-quote-was-a-trap-939i9e", title: "The Quote Was a Trap\u200B", publisher: pub },
+    { slug: "the-quote-was-a-trap-5howt0", title: "The Quote Was a Trap", publisher: pub },
+    { slug: "one-mon-walk", title: "One MON Walk", publisher: "0xdef" },
+  ];
+  const out = dedupePublicArticles(rows);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].slug, "the-quote-was-a-trap-939i9e");
+  assert.equal(out[1].slug, "one-mon-walk");
 });

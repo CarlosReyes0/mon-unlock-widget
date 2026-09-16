@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { locatePaywall, slugFromTitle, splitPost, uniqueSlugFromTitle } from "./split-post.js";
+import {
+  cleanTitle,
+  locatePaywall,
+  nextPublishSlug,
+  slugFromTitle,
+  splitPost,
+  uniqueSlugFromTitle,
+} from "./split-post.js";
 
 describe("splitPost", () => {
   it("uses --- as the paywall fold", () => {
@@ -66,5 +73,29 @@ describe("uniqueSlugFromTitle", () => {
     assert.equal(slugFromTitle("July rain walk"), "july-rain-walk");
     const slug = uniqueSlugFromTitle("July rain walk");
     assert.match(slug, /^july-rain-walk-[a-z0-9]+$/);
+  });
+
+  it("strips zero-width padding from titles", () => {
+    const padded = `The Quote Was a Trap${"\u200B".repeat(12)}`;
+    assert.equal(cleanTitle(padded), "The Quote Was a Trap");
+    assert.equal(slugFromTitle(padded), "the-quote-was-a-trap");
+  });
+
+  it("reuses a reserved slug on the first publish attempt", () => {
+    assert.equal(
+      nextPublishSlug({
+        title: "The Quote Was a Trap",
+        preferredSlug: "the-quote-was-a-trap-5howt0",
+        attempt: 0,
+      }),
+      "the-quote-was-a-trap-5howt0"
+    );
+    const next = nextPublishSlug({
+      title: "The Quote Was a Trap",
+      preferredSlug: "the-quote-was-a-trap-5howt0",
+      attempt: 1,
+    });
+    assert.match(next, /^the-quote-was-a-trap-[a-z0-9]+$/);
+    assert.notEqual(next, "the-quote-was-a-trap-5howt0");
   });
 });

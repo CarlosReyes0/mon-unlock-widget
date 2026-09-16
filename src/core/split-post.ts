@@ -2,9 +2,18 @@
 
 const TEASER_SOFT_MAX = 280;
 
+/** Invisible format chars that LLMs / paste often append; they make titles look identical. */
+const INVISIBLE_TITLE_CHARS = /[\u200B-\u200D\uFEFF\u2060]/g;
+
+export function cleanTitle(title: string): string {
+  return String(title || "")
+    .replace(INVISIBLE_TITLE_CHARS, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function slugFromTitle(title: string): string {
-  let slug = String(title || "")
-    .trim()
+  let slug = cleanTitle(title)
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -35,6 +44,21 @@ export function uniqueSlugFromTitle(title: string): string {
   if (combined.length <= 64) return combined;
   const trimBase = base.slice(0, 64 - suffix.length - 1).replace(/-+$/, "");
   return `${trimBase}-${suffix}`;
+}
+
+/**
+ * Reuse a reserved slug on Publish retry so a failed wallet/sign step
+ * does not mint a second listed copy of the same piece.
+ */
+export function nextPublishSlug(input: {
+  title: string;
+  preferredSlug?: string | null;
+  attempt?: number;
+}): string {
+  const attempt = input.attempt ?? 0;
+  const preferred = String(input.preferredSlug || "").trim();
+  if (attempt === 0 && preferred) return preferred;
+  return uniqueSlugFromTitle(input.title);
 }
 
 function firstChunk(text: string): string {
