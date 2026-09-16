@@ -47,6 +47,8 @@ import {
   parsePublishPaste,
 } from "./publish.mjs";
 import { withMppCharge, mppStatus, publishAmount } from "./mpp.mjs";
+import { x402Status } from "./x402.mjs";
+import { handleX402Publish, handleX402Unlock } from "./x402-handlers.mjs";
 import { buildOpenApiDocument } from "./openapi.mjs";
 import {
   listPublicArticles,
@@ -132,9 +134,12 @@ function cors(res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept"
+    "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept, X-PAYMENT, PAYMENT-SIGNATURE"
   );
-  res.setHeader("Access-Control-Expose-Headers", "WWW-Authenticate, Payment-Receipt");
+  res.setHeader(
+    "Access-Control-Expose-Headers",
+    "WWW-Authenticate, Payment-Receipt, PAYMENT-REQUIRED, X-PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE"
+  );
 }
 
 function sendJson(res, status, body) {
@@ -566,11 +571,13 @@ const server = http.createServer(async (req, res) => {
       service: "mon-unlock",
       product: "Open Paywall",
       mpp: mppStatus(),
+      x402: x402Status(),
       docs: {
         llms: "/llms.txt",
         agents: "/agents.md",
         skill: "/skill.md",
         cursorSkill: "/.well-known/skills/mon-unlock/SKILL.md",
+        x402Skill: "/.well-known/skills/open-paywall-x402/SKILL.md",
         openapi: "/openapi.json",
       },
     });
@@ -618,7 +625,7 @@ const server = http.createServer(async (req, res) => {
           description: "Create one embeddable paywall (embed HTML + body sync)",
         },
         mpp: status,
-        next: "POST /api/agents/publish with the same JSON body, then pay the 402 challenge.",
+        next: "POST /api/agents/publish (MPP PathUSD) or POST /api/x402/publish (Bankr / x402 USDC on Base), then pay the 402 challenge.",
       });
     } catch (e) {
       if (e?.message === "body_too_large") {
@@ -670,6 +677,21 @@ const server = http.createServer(async (req, res) => {
         return publishArticleForAgent(validated.input);
       },
     });
+  }
+
+  const isX402Publish =
+    url.pathname === "/api/x402/publish" || url.pathname === "/api/agents/x402/publish";
+  if (method === "POST" && isX402Publish) {
+    return handleX402Publish(req, res, { readBody, sendJson });
+  }
+
+  const isX402Unlock =
+    url.pathname === "/api/x402/unlock" ||
+    url.pathname === "/api/agents/x402/unlock" ||
+    url.pathname.startsWith("/api/x402/articles/") ||
+    url.pathname.startsWith("/api/agents/x402/articles/");
+  if ((method === "GET" || method === "POST") && isX402Unlock) {
+    return handleX402Unlock(req, res, { url, readBody, sendJson });
   }
 
   // Friendly aliases for agent discovery URLs without extensions.
@@ -1168,6 +1190,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} relayer=${relayerConfigured()})`
+    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} x402=${x402Status().configured} relayer=${relayerConfigured()})`
   );
 });

@@ -55,7 +55,7 @@ Full article text…
 2. Interpret messy paste → show interpretation → **wait for confirmation**.
 3. On publish: **always** auto-generate a new slug. Ignore any `Slug:` they included.
 4. Optional: `POST /api/agents/publish/parse` only after they confirm (strict checker for the final shape).
-5. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (paid ~$0.05).
+5. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (MPP ~$0.05) **or** `POST /api/x402/publish` (x402 USDC on Base ~$0.05).
 6. Return `finishRegistrationUrl` — register + **Copy signed embed** once.
 
 Optional: `Author:`. `Asset: mon` (default USDC).
@@ -64,6 +64,7 @@ Optional: `Author:`. `Asset: mon` (default USDC).
 - LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`
 - Agent skill: `https://mon-unlock-widget-production.up.railway.app/skill.md`
 - Cursor / skills: `https://mon-unlock-widget-production.up.railway.app/.well-known/skills/mon-unlock/SKILL.md`
+- Bankr / x402 skill: `https://mon-unlock-widget-production.up.railway.app/.well-known/skills/open-paywall-x402/SKILL.md`
 - OpenAPI: `https://mon-unlock-widget-production.up.railway.app/openapi.json`
 - Health: `GET /api/agents/health`
 
@@ -106,6 +107,40 @@ Returns quote amount, fingerprint, and whether the payload is valid.
 5. Open `finishRegistrationUrl` → register on Monad → sign → **Copy signed embed** (includes `embed-sig`). Paste that HTML on the site — not the unsigned `embed` from step 4.
 
 Default charge: **0.05** pathUSD (env `MPP_PUBLISH_AMOUNT`). Tempo pathUSD is always offered when MPP is configured; Stripe SPT card may also be offered if `STRIPE_SECRET_KEY` is set.
+
+## x402 / Bankr (USDC on Base)
+
+Bankr and other x402 clients pay **USDC on Base**. Open Paywall's human reader unlock remains **USDC on Monad** (default $0.50, no platform fee). The agent HTTP rail is a Base USDC payment to the Open Paywall wallet — not a Monad `unlock()` tx.
+
+| Action | Endpoint | Amount |
+|--------|----------|--------|
+| Publish listing + store body | `POST /api/x402/publish` | **$0.05** USDC on Base |
+| Unlock / fetch paid body | `GET /api/x402/articles/{slug}` or `POST /api/x402/unlock` | Listing price (default **$0.50** USDC on Base) |
+
+Unpaid → HTTP **402** with machine-readable `accepts[]` (`scheme: "exact"`, `network: "base"`, Base USDC, `payTo`, `maxAmountRequired`). Retry with `X-PAYMENT` (v1) or `PAYMENT-SIGNATURE` (v2). Bad/missing payment **fail closed** — `body` is never returned.
+
+If the caller already has entitlement (`reader=0x…` unlocked on-chain/indexed, or Stripe `fiat_session`), the unlock route returns the body **without** charging.
+
+After a **paid x402 publish**, response still includes unsigned `embed`, `finishRegistrationUrl`, and `needsManualOnChainRegistration`. Open that URL, register on Monad, **Copy signed embed**. x402 does not autopilot on-chain register.
+
+Aliases: `POST /api/agents/x402/publish`, `GET /api/agents/x402/unlock`.
+
+```bash
+# Inspect challenge (no spend)
+curl -sD - -o /dev/null -X POST https://mon-unlock-widget-production.up.railway.app/api/x402/publish \
+  -H 'content-type: application/json' \
+  -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"…","body":"…","publisher":"0x…"}'
+
+# Bankr pays the 402 and retries
+bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/publish \
+  -X POST --max-payment 0.05 \
+  -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0x…"}'
+
+bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/articles/the-quote-was-a-trap-939i9e \
+  --max-payment 0.50
+```
+
+MPP on `POST /api/agents/publish` remains fully supported. Do not send x402 headers to the MPP route (and do not send `Authorization: Payment` to the x402 routes).
 
 ### Prefund checklist (optional, for autonomous pay)
 

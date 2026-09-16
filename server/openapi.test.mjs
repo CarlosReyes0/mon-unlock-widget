@@ -24,6 +24,18 @@ test("buildOpenApiDocument uses MPPscan protocols object shape", () => {
   assert.equal(pay.protocols[0].mpp.chainId, 4217);
 });
 
+test("buildOpenApiDocument includes x402 publish path", () => {
+  process.env.X402_PAY_TO = RECIPIENT;
+  process.env.X402_PUBLISH_AMOUNT = "0.05";
+  const doc = buildOpenApiDocument();
+  const pay = doc.paths["/api/x402/publish"].post["x-payment-info"];
+  assert.equal(pay.protocols[0].x402.network, "base");
+  assert.equal(pay.protocols[0].x402.chainId, 8453);
+  assert.equal(pay.protocols[0].x402.recipient, RECIPIENT);
+  assert.ok(doc.paths["/api/x402/unlock"]);
+  assert.ok(doc.paths["/api/x402/articles/{slug}"]);
+});
+
 const child = spawn(process.execPath, ["server/index.mjs"], {
   cwd: ROOT,
   env: {
@@ -50,5 +62,5 @@ test("GET /openapi.json is served dynamically with mpp protocol object", async (
   const doc = await res.json();
   const pay = doc.paths["/api/agents/publish"].post["x-payment-info"];
   assert.equal(pay.protocols[0].mpp.recipient, RECIPIENT);
-  assert.equal(doc.info.version, "1.0.5");
+  assert.equal(doc.info.version, "1.1.0");
 });

@@ -6,6 +6,16 @@
  * A plain ["mpp"] string list is ignored (authMode becomes "paid" with no protocols).
  */
 import { publishAmount, publishCurrency, mppConfigured } from "./mpp.mjs";
+import {
+  BASE_CHAIN_ID,
+  BASE_NETWORK_V1,
+  BASE_USDC,
+  x402Configured,
+  x402PayTo,
+  x402PublishAmountUsd,
+  x402UnlockAmountUsd,
+  usdToUsdcAtomic,
+} from "./x402.mjs";
 
 const PATH_USD = "0x20c0000000000000000000000000000000000000";
 const TEMPO_CHAIN_ID = 4217;
@@ -51,9 +61,9 @@ export function buildOpenApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "Open Paywall Agent API",
-      version: "1.0.5",
+      version: "1.1.0",
       description:
-        "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, ~$0.05) to publish. If unpaid and no funded payer is configured, agents should stop and ask the human — not chase faucets. On-chain Monad registration may still require one publisher wallet approval.",
+        "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, ~$0.05 PathUSD on Tempo) or x402 (USDC on Base) to publish. Bankr agents should use POST /api/x402/publish and GET /api/x402/articles/{slug}. If unpaid and no funded payer is configured, agents should stop and ask the human — not chase faucets. On-chain Monad registration may still require one publisher wallet approval. Human readers still unlock USDC on Monad.",
       contact: {
         name: "Open Paywall",
         email: "carlos.a.reyes00@gmail.com",
@@ -80,8 +90,9 @@ export function buildOpenApiDocument() {
         "Accept human paste (Title/Teaser/---/body) or JSON",
         "POST /api/agents/publish/parse (optional, free)",
         "POST /api/agents/publish/validate",
-        "POST /api/agents/publish (pay 402 challenge)",
-        "Return embed HTML",
+        "POST /api/agents/publish (MPP 402) OR POST /api/x402/publish (x402 USDC on Base)",
+        "Return embed HTML + finishRegistrationUrl",
+        "Unlock/read: GET /api/x402/articles/{slug} (x402 USDC on Base, or existing reader entitlement)",
         "Send finishRegistrationUrl if needsManualOnChainRegistration; tell user to Copy signed embed there",
       ],
       humanPasteFormat: {
@@ -101,7 +112,9 @@ export function buildOpenApiDocument() {
       },
       skill: `${origin}/skill.md`,
       cursorSkill: `${origin}/.well-known/skills/mon-unlock/SKILL.md`,
+      x402Skill: `${origin}/.well-known/skills/open-paywall-x402/SKILL.md`,
       mppConfigured: mppConfigured(),
+      x402Configured: x402Configured(),
     },
     paths: {
       "/api/agents/health": {
@@ -202,6 +215,130 @@ export function buildOpenApiDocument() {
             "402": { description: "Payment Required" },
             "400": { description: "Invalid payload" },
             "503": { description: "MPP not configured on server" },
+          },
+        },
+      },
+      "/api/x402/publish": {
+        post: {
+          operationId: "x402PublishPaywall",
+          summary: "Create embed + sync article body (x402 USDC on Base)",
+          description:
+            "Bankr-friendly x402. Unpaid requests receive HTTP 402 with x402 accepts[] (USDC on Base, ~$0.05). Retry with X-PAYMENT (v1) or PAYMENT-SIGNATURE (v2). Same JSON body and result as POST /api/agents/publish. MPP PathUSD on that route is unchanged. After payment, returns unsigned embed HTML plus finishRegistrationUrl — publishers still register on Monad.",
+          "x-payment-info": {
+            price: {
+              mode: "fixed",
+              currency: "USD",
+              amount: x402PublishAmountUsd(),
+            },
+            protocols: [
+              {
+                x402: {
+                  version: 1,
+                  scheme: "exact",
+                  network: BASE_NETWORK_V1,
+                  chainId: BASE_CHAIN_ID,
+                  asset: BASE_USDC,
+                  amount: usdToUsdcAtomic(x402PublishAmountUsd()),
+                  ...(x402PayTo() && /^0x[a-fA-F0-9]{40}$/.test(x402PayTo())
+                    ? { recipient: x402PayTo() }
+                    : {}),
+                },
+              },
+            ],
+            offers: [
+              {
+                method: "x402",
+                network: BASE_NETWORK_V1,
+                currency: BASE_USDC,
+                amount: usdToUsdcAtomic(x402PublishAmountUsd()),
+                description: `Create one embeddable paywall — $${x402PublishAmountUsd()} USDC on Base (Bankr x402). Human reader unlocks remain USDC on Monad.`,
+              },
+            ],
+          },
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PublishRequest" },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "Published embed payload" },
+            "402": { description: "x402 Payment Required (USDC on Base)" },
+            "400": { description: "Invalid payload" },
+            "503": { description: "x402 not configured on server" },
+          },
+        },
+      },
+      "/api/x402/unlock": {
+        get: {
+          operationId: "x402UnlockGet",
+          summary: "Unlock / fetch paid body (x402 USDC on Base, or existing entitlement)",
+          description:
+            "Without payment: HTTP 402 with the listing price in USDC on Base (default $0.50). Does not return body. If reader=0x… or fiat_session already entitled, returns body without charging. After X-PAYMENT, returns the paid article body. Human widget/Stripe paths are unchanged.",
+          parameters: [
+            {
+              name: "articleId",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+            },
+            {
+              name: "reader",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+              description: "0x wallet; if already entitled, skip x402",
+            },
+          ],
+          responses: {
+            "200": { description: "Unlocked body" },
+            "402": { description: "x402 Payment Required" },
+            "404": { description: "Article not found" },
+          },
+        },
+        post: {
+          operationId: "x402UnlockPost",
+          summary: "Unlock / fetch paid body (x402 USDC on Base)",
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    articleId: { type: "string" },
+                    slug: { type: "string" },
+                    reader: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "Unlocked body" },
+            "402": { description: "x402 Payment Required" },
+            "404": { description: "Article not found" },
+          },
+        },
+      },
+      "/api/x402/articles/{slug}": {
+        get: {
+          operationId: "x402ArticleBySlug",
+          summary: "Unlock / fetch paid body by slug (x402)",
+          description: `Default listing price ${x402UnlockAmountUsd()} USDC. Settlement is USDC on Base for agents; readers on the web still pay USDC on Monad.`,
+          parameters: [
+            {
+              name: "slug",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": { description: "Unlocked body" },
+            "402": { description: "x402 Payment Required" },
+            "404": { description: "Article not found" },
           },
         },
       },

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Open Paywall Agent API",
-    "version": "1.0.4",
-    "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402) to publish paste-ready <open-paywall> HTML (legacy <mon-unlock> still works). On-chain Monad registration may still require one publisher wallet approval.",
+    "version": "1.1.0",
+    "description": "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, PathUSD on Tempo) or x402 (USDC on Base) to publish. Bankr: POST /api/x402/publish and GET /api/x402/articles/{slug}. On-chain Monad registration may still require one publisher wallet approval. Human readers still unlock USDC on Monad.",
     "contact": {
       "name": "Open Paywall",
       "email": "carlos.a.reyes00@gmail.com",
@@ -106,6 +106,40 @@
           "402": { "description": "Payment Required" },
           "400": { "description": "Invalid payload" },
           "503": { "description": "MPP not configured on server" }
+        }
+      }
+    },
+    "/api/x402/publish": {
+      "post": {
+        "operationId": "x402PublishPaywall",
+        "summary": "Create embed + sync article body (x402 USDC on Base)",
+        "description": "Bankr-friendly x402. Unpaid → HTTP 402 with accepts[] (USDC on Base, ~$0.05). MPP PathUSD on POST /api/agents/publish is unchanged.",
+        "responses": {
+          "200": { "description": "Published embed payload" },
+          "402": { "description": "x402 Payment Required (USDC on Base)" },
+          "503": { "description": "x402 not configured on server" }
+        }
+      }
+    },
+    "/api/x402/unlock": {
+      "get": {
+        "operationId": "x402UnlockGet",
+        "summary": "Unlock / fetch paid body (x402 USDC on Base, or existing entitlement)",
+        "responses": {
+          "200": { "description": "Unlocked body" },
+          "402": { "description": "x402 Payment Required" },
+          "404": { "description": "Article not found" }
+        }
+      }
+    },
+    "/api/x402/articles/{slug}": {
+      "get": {
+        "operationId": "x402ArticleBySlug",
+        "summary": "Unlock / fetch paid body by slug (x402)",
+        "responses": {
+          "200": { "description": "Unlocked body" },
+          "402": { "description": "x402 Payment Required" },
+          "404": { "description": "Article not found" }
         }
       }
     }

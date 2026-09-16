@@ -190,12 +190,10 @@ export async function listReaderSubscriptions(readerRaw) {
   }));
 }
 
-async function lookupArticleForAccess(articleId) {
+async function lookupArticleRow(articleId, cols) {
   const slug = String(articleId || "").trim();
   if (!slug) throw httpError("invalid_article_id");
   const hash = articleIdHash(slug);
-  const cols =
-    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,body";
   const bySlug = await supabase(
     `articles?select=${cols}&article_id=eq.${encodeURIComponent(slug)}&limit=1`
   );
@@ -205,6 +203,42 @@ async function lookupArticleForAccess(articleId) {
   );
   if (Array.isArray(byHash) && byHash[0]) return byHash[0];
   return null;
+}
+
+async function lookupArticleForAccess(articleId) {
+  const cols =
+    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,body";
+  return lookupArticleRow(articleId, cols);
+}
+
+const UNLOCK_QUOTE_COLS =
+  "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,teaser,title";
+
+/**
+ * Public metadata for an agent unlock quote. Never includes `body`.
+ * @param {string} articleId
+ */
+export async function quoteArticleUnlock(articleId) {
+  return lookupArticleRow(articleId, UNLOCK_QUOTE_COLS);
+}
+
+/**
+ * Paid-text load for the x402 unlock handler. Call only after payment / entitlement.
+ * @param {string} articleId
+ */
+export async function loadArticleBodyAfterPayment(articleId) {
+  const article = await lookupArticleForAccess(articleId);
+  if (!article) return null;
+  return {
+    articleId: article.article_id,
+    articleIdHash: article.article_id_hash,
+    publisher: article.publisher,
+    paymentAsset: article.payment_asset || "usdc",
+    priceWei: article.price_wei,
+    listingStatus: article.listing_status,
+    allowALaCarte: article.allow_a_la_carte,
+    body: article.body || "",
+  };
 }
 
 async function hasPurchase({ article, reader, fiatSession }) {

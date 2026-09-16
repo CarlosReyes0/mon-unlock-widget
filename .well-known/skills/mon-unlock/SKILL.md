@@ -37,11 +37,14 @@ Full article text…
 
 1. Interpret their message → **show interpretation → wait for OK**.
 2. Read /agents.md if needed.
-3. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish`.
-   - Expect HTTP 402 + Payment challenge if unpaid (about **$0.05**).
-   - If a funded payer is already available: show the price, get approval, pay, retry with `Authorization: Payment …` (or `npx mppx` with **mainnet** PathUSD).
-   - **If not funded: STOP after this first 402.** Tell the human publish requires $0.05 and ask them to pay or provide a funded `MPPX_PRIVATE_KEY`. Do **not** install keyrings, use testnet faucets, or bypass via Supabase.
-5. After **paid** publish: send `finishRegistrationUrl`. Explain: open the link → Register on Monad → approve the embed signature → **Copy signed embed** and paste that HTML. Do not tell them to paste the unsigned API `embed`.
+3. `POST /api/agents/publish/validate` (free), then `POST /api/agents/publish` (MPP) **or** `POST /api/x402/publish` (Bankr / x402 USDC on Base).
+   - Expect HTTP 402 if unpaid (about **$0.05**). MPP uses `Authorization: Payment …`; x402 uses `X-PAYMENT` / `bankr x402 call` (USDC on **Base**).
+   - If a funded payer is already available: show the price, get approval, pay, retry.
+   - **If not funded: STOP after this first 402.** Tell the human publish requires $0.05 and ask them to pay or provide a funded payer. Do **not** install keyrings, use testnet faucets, or bypass via Supabase.
+4. After **paid** publish: send `finishRegistrationUrl`. Explain: open the link → Register on Monad → approve the embed signature → **Copy signed embed** and paste that HTML. Do not tell them to paste the unsigned API `embed`.
+5. To **read** a paid article as an agent: `GET /api/x402/articles/{slug}` (402 → pay listing USDC on Base, default $0.50). Human widget unlock stays USDC on Monad.
+
+See `/.well-known/skills/open-paywall-x402/SKILL.md` for Bankr examples.
 
 ## OpenClaw workflow
 If OpenClaw is available, install `skills/mon-unlock-embed`, paste `AGENT.md`, configure `publisher` or `privateKey`, and call `generate_mon_unlock_embed`. (No MPP $0.05 fee on this path.)

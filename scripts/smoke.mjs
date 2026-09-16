@@ -83,6 +83,9 @@ test("GET /api/agents/health is ok", async () => {
   assert.equal(body.docs?.llms, "/llms.txt");
   assert.equal(body.docs?.agents, "/agents.md");
   assert.equal(body.docs?.openapi, "/openapi.json");
+  assert.ok(body.x402);
+  assert.equal(typeof body.x402.configured, "boolean");
+  assert.equal(body.x402.network, "base");
 });
 
 test("GET /agents.md, /llms.txt, /openapi.json are crawlable", async () => {
@@ -96,6 +99,35 @@ test("GET /agents.md, /llms.txt, /openapi.json are crawlable", async () => {
   const llms = await (await fetch(`${origin}/llms.txt`)).text();
   assert.match(llms, /Open Paywall/i);
   assert.match(llms, /embeddable paywall/i);
+  assert.match(llms, /x402/i);
+});
+
+test("x402 skill and unpaid publish gate exist (no spend)", async () => {
+  const skill = await fetch(`${origin}/.well-known/skills/open-paywall-x402/SKILL.md`);
+  assert.equal(skill.status, 200);
+  const skillText = await skill.text();
+  assert.match(skillText, /bankr x402 call/i);
+
+  const unpaid = await fetch(`${origin}/api/x402/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  assert.ok(
+    unpaid.status === 402 || unpaid.status === 503,
+    `expected 402 or 503, got ${unpaid.status}`
+  );
+  const body = await unpaid.json();
+  if (unpaid.status === 402) {
+    assert.equal(body.x402Version, 1);
+    assert.ok(Array.isArray(body.accepts));
+    assert.equal(body.accepts[0]?.network, "base");
+  } else {
+    assert.equal(body.error, "x402_not_configured");
+  }
+
+  const missing = await fetch(`${origin}/api/x402/unlock`);
+  assert.equal(missing.status, 400);
 });
 
 test("listed article HTML injects og:image at /og/{slug}.jpg with a sane description", async () => {
