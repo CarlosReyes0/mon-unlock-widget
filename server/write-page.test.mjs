@@ -52,6 +52,7 @@ test("voice drafts are optional, drafts-only, and never post", () => {
   assert.match(voice, /Drafts only/);
   assert.match(voice, /Nothing posts from here/);
   assert.match(voice, /Use as reply seed/);
+  assert.match(voice, /mon-write__media-btn/);
   assert.match(voice, /openpaywall-voice-samples/);
   assert.doesNotMatch(voice, /Post to X/);
   assert.doesNotMatch(voice, /\/2\/tweets/);

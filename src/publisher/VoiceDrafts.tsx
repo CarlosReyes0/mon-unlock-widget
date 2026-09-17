@@ -284,7 +284,7 @@ export function VoiceDrafts({
 
       <button
         type="button"
-        className="mon-pub-auth__btn"
+        className="mon-write__media-btn"
         disabled={busy}
         onClick={() => void onGenerate()}
       >

@@ -538,6 +538,11 @@
   margin: 0.65rem 0 0;
 }
 
+.mon-write__voice .mon-write__media-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .mon-write__voice-error {
   margin: 0.75rem 0 0;
   font-size: 0.88rem;
