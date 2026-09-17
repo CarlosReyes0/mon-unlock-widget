@@ -34,6 +34,8 @@ test("buildOpenApiDocument includes x402 publish path", () => {
   assert.equal(pay.protocols[0].x402.recipient, RECIPIENT);
   assert.ok(doc.paths["/api/x402/unlock"]);
   assert.ok(doc.paths["/api/x402/articles/{slug}"]);
+  assert.ok(doc.paths["/api/miroshark/preview"]);
+  assert.ok(doc.paths["/api/miroshark/status"]);
 });
 
 const child = spawn(process.execPath, ["server/index.mjs"], {
@@ -62,5 +64,5 @@ test("GET /openapi.json is served dynamically with mpp protocol object", async (
   const doc = await res.json();
   const pay = doc.paths["/api/agents/publish"].post["x-payment-info"];
   assert.equal(pay.protocols[0].mpp.recipient, RECIPIENT);
-  assert.equal(doc.info.version, "1.1.0");
+  assert.equal(doc.info.version, "1.2.0");
 });

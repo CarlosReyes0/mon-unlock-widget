@@ -88,7 +88,14 @@ export default defineConfig(({ mode }) => {
       {
         name: "publisher-auth-dev-alias",
         configureServer(server) {
-          for (const key of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "PUBLIC_ORIGIN"]) {
+          for (const key of [
+            "SUPABASE_URL",
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "PUBLIC_ORIGIN",
+            "BASE_BUILDER_CODE",
+            "MIROSHARK_BASE_URL",
+            "MIROSHARK_X402_PRIVATE_KEY",
+          ]) {
             if (env[key] && !process.env[key]) process.env[key] = env[key];
           }
           server.middlewares.use(async (req, res, next) => {
@@ -97,6 +104,12 @@ export default defineConfig(({ mode }) => {
               if (await tryHandleOgRequest(req, res)) return;
             } catch (e) {
               console.error("[og-dev]", e?.message || e);
+            }
+            try {
+              const { tryHandleMirosharkRequest } = await import("./server/miroshark.mjs");
+              if (await tryHandleMirosharkRequest(req, res)) return;
+            } catch (e) {
+              console.error("[miroshark-dev]", e?.message || e);
             }
             if (req.url === "/publisher-auth.js" || req.url?.startsWith("/publisher-auth.js?")) {
               req.url = "/src/publisher/auth-mount.tsx";
