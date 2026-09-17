@@ -49,6 +49,9 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     RELAYER_PRIVATE_KEY: "",
     BASE_BUILDER_CODE: "",
     MIROSHARK_X402_PRIVATE_KEY: "",
+    VOICE_DRAFT_API_KEY: "",
+    OPENAI_API_KEY: "",
+    ANTHROPIC_API_KEY: "",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -441,6 +444,8 @@ test("GET /api/agents/health reports mpp status", async () => {
   assert.equal(body.mpp.configured, false);
   assert.equal(body.x402.configured, false);
   assert.equal(body.miroshark.enabled, false);
+  assert.equal(body.voiceDrafts.enabled, false);
+  assert.equal(body.voiceDrafts.autopost, false);
   assert.equal(body.docs.llms, "/llms.txt");
   assert.equal(body.docs.x402Skill, "/.well-known/skills/open-paywall-x402/SKILL.md");
 });
@@ -452,6 +457,16 @@ test("GET /api/miroshark/status is disabled without BASE_BUILDER_CODE", async ()
   assert.equal(body.enabled, false);
   assert.match(body.message, /BASE_BUILDER_CODE/);
   assert.equal(body.builderCode, null);
+});
+
+test("GET /api/voice-drafts/status is disabled without an LLM key", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/voice-drafts/status`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.enabled, false);
+  assert.equal(body.draftsOnly, true);
+  assert.equal(body.autopost, false);
+  assert.match(body.message, /VOICE_DRAFT_API_KEY/);
 });
 
 test("GET /.well-known/skills/open-paywall-x402/SKILL.md is served", async () => {

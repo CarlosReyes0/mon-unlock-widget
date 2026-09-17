@@ -43,7 +43,7 @@ https://mon-unlock-widget-production.up.railway.app
 Pages:
 - `/` – Public article feed (also `/articles`)
 - `/demo` – Unlock demo video (former homepage)
-- `/write` – New post (title, write, Publish). Optional **Preview how this might land** (MiroShark) does not block Publish.
+- `/write` – New post (title, write, Publish). Optional **Draft posts in your voice** (never auto-posts) and **Preview how this might land** (MiroShark) do not block Publish.
 - `/articles/{slug}` – Hosted article page (same unlock as embed). After unlock, **Download** is free (HTML of title + body). Locked readers cannot fetch the file.
 - `/generator.html` – Create embed for your own site
 - `/account.html` – Publisher account (email / Google / wallet)
@@ -73,6 +73,10 @@ See **[agents.md](./agents.md)** and **[x402 skill](./.well-known/skills/open-pa
 Write can ask [MiroShark](https://www.miroshark.xyz/) “how might this land?” **before** Publish. It is off unless `BASE_BUILDER_CODE` is set. Setup, Railway env, and payout caveats: **[docs/MIROSHARK.md](./docs/MIROSHARK.md)**.
 
 The articles homepage already has `<meta name="base:app_id" content="6aab87b69b238d5ecd11e976">` for Base domain verify. That id is **not** a Builder Code.
+
+### Voice drafts (optional, drafts only)
+
+Write can draft 2–3 X posts in the writer's voice from pasted samples. **Nothing posts** — copy/reply-seed only. Autopost is out of scope. Setup: **[VOICE_DRAFTS.md](./VOICE_DRAFTS.md)**.
 
 ### Make yourself findable (manual Stripe step)
 

@@ -88,6 +88,10 @@ test("GET /api/agents/health is ok", async () => {
   assert.equal(body.x402.network, "base");
   assert.ok(body.miroshark);
   assert.equal(typeof body.miroshark.enabled, "boolean");
+  assert.ok(body.voiceDrafts);
+  assert.equal(typeof body.voiceDrafts.enabled, "boolean");
+  assert.equal(body.voiceDrafts.draftsOnly, true);
+  assert.equal(body.voiceDrafts.autopost, false);
 });
 
 test("GET /api/miroshark/status is fail-soft JSON", async () => {
@@ -99,6 +103,16 @@ test("GET /api/miroshark/status is fail-soft JSON", async () => {
   if (!body.enabled) {
     assert.match(String(body.message || ""), /BASE_BUILDER_CODE|Builder Code/i);
   }
+});
+
+test("GET /api/voice-drafts/status is drafts-only JSON", async () => {
+  const res = await fetch(`${origin}/api/voice-drafts/status`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.enabled, "boolean");
+  assert.equal(body.draftsOnly, true);
+  assert.equal(body.autopost, false);
 });
 
 test("GET /agents.md, /llms.txt, /openapi.json are crawlable", async () => {

@@ -36,6 +36,8 @@ test("buildOpenApiDocument includes x402 publish path", () => {
   assert.ok(doc.paths["/api/x402/articles/{slug}"]);
   assert.ok(doc.paths["/api/miroshark/preview"]);
   assert.ok(doc.paths["/api/miroshark/status"]);
+  assert.ok(doc.paths["/api/voice-drafts"]);
+  assert.ok(doc.paths["/api/voice-drafts/status"]);
 });
 
 const child = spawn(process.execPath, ["server/index.mjs"], {
