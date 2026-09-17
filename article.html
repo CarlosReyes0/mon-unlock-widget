@@ -59,6 +59,12 @@
         color: var(--muted);
       }
       .also a { color: var(--accent); }
+      .collectible {
+        margin: 0 0 1.25rem;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .collectible a { color: var(--accent); }
       .status {
         margin: 2rem 0;
         color: var(--muted);
@@ -75,6 +81,7 @@
       <a class="back" href="/articles">← All articles</a>
       <p class="meta" id="meta" hidden></p>
       <p class="also" id="also" hidden></p>
+      <p class="collectible" id="collectible" hidden></p>
       <div id="paywallHost"></div>
       <p class="status" id="status">Loading article…</p>
       <div id="site-footer"></div>
@@ -139,7 +146,7 @@
           }
 
           const qs =
-            "select=article_id,title,author,teaser,price_wei,payment_asset,publisher,external_url,embed_sig,listing_status,allow_a_la_carte" +
+            "select=article_id,title,author,teaser,price_wei,payment_asset,publisher,external_url,embed_sig,listing_status,allow_a_la_carte,nft_token_id,nft_contract,nft_chain_id,nft_tx_hash" +
             `&article_id=eq.${encodeURIComponent(slug)}&listing_status=eq.listed&limit=1`;
           const res = await fetch(`${SUPABASE_URL}/rest/v1/articles?${qs}`, {
             headers: {
@@ -152,6 +159,11 @@
           const row = rows && rows[0];
           if (!row) return null;
           const paymentAsset = row.payment_asset === "usdc" ? "usdc" : "mon";
+          const nftToken = row.nft_token_id != null ? String(row.nft_token_id).trim() : "";
+          const nftContract = typeof row.nft_contract === "string" ? row.nft_contract.trim() : "";
+          const nftChain = Number(row.nft_chain_id) === 84532 ? 84532 : 8453;
+          const explorer =
+            nftChain === 84532 ? "https://sepolia.basescan.org" : "https://basescan.org";
           return {
             slug: row.article_id,
             title: row.title || row.article_id,
@@ -165,6 +177,15 @@
             publisher: row.publisher || "",
             allowALaCarte: row.allow_a_la_carte !== false,
             plan: null,
+            nft:
+              nftToken && nftContract
+                ? {
+                    tokenId: nftToken,
+                    contract: nftContract,
+                    chainId: nftChain,
+                    explorerUrl: `${explorer}/token/${nftContract}?a=${nftToken}`,
+                  }
+                : null,
           };
         }
 
@@ -239,6 +260,14 @@
               )}" rel="noopener noreferrer" target="_blank">${escapeHtml(
                 String(article.externalUrl).replace(/^https?:\/\//, "")
               )}</a>`;
+            }
+
+            if (article.nft && article.nft.explorerUrl) {
+              const collectible = document.getElementById("collectible");
+              collectible.hidden = false;
+              collectible.innerHTML = `Collectible minted · <a href="${escapeHtml(
+                article.nft.explorerUrl
+              )}" rel="noopener noreferrer" target="_blank">View token</a>`;
             }
 
             mountPaywall(article);

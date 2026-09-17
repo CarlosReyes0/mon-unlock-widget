@@ -1,5 +1,5 @@
 import type { PrivyClientConfig } from "@privy-io/react-auth";
-import { monad } from "viem/chains";
+import { monad, base, baseSepolia } from "viem/chains";
 import { resolveWalletConnectProjectId } from "../core/walletconnect.js";
 
 export function publisherPrivyConfig(): PrivyClientConfig {
@@ -16,7 +16,7 @@ export function publisherPrivyConfig(): PrivyClientConfig {
       },
     },
     defaultChain: monad,
-    supportedChains: [monad],
+    supportedChains: [monad, base, baseSepolia],
     walletConnectCloudProjectId: resolveWalletConnectProjectId(),
   };
 }

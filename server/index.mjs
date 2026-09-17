@@ -51,6 +51,7 @@ import { x402Status } from "./x402.mjs";
 import { handleX402Publish, handleX402Unlock } from "./x402-handlers.mjs";
 import { mirosharkPublicStatus, tryHandleMirosharkRequest } from "./miroshark.mjs";
 import { tryHandleVoiceDraftRequest, voiceDraftPublicStatus } from "./voice-drafts.mjs";
+import { nftPublicStatus, tryHandleNftRequest } from "./article-nft.mjs";
 import { buildOpenApiDocument } from "./openapi.mjs";
 import {
   listPublicArticles,
@@ -411,6 +412,7 @@ const server = http.createServer(async (req, res) => {
 
   if (await tryHandleMirosharkRequest(req, res)) return;
   if (await tryHandleVoiceDraftRequest(req, res)) return;
+  if (await tryHandleNftRequest(req, res)) return;
 
   if (method === "POST" && url.pathname === "/api/coinbase/session-token") {
     return handleSessionToken(req, res);
@@ -581,6 +583,7 @@ const server = http.createServer(async (req, res) => {
       x402: x402Status(),
       miroshark: mirosharkPublicStatus(),
       voiceDrafts: voiceDraftPublicStatus(),
+      articleNft: nftPublicStatus(),
       docs: {
         llms: "/llms.txt",
         agents: "/agents.md",

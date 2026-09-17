@@ -29,11 +29,33 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /MirosharkPreview/);
   assert.match(app, /VoiceDrafts/);
   const publishStart = app.indexOf("async function onPublish");
-  const publishEnd = app.indexOf("return (", publishStart);
+  const publishEnd = app.indexOf("async function onMintEdition", publishStart);
   assert.ok(publishStart >= 0 && publishEnd > publishStart);
   const publishFn = app.slice(publishStart, publishEnd);
   assert.doesNotMatch(publishFn, /MirosharkPreview|\/api\/miroshark/);
   assert.doesNotMatch(publishFn, /VoiceDrafts|\/api\/voice-drafts/);
+  assert.doesNotMatch(publishFn, /mintArticleEdition/);
+});
+
+test("edition NFT mint is optional after publish and never a read gate", () => {
+  const app = fs.readFileSync(path.join(ROOT, "src/publisher/WriteApp.tsx"), "utf8");
+  const mint = fs.readFileSync(path.join(ROOT, "src/publisher/mint-edition.ts"), "utf8");
+  const articlePage = fs.readFileSync(path.join(ROOT, "article.html"), "utf8");
+  const docs = fs.readFileSync(path.join(ROOT, "ARTICLE_NFT.md"), "utf8");
+  assert.match(app, /Mint edition NFT/);
+  assert.match(app, /Collectible minted/);
+  assert.match(app, /fetchNftConfig/);
+  assert.match(mint, /eth_sendTransaction/);
+  assert.match(mint, /\/api\/nft\/health/);
+  assert.match(mint, /\/api\/articles\/\$\{encodeURIComponent\(slug\)\}\/nft/);
+  assert.match(articlePage, /Collectible minted/);
+  assert.match(articlePage, /article\.nft/);
+  assert.match(articlePage, /mountPaywall\(article\)/);
+  assert.doesNotMatch(articlePage, /if \(article\.nft\)[\s\S]*return/);
+  assert.match(docs, /Unlock \/ USDC stays the access gate|not a second paywall/i);
+  assert.match(docs, /ARTICLE_NFT_CONTRACT/);
+  assert.match(docs, /8453/);
+  assert.match(docs, /CI never broadcasts/);
 });
 
 test("Miroshark preview is optional and fail-soft", () => {

@@ -92,6 +92,9 @@ test("GET /api/agents/health is ok", async () => {
   assert.equal(typeof body.voiceDrafts.enabled, "boolean");
   assert.equal(body.voiceDrafts.draftsOnly, true);
   assert.equal(body.voiceDrafts.autopost, false);
+  assert.ok(body.articleNft);
+  assert.equal(typeof body.articleNft.configured, "boolean");
+  assert.equal(body.articleNft.unlockSeparate, true);
 });
 
 test("GET /api/miroshark/status is fail-soft JSON", async () => {
@@ -113,6 +116,15 @@ test("GET /api/voice-drafts/status is drafts-only JSON", async () => {
   assert.equal(typeof body.enabled, "boolean");
   assert.equal(body.draftsOnly, true);
   assert.equal(body.autopost, false);
+});
+
+test("GET /api/nft/health is JSON and never requires a mint", async () => {
+  const res = await fetch(`${origin}/api/nft/health`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.configured, "boolean");
+  assert.equal(body.unlockSeparate, true);
 });
 
 test("GET /agents.md, /llms.txt, /openapi.json are crawlable", async () => {

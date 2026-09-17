@@ -7,6 +7,7 @@ import { insertAtTextareaCursor, WriteMediaSheet } from "./WriteMediaSheet.js";
 import { MirosharkPreview } from "./MirosharkPreview.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { publishPost } from "./publish-post.js";
+import { fetchNftConfig, mintArticleEdition } from "./mint-edition.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import type { Address } from "viem";
 
@@ -188,6 +189,13 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [draftNote, setDraftNote] = useState("");
   const [mediaNote, setMediaNote] = useState("");
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [publishedSlug, setPublishedSlug] = useState("");
+  const [nftReady, setNftReady] = useState(false);
+  const [nftBusy, setNftBusy] = useState(false);
+  const [nftMinted, setNftMinted] = useState<{ tokenId: string; explorerUrl: string | null } | null>(
+    null
+  );
+  const [nftError, setNftError] = useState("");
   const bodyHandleRef = useRef<WriteBodyHandle | null>(null);
 
   useEffect(() => {
@@ -272,7 +280,20 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       } catch {
         /* ignore */
       }
-      window.location.assign(`/articles/${encodeURIComponent(slug)}`);
+      let showMint = false;
+      try {
+        const cfg = await fetchNftConfig();
+        showMint = Boolean(cfg.configured);
+        setNftReady(showMint);
+      } catch {
+        showMint = false;
+      }
+      if (!showMint) {
+        window.location.assign(`/articles/${encodeURIComponent(slug)}`);
+        return;
+      }
+      setPublishedSlug(slug);
+      setStatus("Published. Mint an optional edition NFT, or open the article.");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not publish.";
       if (!/reject|denied|cancel/i.test(msg)) setError(msg);
@@ -283,6 +304,31 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     }
   }
 
+  async function onMintEdition() {
+    setNftError("");
+    if (!publishedSlug || !window.__monPublisherAddress || !window.__monPublisherProvider) {
+      setNftError("Sign in to mint.");
+      return;
+    }
+    setNftBusy(true);
+    try {
+      const minted = await mintArticleEdition({
+        slug: publishedSlug,
+        publisher: window.__monPublisherAddress as Address,
+        provider: window.__monPublisherProvider as Eip1193Provider,
+        onStatus: setStatus,
+      });
+      setNftMinted({ tokenId: minted.tokenId, explorerUrl: minted.explorerUrl });
+      setStatus("Collectible minted. Unlock is still the paywall.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not mint.";
+      if (!/reject|denied|cancel/i.test(msg)) setNftError(msg);
+      else setNftError("Mint cancelled.");
+    } finally {
+      setNftBusy(false);
+    }
+  }
+
   return (
     <div className="mon-write">
       <header className="mon-write__bar">
@@ -290,10 +336,10 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         <button
           type="button"
           className="mon-pub-auth__btn mon-pub-auth__btn--primary mon-write__publish"
-          disabled={busy}
+          disabled={busy || Boolean(publishedSlug)}
           onClick={() => void onPublish()}
         >
-          {busy ? "Publishing…" : "Publish"}
+          {busy ? "Publishing…" : publishedSlug ? "Published" : "Publish"}
         </button>
       </header>
 
@@ -330,7 +376,48 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           )}
         </div>
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
+        {nftError ? <p className="mon-pub-auth__error">{nftError}</p> : null}
         {status ? <p className="mon-write__status">{status}</p> : null}
+        {publishedSlug ? (
+          <div className="mon-write__published">
+            <p className="mon-write__published-lead">
+              Live at{" "}
+              <a href={`/articles/${encodeURIComponent(publishedSlug)}`}>
+                /articles/{publishedSlug}
+              </a>
+              . Unlock/USDC is still the access gate — the NFT is an optional 1/1
+              collectible.
+            </p>
+            <div className="mon-write__published-row">
+              {nftReady && !nftMinted ? (
+                <button
+                  type="button"
+                  className="mon-pub-auth__btn mon-pub-auth__btn--primary"
+                  disabled={nftBusy}
+                  onClick={() => void onMintEdition()}
+                >
+                  {nftBusy ? "Minting…" : "Mint edition NFT"}
+                </button>
+              ) : null}
+              {nftMinted?.explorerUrl ? (
+                <a
+                  className="mon-write__collectible"
+                  href={nftMinted.explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Collectible minted
+                </a>
+              ) : null}
+              <a
+                className="mon-pub-auth__btn"
+                href={`/articles/${encodeURIComponent(publishedSlug)}`}
+              >
+                View article
+              </a>
+            </div>
+          </div>
+        ) : null}
 
         <label className="mon-write__sr" htmlFor="writeTitle">
           Title

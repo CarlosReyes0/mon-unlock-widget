@@ -62,6 +62,7 @@ COPY --from=builder /app/llms.txt ./llms.txt
 COPY --from=builder /app/agents.md ./agents.md
 COPY --from=builder /app/skill.md ./skill.md
 COPY --from=builder /app/VOICE_DRAFTS.md ./VOICE_DRAFTS.md
+COPY --from=builder /app/ARTICLE_NFT.md ./ARTICLE_NFT.md
 COPY --from=builder /app/openapi.json ./openapi.json
 COPY --from=builder /app/robots.txt ./robots.txt
 COPY --from=builder /app/favicon.ico ./favicon.ico

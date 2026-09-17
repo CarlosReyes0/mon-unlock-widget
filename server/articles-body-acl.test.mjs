@@ -51,6 +51,17 @@ test("migration revokes articles.body from anon/authenticated and re-grants list
   );
 });
 
+test("article edition NFT columns are granted without exposing body", () => {
+  const sql = read("supabase/migrations/0011_article_edition_nft.sql");
+  assert.match(sql, /nft_token_id/);
+  assert.match(sql, /nft_contract/);
+  assert.match(sql, /grant select \(/i);
+  assert.doesNotMatch(
+    sql.replace(/--[^\n]*/g, ""),
+    /grant select \([^)]*\bbody\b/i
+  );
+});
+
 test("dashboard does not select articles.body or wildcard columns", () => {
   const html = read("dashboard.html");
   assert.match(html, /\.from\('articles'\)/);

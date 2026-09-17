@@ -222,6 +222,15 @@ test("GET /api/listings/health reports supabaseConfigured=false without secrets"
   assert.equal(body.adminConfigured, false);
 });
 
+test("GET /api/nft/health is unconfigured without ARTICLE_NFT_CONTRACT", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/nft/health`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.configured, false);
+  assert.equal(body.unlockSeparate, true);
+});
+
 test("GET /api/articles returns 503 without Supabase", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/articles`);
   assert.equal(res.status, 503);

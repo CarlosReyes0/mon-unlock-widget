@@ -326,7 +326,7 @@
           const { data: articlesData, error: articlesError } = await client
             .from('articles')
             .select(
-              'article_id,article_id_hash,publisher,price_wei,payment_asset,active,title,author,teaser,listing_status,allow_a_la_carte,external_url,embed_sig'
+              'article_id,article_id_hash,publisher,price_wei,payment_asset,active,title,author,teaser,listing_status,allow_a_la_carte,external_url,embed_sig,nft_token_id,nft_contract,nft_chain_id'
             )
             .eq('publisher', wallet.toLowerCase());
 

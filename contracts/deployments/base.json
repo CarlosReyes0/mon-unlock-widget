@@ -1,0 +1,9 @@
+{
+  "network": "base",
+  "chainId": 8453,
+  "rpcUrl": "https://mainnet.base.org",
+  "explorer": "https://basescan.org",
+  "contract": "",
+  "status": "not_deployed",
+  "notes": "Optional 1/1 article edition NFT on Base mainnet. Do not mint from CI. After deploy, set ARTICLE_NFT_CONTRACT and ARTICLE_NFT_CHAIN_ID=8453 on Railway (no deployer private key needed at runtime — the writer mints)."
+}
