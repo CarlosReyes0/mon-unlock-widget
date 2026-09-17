@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_WALLETCONNECT_PROJECT_ID?: string;
   readonly VITE_CHECKOUT_ORIGIN?: string;
   readonly VITE_RAMP_HOST_API_KEY?: string;
+  readonly VITE_USDC_UNLOCK_CONTRACT?: string;
+  readonly VITE_ARTICLE_NFT_CONTRACT?: string;
 }
 
 interface ImportMeta {

@@ -1,0 +1,10 @@
+{
+  "network": "monad-mainnet",
+  "chainId": 143,
+  "rpcUrl": "https://rpc.monad.xyz",
+  "explorer": "https://monadvision.com",
+  "contract": "",
+  "unlockMon": "0x27cA0c23835328e2Ab1424b66330be86fe177FA6",
+  "unlockUsdc": "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f",
+  "notes": "Fill `contract` after `forge script script/DeployArticleNft.s.sol --rpc-url monad_mainnet --broadcast`. Then set ARTICLE_NFT_CONTRACT (and optional VITE_ARTICLE_NFT_CONTRACT) on Railway."
+}

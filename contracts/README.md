@@ -115,3 +115,7 @@ forge script script/DeployUsdc.s.sol --rpc-url https://rpc.monad.xyz --broadcast
 Mainnet deploy: `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f` (wired as the app/indexer default).
 Override with `VITE_USDC_UNLOCK_CONTRACT` / `USDC_CONTRACT_ADDRESS` for forks.
 Publishers receive USDC; readers only need a tiny MON balance for gas.
+
+## Article NFTs (optional)
+
+Writer editions and reader receipts share one ERC-1155: `ArticleNFT.sol`. Unlock is still access. Deploy with `script/DeployArticleNft.s.sol`, then set `ARTICLE_NFT_CONTRACT`. Full steps: [ARTICLE_NFT.md](../ARTICLE_NFT.md).

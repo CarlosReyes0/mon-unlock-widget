@@ -188,6 +188,43 @@ body {
   cursor: pointer;
 }
 
+.mon-nft {
+  margin: 1rem 0 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f4f7f3;
+  text-align: left;
+}
+
+.mon-nft__title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.mon-nft__copy,
+.mon-nft__ok,
+.mon-nft__error {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.mon-nft__error { color: var(--danger); }
+.mon-nft__ok { color: var(--ok); }
+
+.mon-nft__skip {
+  display: inline-block;
+  margin-left: 0.65rem;
+  border: none;
+  background: none;
+  color: var(--sage-dark);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85em;
