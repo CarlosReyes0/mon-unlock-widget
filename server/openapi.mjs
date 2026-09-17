@@ -394,6 +394,51 @@ export function buildOpenApiDocument() {
           responses: { "200": { description: "Run status + optional report summary" } },
         },
       },
+      "/api/voice-drafts/status": {
+        get: {
+          operationId: "voiceDraftStatus",
+          summary: "Optional writer voice-draft status (drafts only)",
+          description:
+            "Enabled when VOICE_DRAFT_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY is set. Never posts to X. Does not affect publish or article unlock.",
+          security: [],
+          responses: {
+            "200": { description: "enabled flag, draftsOnly true, autopost false" },
+          },
+        },
+      },
+      "/api/voice-drafts": {
+        post: {
+          operationId: "voiceDraftGenerate",
+          summary: "Draft 2–3 social posts in the writer's voice (never posts)",
+          description:
+            "Returns editable draft cards from voice samples + the current article. LLM errors are HTTP 200 { ok: false }. Autopost / X write API is out of scope.",
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    samples: {
+                      description: "Sample posts (string or array)",
+                      oneOf: [{ type: "string" }, { type: "array", items: { type: "string" } }],
+                    },
+                    notes: { type: "string" },
+                    title: { type: "string" },
+                    teaser: { type: "string" },
+                    body: { type: "string" },
+                    articleUrl: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "ok drafts, or fail-soft missing_api_key / llm_error" },
+          },
+        },
+      },
     },
     components: {
       schemas: {

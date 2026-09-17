@@ -95,6 +95,12 @@ export default defineConfig(({ mode }) => {
             "BASE_BUILDER_CODE",
             "MIROSHARK_BASE_URL",
             "MIROSHARK_X402_PRIVATE_KEY",
+            "VOICE_DRAFT_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "VOICE_DRAFT_PROVIDER",
+            "VOICE_DRAFT_MODEL",
+            "VOICE_DRAFT_BASE_URL",
           ]) {
             if (env[key] && !process.env[key]) process.env[key] = env[key];
           }
@@ -110,6 +116,12 @@ export default defineConfig(({ mode }) => {
               if (await tryHandleMirosharkRequest(req, res)) return;
             } catch (e) {
               console.error("[miroshark-dev]", e?.message || e);
+            }
+            try {
+              const { tryHandleVoiceDraftRequest } = await import("./server/voice-drafts.mjs");
+              if (await tryHandleVoiceDraftRequest(req, res)) return;
+            } catch (e) {
+              console.error("[voice-drafts-dev]", e?.message || e);
             }
             if (req.url === "/publisher-auth.js" || req.url?.startsWith("/publisher-auth.js?")) {
               req.url = "/src/publisher/auth-mount.tsx";

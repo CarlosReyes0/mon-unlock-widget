@@ -27,11 +27,13 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /Free above · paid below/);
   assert.match(app, /locatePaywall/);
   assert.match(app, /MirosharkPreview/);
+  assert.match(app, /VoiceDrafts/);
   const publishStart = app.indexOf("async function onPublish");
   const publishEnd = app.indexOf("return (", publishStart);
   assert.ok(publishStart >= 0 && publishEnd > publishStart);
   const publishFn = app.slice(publishStart, publishEnd);
   assert.doesNotMatch(publishFn, /MirosharkPreview|\/api\/miroshark/);
+  assert.doesNotMatch(publishFn, /VoiceDrafts|\/api\/voice-drafts/);
 });
 
 test("Miroshark preview is optional and fail-soft", () => {
@@ -41,6 +43,22 @@ test("Miroshark preview is optional and fail-soft", () => {
   assert.match(preview, /Publish still works/);
   assert.match(preview, /BASE_BUILDER_CODE/);
   assert.doesNotMatch(preview, /onPublish/);
+});
+
+test("voice drafts are optional, drafts-only, and never post", () => {
+  const voice = fs.readFileSync(path.join(ROOT, "src/publisher/VoiceDrafts.tsx"), "utf8");
+  const docs = fs.readFileSync(path.join(ROOT, "VOICE_DRAFTS.md"), "utf8");
+  assert.match(voice, /\/api\/voice-drafts/);
+  assert.match(voice, /Drafts only/);
+  assert.match(voice, /Nothing posts from here/);
+  assert.match(voice, /Use as reply seed/);
+  assert.match(voice, /mon-write__media-btn/);
+  assert.match(voice, /openpaywall-voice-samples/);
+  assert.doesNotMatch(voice, /Post to X/);
+  assert.doesNotMatch(voice, /\/2\/tweets/);
+  assert.doesNotMatch(voice, /onPublish/);
+  assert.match(docs, /Autopost is future work|out of scope/i);
+  assert.match(docs, /VOICE_DRAFT_API_KEY/);
 });
 
 test("publishPost lists USDC posts on Open Paywall", () => {

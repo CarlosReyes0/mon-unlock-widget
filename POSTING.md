@@ -10,6 +10,8 @@ Share that URL on X or iMessage: the page ships Open Graph / Twitter Card tags s
 
 Price is $0.50. The start of the piece is free; the rest is paid. Embed HTML is optional after, from the generator.
 
+Optional on the same page: **Draft posts in your voice** (paste samples → 2–3 editable cards). Copy or use as a reply seed. **Nothing posts from /write.** See [VOICE_DRAFTS.md](./VOICE_DRAFTS.md). Autopost is future / gated, not this flow.
+
 Articles are still registered on Monad (so readers can pay on-chain). You only **sign** — the platform pays gas when `RELAYER_PRIVATE_KEY` is set. If the relayer is off, Publish falls back to a wallet transaction.
 
 <video src="docs/posting/posting_flow.mp4" controls playsinline></video>
