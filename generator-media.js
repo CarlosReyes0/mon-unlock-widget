@@ -8,7 +8,10 @@ export const ALLOWED_IFRAME_HOSTS = new Set([
   "youtube.com",
   "youtu.be",
   "m.youtube.com",
+  "www.youtube-nocookie.com",
+  "youtube-nocookie.com",
   "player.vimeo.com",
+  "vimeo.com",
   "www.loom.com",
   "loom.com",
 ]);
@@ -26,6 +29,7 @@ const GALLERY_HOST_HINTS = [
 
 const IMAGE_EXT = /\.(avif|gif|jpe?g|png|svg|webp)(\?|#|$)/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
+const AUDIO_EXT = /\.(mp3|wav|ogg|m4a|aac|flac|opus)(\?|#|$)/i;
 
 export function youtubeUrlToEmbed(src) {
   try {
@@ -52,6 +56,39 @@ export function youtubeUrlToEmbed(src) {
   }
 }
 
+export function vimeoUrlToEmbed(src) {
+  try {
+    const u = new URL(src, "https://example.com");
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "vimeo.com" && host !== "player.vimeo.com") return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    const id = parts.find((p) => /^\d{6,12}$/.test(p));
+    if (!id) return null;
+    return `https://player.vimeo.com/video/${id}`;
+  } catch {
+    return null;
+  }
+}
+
+export function loomUrlToEmbed(src) {
+  try {
+    const u = new URL(src, "https://example.com");
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "loom.com") return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    if ((parts[0] === "share" || parts[0] === "embed") && parts[1]) {
+      return `https://www.loom.com/embed/${parts[1]}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function trustedEmbedSrc(src) {
+  return youtubeUrlToEmbed(src) || vimeoUrlToEmbed(src) || loomUrlToEmbed(src);
+}
+
 export function normalizeUrl(raw) {
   const trimmed = String(raw || "").trim();
   if (!trimmed) return "";
@@ -70,7 +107,7 @@ export function looksLikeGalleryPage(url) {
 }
 
 export function detectMediaKind(url) {
-  const embed = youtubeUrlToEmbed(url);
+  const embed = trustedEmbedSrc(url);
   if (embed) return "embed";
 
   try {
@@ -84,6 +121,7 @@ export function detectMediaKind(url) {
     /* ignore */
   }
 
+  if (AUDIO_EXT.test(url)) return "audio";
   if (VIDEO_EXT.test(url)) return "video";
   if (IMAGE_EXT.test(url)) return "image";
   return "image";
@@ -94,12 +132,16 @@ export function buildMediaSnippet(url, kind) {
   if (!normalized) return "";
 
   if (kind === "embed") {
-    const embedSrc = youtubeUrlToEmbed(normalized) || normalized;
+    const embedSrc = trustedEmbedSrc(normalized) || normalized;
     return `\n<iframe src="${embedSrc}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>\n`;
   }
 
   if (kind === "video") {
-    return `\n<video controls preload="metadata" src="${normalized}"></video>\n`;
+    return `\n<video controls playsinline preload="metadata" src="${normalized}"></video>\n`;
+  }
+
+  if (kind === "audio") {
+    return `\n<audio controls preload="metadata" src="${normalized}"></audio>\n`;
   }
 
   return `\n<img src="${normalized}" alt="Describe image" loading="lazy" />\n`;
@@ -127,6 +169,8 @@ export function extractMediaUrls(html) {
   root.querySelectorAll("img[src]").forEach((el) => push("image", el.getAttribute("src"), el));
   root.querySelectorAll("video[src]").forEach((el) => push("video", el.getAttribute("src"), el));
   root.querySelectorAll("video source[src]").forEach((el) => push("video", el.getAttribute("src"), el));
+  root.querySelectorAll("audio[src]").forEach((el) => push("audio", el.getAttribute("src"), el));
+  root.querySelectorAll("audio source[src]").forEach((el) => push("audio", el.getAttribute("src"), el));
   root.querySelectorAll("iframe[src]").forEach((el) => push("embed", el.getAttribute("src"), el));
 
   return items;
@@ -161,6 +205,26 @@ function loadImage(url, timeoutMs = 12000) {
   });
 }
 
+function loadAudio(url, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      audio.onloadeddata = null;
+      audio.onerror = null;
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    audio.onloadeddata = () => finish(true);
+    audio.onerror = () => finish(false);
+    audio.src = url;
+  });
+}
+
 function loadVideo(url, timeoutMs = 12000) {
   return new Promise((resolve) => {
     const video = document.createElement("video");
@@ -191,23 +255,23 @@ export async function validateMediaUrl(rawUrl, preferredKind = "image") {
   }
 
   const youtubeEmbed = youtubeUrlToEmbed(url);
+  const embedSrc = trustedEmbedSrc(url);
   let kind = preferredKind;
 
-  if (youtubeEmbed || (preferredKind === "embed" && youtubeUrlToEmbed(url))) {
+  if (embedSrc || (preferredKind === "embed" && youtubeEmbed)) {
     kind = "embed";
   } else if (preferredKind === "auto") {
     kind = detectMediaKind(url);
   }
 
-  if (kind === "embed" || youtubeEmbed) {
-    const embedSrc = youtubeEmbed || url;
-    if (!iframeHostAllowed(embedSrc) && !youtubeEmbed) {
+  if (kind === "embed" || embedSrc) {
+    const finalUrl = embedSrc || url;
+    if (!iframeHostAllowed(finalUrl) && !embedSrc) {
       return {
         status: "error",
         message: "Embed host not allowed. Use YouTube, Vimeo, or Loom embed URLs.",
       };
     }
-    const finalUrl = youtubeEmbed || embedSrc;
     return {
       status: "ok",
       message: "Embed URL looks good.",
@@ -243,6 +307,15 @@ export async function validateMediaUrl(rawUrl, preferredKind = "image") {
         kind: "video",
         fixedUrl: url,
         snippet: buildMediaSnippet(url, "video"),
+      };
+    }
+    if (AUDIO_EXT.test(url)) {
+      return {
+        status: "fixable",
+        message: "This URL looks like audio. Switch to Audio mode.",
+        kind: "audio",
+        fixedUrl: url,
+        snippet: buildMediaSnippet(url, "audio"),
       };
     }
 
@@ -290,6 +363,23 @@ export async function validateMediaUrl(rawUrl, preferredKind = "image") {
       kind: "video",
       fixedUrl: url,
       snippet: buildMediaSnippet(url, "video"),
+    };
+  }
+
+  if (kind === "audio") {
+    const loaded = await loadAudio(url);
+    if (!loaded) {
+      return {
+        status: "error",
+        message: "Audio didn't load. Use a direct .mp3, .m4a, or .ogg file URL.",
+      };
+    }
+    return {
+      status: "ok",
+      message: "Audio loaded successfully.",
+      kind: "audio",
+      fixedUrl: url,
+      snippet: buildMediaSnippet(url, "audio"),
     };
   }
 

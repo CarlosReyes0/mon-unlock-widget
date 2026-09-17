@@ -250,22 +250,39 @@ export class MonUnlock extends LitElement {
     }
   }
 
-  private slotText(name: string): string {
-    const el = this.querySelector(`[slot="${name}"]`);
-    return el?.textContent?.trim() ?? "";
-  }
-
   private slotHtml(name: string): string {
     const el = this.querySelector(`[slot="${name}"]`);
     return el?.innerHTML?.trim() ?? "";
   }
 
-  private renderBody(body: string) {
-    if (!body) return nothing;
-    if (looksLikeHtml(body)) {
-      return html`<div class="mon-body text-black">${unsafeHTML(sanitizeRichHtml(body))}</div>`;
+  /**
+   * Free preview: HTML string in a text node (hosted /articles) or real nodes
+   * (embed slot). Image-only teasers have no textContent, so prefer innerHTML
+   * when the slot has element children.
+   */
+  private slotPreview(name: string): string {
+    const el = this.querySelector(`[slot="${name}"]`);
+    if (!el) return "";
+    const html = el.innerHTML.trim();
+    const text = el.textContent?.trim() ?? "";
+    if (el.children.length > 0) return html || text;
+    return text || html;
+  }
+
+  private renderHtmlOrText(content: string, className: string) {
+    if (!content) return nothing;
+    if (looksLikeHtml(content)) {
+      return html`<div class="${className}">${unsafeHTML(sanitizeRichHtml(content))}</div>`;
     }
-    return html`<div class="mon-body text-black whitespace-pre-wrap">${body}</div>`;
+    return html`<div class="${className} whitespace-pre-wrap">${content}</div>`;
+  }
+
+  private renderBody(body: string) {
+    return this.renderHtmlOrText(body, "mon-body text-black");
+  }
+
+  private renderTeaser(teaser: string, className: string) {
+    return this.renderHtmlOrText(teaser, className);
   }
 
   private loadArticle() {
@@ -277,7 +294,7 @@ export class MonUnlock extends LitElement {
       return;
     }
 
-    const teaser = this.slotText("teaser");
+    const teaser = this.slotPreview("teaser");
     const body = this.slotHtml("body");
 
     if (!this.title?.trim()) {
@@ -1105,7 +1122,7 @@ export class MonUnlock extends LitElement {
 
           ${this.unlocked
             ? html`
-                <div class="mb-6 whitespace-pre-wrap text-base" style="color:#000">${a.teaser}</div>
+                ${this.renderTeaser(a.teaser, "mon-teaser mon-teaser--unlocked mb-6 text-base")}
                 ${this.renderBody(this.fetchedBody || a.body)}
                 <p class="mt-6 text-xs text-black">
                   ${this.accessReason === "subscription"
@@ -1116,7 +1133,7 @@ export class MonUnlock extends LitElement {
                 </p>
               `
             : html`
-                <div class="mon-title-box whitespace-pre-wrap">${a.teaser}</div>
+                ${this.renderTeaser(a.teaser, "mon-title-box mon-teaser")}
                 <div class="mt-6 rounded-xl border border-violet-100 bg-violet-50/80 p-5 dark:border-violet-900/40 dark:bg-violet-950/30">
                   ${this.isOnchain
                     ? nothing

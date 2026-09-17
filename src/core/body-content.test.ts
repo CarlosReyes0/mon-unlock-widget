@@ -99,4 +99,53 @@ describe("sanitizeRichHtml", () => {
     const between = out.slice(out.indexOf("First paragraph."), out.indexOf("Second paragraph."));
     assert.ok((between.match(/<br\s*\/?>/gi) || []).length >= 2, "paragraph gap becomes multiple br");
   });
+
+  it("allows audio tags with a safe src", () => {
+    const out = sanitizeRichHtml(
+      '<audio controls src="https://cdn.example.com/track.mp3"></audio>'
+    );
+    assert.ok(out.includes("<audio"));
+    assert.ok(out.includes("https://cdn.example.com/track.mp3"));
+    assert.ok(out.includes("controls"));
+  });
+
+  it("rewrites m.youtube.com and youtube-nocookie watch URLs to embed", () => {
+    const mobile = sanitizeRichHtml(
+      '<iframe src="https://m.youtube.com/watch?v=yUSvGpmOw10"></iframe>'
+    );
+    assert.ok(mobile.includes("youtube.com/embed/yUSvGpmOw10"));
+    assert.equal(mobile.includes("m.youtube.com"), false);
+
+    const nocookie = sanitizeRichHtml(
+      '<iframe src="https://www.youtube-nocookie.com/embed/abc123"></iframe>'
+    );
+    assert.ok(nocookie.includes("iframe"));
+    assert.ok(nocookie.includes("youtube-nocookie.com/embed/abc123"));
+  });
+
+  it("rewrites Vimeo watch and Loom share URLs to player/embed", () => {
+    const vimeo = sanitizeRichHtml('<iframe src="https://vimeo.com/123456789"></iframe>');
+    assert.ok(vimeo.includes("player.vimeo.com/video/123456789"));
+    assert.equal(vimeo.includes("://vimeo.com/123456789"), false);
+
+    const loom = sanitizeRichHtml('<iframe src="https://www.loom.com/share/abcDEF123"></iframe>');
+    assert.ok(loom.includes("loom.com/embed/abcDEF123"));
+    assert.equal(loom.includes("/share/"), false);
+  });
+
+  it("converts a Vimeo URL in <video src> into an iframe", () => {
+    const out = sanitizeRichHtml('<video src="https://vimeo.com/123456789" controls></video>');
+    assert.ok(out.includes("<iframe"));
+    assert.ok(out.includes("player.vimeo.com/video/123456789"));
+  });
+
+  it("strips scripts from a teaser-sized HTML fragment the same way as body", () => {
+    const out = sanitizeRichHtml(
+      '<p>Free preview</p><img src="https://example.com/hero.jpg" alt="Hero" onerror="alert(1)"><script>alert(2)</script>'
+    );
+    assert.equal(out.includes("script"), false);
+    assert.equal(out.includes("onerror"), false);
+    assert.ok(out.includes("hero.jpg"));
+    assert.ok(out.includes("Free preview"));
+  });
 });
