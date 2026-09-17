@@ -61,7 +61,7 @@ export function buildOpenApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "Open Paywall Agent API",
-      version: "1.1.0",
+      version: "1.2.0",
       description:
         "Create embeddable paywalls for long-form articles. Agents validate for free, then pay via Machine Payments Protocol (HTTP 402, ~$0.05 PathUSD on Tempo) or x402 (USDC on Base) to publish. Bankr agents should use POST /api/x402/publish and GET /api/x402/articles/{slug}. If unpaid and no funded payer is configured, agents should stop and ask the human — not chase faucets. On-chain Monad registration may still require one publisher wallet approval. Human readers still unlock USDC on Monad.",
       contact: {
@@ -340,6 +340,58 @@ export function buildOpenApiDocument() {
             "402": { description: "x402 Payment Required" },
             "404": { description: "Article not found" },
           },
+        },
+      },
+      "/api/miroshark/status": {
+        get: {
+          operationId: "mirosharkPreviewStatus",
+          summary: "Optional MiroShark Write preview + x402aff affiliate status",
+          description:
+            "Enabled only when BASE_BUILDER_CODE is set. Does not affect publish or article unlock.",
+          security: [],
+          responses: { "200": { description: "enabled flag, serverPayer boolean, affiliate meta" } },
+        },
+      },
+      "/api/miroshark/preview": {
+        post: {
+          operationId: "mirosharkPreview",
+          summary: "Optional MiroShark sim from a Write draft (fail-soft)",
+          description:
+            "Seeds POST https://x402.miroshark.xyz/run with title + teaser + body snippet. Always attaches X-Builder-Code. If MiroShark returns 402 and MIROSHARK_X402_PRIVATE_KEY is unset, returns the challenge for a client wallet (HTTP 200, ok:false). Sim errors never block publish.",
+          security: [],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    body: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "ok run, payment_required challenge, or fail-soft error" },
+          },
+        },
+      },
+      "/api/miroshark/runs/{runId}": {
+        get: {
+          operationId: "mirosharkRunStatus",
+          summary: "Poll a MiroShark run and return a short summary",
+          security: [],
+          parameters: [
+            {
+              name: "runId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: { "200": { description: "Run status + optional report summary" } },
         },
       },
     },

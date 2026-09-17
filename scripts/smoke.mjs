@@ -86,6 +86,19 @@ test("GET /api/agents/health is ok", async () => {
   assert.ok(body.x402);
   assert.equal(typeof body.x402.configured, "boolean");
   assert.equal(body.x402.network, "base");
+  assert.ok(body.miroshark);
+  assert.equal(typeof body.miroshark.enabled, "boolean");
+});
+
+test("GET /api/miroshark/status is fail-soft JSON", async () => {
+  const res = await fetch(`${origin}/api/miroshark/status`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.enabled, "boolean");
+  if (!body.enabled) {
+    assert.match(String(body.message || ""), /BASE_BUILDER_CODE|Builder Code/i);
+  }
 });
 
 test("GET /agents.md, /llms.txt, /openapi.json are crawlable", async () => {

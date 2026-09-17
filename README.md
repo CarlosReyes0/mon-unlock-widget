@@ -43,7 +43,7 @@ https://mon-unlock-widget-production.up.railway.app
 Pages:
 - `/` – Public article feed (also `/articles`)
 - `/demo` – Unlock demo video (former homepage)
-- `/write` – New post (title, write, Publish)
+- `/write` – New post (title, write, Publish). Optional **Preview how this might land** (MiroShark) does not block Publish.
 - `/articles/{slug}` – Hosted article page (same unlock as embed). After unlock, **Download** is free (HTML of title + body). Locked readers cannot fetch the file.
 - `/generator.html` – Create embed for your own site
 - `/account.html` – Publisher account (email / Google / wallet)
@@ -67,6 +67,12 @@ Agents can create paywalls without cloning this repo:
 4. Agents read a listing with `GET /api/x402/articles/{slug}` (402 → pay listing USDC on Base, default $0.50). Human widget unlock stays USDC on Monad.
 
 See **[agents.md](./agents.md)** and **[x402 skill](./.well-known/skills/open-paywall-x402/SKILL.md)**. OpenClaw plugin: [`skills/mon-unlock-embed`](./skills/mon-unlock-embed).
+
+### MiroShark preview + Base affiliate (optional)
+
+Write can ask [MiroShark](https://www.miroshark.xyz/) “how might this land?” **before** Publish. It is off unless `BASE_BUILDER_CODE` is set. Setup, Railway env, and payout caveats: **[docs/MIROSHARK.md](./docs/MIROSHARK.md)**.
+
+The articles homepage already has `<meta name="base:app_id" content="6aab87b69b238d5ecd11e976">` for Base domain verify. That id is **not** a Builder Code.
 
 ### Make yourself findable (manual Stripe step)
 

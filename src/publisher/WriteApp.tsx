@@ -4,6 +4,7 @@ import { snippetFromPastedText } from "../core/media-url.js";
 import { PublisherAuth } from "./PublisherAuth.js";
 import { SiteNav } from "./SiteNav.js";
 import { insertAtTextareaCursor, WriteMediaSheet } from "./WriteMediaSheet.js";
+import { MirosharkPreview } from "./MirosharkPreview.js";
 import { publishPost } from "./publish-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import type { Address } from "viem";
@@ -368,6 +369,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           bodyRef={bodyHandleRef}
         />
         <p className="mon-write__draft">{mediaNote || draftNote}</p>
+        <MirosharkPreview title={title} body={body} />
       </div>
       <WriteMediaSheet
         open={mediaOpen}

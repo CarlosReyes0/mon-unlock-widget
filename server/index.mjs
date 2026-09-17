@@ -49,6 +49,7 @@ import {
 import { withMppCharge, mppStatus, publishAmount } from "./mpp.mjs";
 import { x402Status } from "./x402.mjs";
 import { handleX402Publish, handleX402Unlock } from "./x402-handlers.mjs";
+import { mirosharkPublicStatus, tryHandleMirosharkRequest } from "./miroshark.mjs";
 import { buildOpenApiDocument } from "./openapi.mjs";
 import {
   listPublicArticles,
@@ -407,6 +408,8 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
+  if (await tryHandleMirosharkRequest(req, res)) return;
+
   if (method === "POST" && url.pathname === "/api/coinbase/session-token") {
     return handleSessionToken(req, res);
   }
@@ -574,6 +577,7 @@ const server = http.createServer(async (req, res) => {
       product: "Open Paywall",
       mpp: mppStatus(),
       x402: x402Status(),
+      miroshark: mirosharkPublicStatus(),
       docs: {
         llms: "/llms.txt",
         agents: "/agents.md",
@@ -1219,6 +1223,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} x402=${x402Status().configured} relayer=${relayerConfigured()})`
+    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} x402=${x402Status().configured} miroshark=${mirosharkPublicStatus().enabled} relayer=${relayerConfigured()})`
   );
 });

@@ -47,6 +47,8 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     MPP_TEMPO_RECIPIENT: "",
     MPP_DEV_BYPASS: "",
     RELAYER_PRIVATE_KEY: "",
+    BASE_BUILDER_CODE: "",
+    MIROSHARK_X402_PRIVATE_KEY: "",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -438,8 +440,18 @@ test("GET /api/agents/health reports mpp status", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.mpp.configured, false);
   assert.equal(body.x402.configured, false);
+  assert.equal(body.miroshark.enabled, false);
   assert.equal(body.docs.llms, "/llms.txt");
   assert.equal(body.docs.x402Skill, "/.well-known/skills/open-paywall-x402/SKILL.md");
+});
+
+test("GET /api/miroshark/status is disabled without BASE_BUILDER_CODE", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/miroshark/status`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.enabled, false);
+  assert.match(body.message, /BASE_BUILDER_CODE/);
+  assert.equal(body.builderCode, null);
 });
 
 test("GET /.well-known/skills/open-paywall-x402/SKILL.md is served", async () => {

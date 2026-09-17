@@ -26,6 +26,21 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /reservedSlug/);
   assert.match(app, /Free above · paid below/);
   assert.match(app, /locatePaywall/);
+  assert.match(app, /MirosharkPreview/);
+  const publishStart = app.indexOf("async function onPublish");
+  const publishEnd = app.indexOf("return (", publishStart);
+  assert.ok(publishStart >= 0 && publishEnd > publishStart);
+  const publishFn = app.slice(publishStart, publishEnd);
+  assert.doesNotMatch(publishFn, /MirosharkPreview|\/api\/miroshark/);
+});
+
+test("Miroshark preview is optional and fail-soft", () => {
+  const preview = fs.readFileSync(path.join(ROOT, "src/publisher/MirosharkPreview.tsx"), "utf8");
+  assert.match(preview, /\/api\/miroshark\/preview/);
+  assert.match(preview, /\/api\/miroshark\/status/);
+  assert.match(preview, /Publish still works/);
+  assert.match(preview, /BASE_BUILDER_CODE/);
+  assert.doesNotMatch(preview, /onPublish/);
 });
 
 test("publishPost lists USDC posts on Open Paywall", () => {
