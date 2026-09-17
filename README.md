@@ -44,7 +44,7 @@ Pages:
 - `/` – Public article feed (also `/articles`)
 - `/demo` – Unlock demo video (former homepage)
 - `/write` – New post (title, write, Publish)
-- `/articles/{slug}` – Hosted article page (same unlock as embed)
+- `/articles/{slug}` – Hosted article page (same unlock as embed). After unlock, **Download** is free (HTML of title + body). Locked readers cannot fetch the file.
 - `/generator.html` – Create embed for your own site
 - `/account.html` – Publisher account (email / Google / wallet)
 - `/dashboard.html` – Writer dashboard + Stripe payouts + listing controls

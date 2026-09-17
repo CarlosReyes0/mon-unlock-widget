@@ -80,6 +80,7 @@ export class MonUnlock extends LitElement {
   @state() private urlCopied = false;
   @state() private checkoutOpen = false;
   @state() private showMetaMaskHelp = false;
+  @state() private downloadBusy = false;
 
   private walletManager = new WalletManager();
   private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
@@ -279,6 +280,105 @@ export class MonUnlock extends LitElement {
 
   private renderBody(body: string) {
     return this.renderHtmlOrText(body, "mon-body text-black");
+  }
+
+  private entitledBodyText(): string {
+    return this.fetchedBody || this.slotHtml("body") || this.article?.body || "";
+  }
+
+  private fallbackDownloadHtml(): string {
+    const title = this.article?.title || this.articleId || "Article";
+    const author = this.article?.author || "Author";
+    const body = this.entitledBodyText();
+    const esc = (s: string) =>
+      String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const bodyHtml = looksLikeHtml(body)
+      ? sanitizeRichHtml(body)
+      : `<p>${esc(body).replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>${esc(title)}</title>
+</head>
+<body>
+  <article>
+    <h1>${esc(title)}</h1>
+    <p>By ${esc(author)}</p>
+    <div>${bodyHtml}</div>
+    <footer>Downloaded from Open Paywall. Included with your unlock — no extra charge.</footer>
+  </article>
+</body>
+</html>`;
+  }
+
+  private triggerFileDownload(blob: Blob, filename: string) {
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1_000);
+  }
+
+  /** Free download after unlock — server-gated; no second charge. */
+  private async downloadArticle() {
+    if (!this.article || this.downloadBusy) return;
+    if (!this.unlocked) {
+      this.error = "Unlock this article to download it.";
+      return;
+    }
+    this.downloadBusy = true;
+    this.error = null;
+    const filename = `${this.article.id.replace(/[^a-zA-Z0-9._-]+/g, "-") || "article"}.html`;
+    try {
+      const params = new URLSearchParams();
+      if (this.wallet.address) params.set("reader", this.wallet.address);
+      if (this.fiatSession) params.set("fiat_session", this.fiatSession);
+      const qs = params.toString();
+      const url = `${getCheckoutBaseUrl()}/api/articles/${encodeURIComponent(this.article.id)}/download${qs ? `?${qs}` : ""}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        const header = res.headers.get("content-disposition") || "";
+        const named = header.match(/filename="([^"]+)"/)?.[1];
+        this.triggerFileDownload(blob, named || filename);
+        return;
+      }
+      // Already entitled in this session (slotted body / indexer lag): export locally.
+      const local = this.entitledBodyText();
+      if (local) {
+        this.triggerFileDownload(
+          new Blob([this.fallbackDownloadHtml()], { type: "text/html;charset=utf-8" }),
+          filename
+        );
+        return;
+      }
+      if (res.status === 401 || res.status === 403 || res.status === 400) {
+        throw new Error("Unlock this article to download it.");
+      }
+      throw new Error("Could not download this article.");
+    } catch (e) {
+      const local = this.entitledBodyText();
+      if (this.unlocked && local) {
+        this.triggerFileDownload(
+          new Blob([this.fallbackDownloadHtml()], { type: "text/html;charset=utf-8" }),
+          filename
+        );
+        return;
+      }
+      this.error = e instanceof Error ? e.message : "Could not download this article.";
+    } finally {
+      this.downloadBusy = false;
+    }
   }
 
   private renderTeaser(teaser: string, className: string) {
@@ -1124,6 +1224,17 @@ export class MonUnlock extends LitElement {
             ? html`
                 ${this.renderTeaser(a.teaser, "mon-teaser mon-teaser--unlocked mb-6 text-base")}
                 ${this.renderBody(this.fetchedBody || a.body)}
+                <div class="mon-download-row">
+                  <button
+                    type="button"
+                    class="mon-btn mon-btn-secondary"
+                    ?disabled=${this.downloadBusy}
+                    @click=${() => this.downloadArticle()}
+                  >
+                    ${this.downloadBusy ? "Preparing…" : "Download"}
+                  </button>
+                  <span class="mon-download-note">Free with your unlock</span>
+                </div>
                 <p class="mt-6 text-xs text-black">
                   ${this.accessReason === "subscription"
                     ? "Unlocked with subscription"

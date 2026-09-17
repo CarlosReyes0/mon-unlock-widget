@@ -72,6 +72,8 @@ import {
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
 import { articleHtmlForSlug, ogJpegForSlug, parseArticleSlug } from "./og-http.mjs";
 import { parseOgImagePath } from "./og-card.mjs";
+import { publicOrigin } from "./article-og.mjs";
+import { createArticleDownload, parseDownloadPath } from "./article-download.mjs";
 import { relayGasDrip } from "./relay-gas.mjs";
 import {
   MONAD_BLOCKCHAIN,
@@ -138,7 +140,7 @@ function cors(res) {
   );
   res.setHeader(
     "Access-Control-Expose-Headers",
-    "WWW-Authenticate, Payment-Receipt, PAYMENT-REQUIRED, X-PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE"
+    "WWW-Authenticate, Payment-Receipt, PAYMENT-REQUIRED, X-PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE, Content-Disposition"
   );
 }
 
@@ -888,6 +890,33 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       const status = e?.status || 500;
       return sendJson(res, status, { error: e?.message || "body_failed" });
+    }
+  }
+
+  // Entitled HTML download — same gate as /api/article-body. No body bytes if locked.
+  const downloadSlug = parseDownloadPath(url.pathname);
+  if ((method === "GET" || method === "HEAD") && downloadSlug) {
+    try {
+      const file = await createArticleDownload({
+        articleId: downloadSlug,
+        reader: url.searchParams.get("reader"),
+        fiatSession: url.searchParams.get("fiat_session") || url.searchParams.get("fiatSession"),
+        origin: publicOrigin(req),
+      });
+      cors(res);
+      const payload = Buffer.from(file.html, "utf8");
+      res.writeHead(200, {
+        "Content-Type": file.contentType,
+        "Content-Disposition": file.contentDisposition,
+        "Cache-Control": "private, no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Length": payload.length,
+      });
+      if (method === "HEAD") return res.end();
+      return res.end(payload);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "download_failed" });
     }
   }
 
