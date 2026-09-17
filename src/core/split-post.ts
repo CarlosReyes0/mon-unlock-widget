@@ -61,17 +61,50 @@ export function nextPublishSlug(input: {
   return uniqueSlugFromTitle(input.title);
 }
 
+/**
+ * Do not cut a 280-char preview in the middle of an HTML tag (or leave an
+ * unclosed <iframe>/<video>). Broken teaser markup would leak mid-tag URLs
+ * and fail to render the free media.
+ */
+function adjustChunkForHtml(text: string, end: number): number {
+  if (end <= 0 || end >= text.length) return end;
+  const before = text.slice(0, end);
+  const lastLt = before.lastIndexOf("<");
+  const lastGt = before.lastIndexOf(">");
+  if (lastLt <= lastGt) return end;
+
+  const close = text.indexOf(">", lastLt);
+  if (close < 0) return lastLt > 0 ? lastLt : end;
+
+  let next = close + 1;
+  const tagMatch = /^<([a-zA-Z][\w:-]*)\b/.exec(text.slice(lastLt));
+  const tag = tagMatch?.[1]?.toLowerCase();
+  const voidTags = new Set(["img", "br", "hr", "source", "input", "meta", "link"]);
+  if (tag && !voidTags.has(tag) && !text.slice(lastLt, close + 1).endsWith("/>")) {
+    const closer = `</${tag}>`;
+    const closeIdx = text.toLowerCase().indexOf(closer, close);
+    if (closeIdx >= 0 && closeIdx - lastLt < 2500) {
+      next = closeIdx + closer.length;
+    }
+  }
+  return next;
+}
+
 function firstChunk(text: string): string {
   const t = text.trim();
   if (t.length <= TEASER_SOFT_MAX) return t;
   const cut = t.lastIndexOf(" ", TEASER_SOFT_MAX);
-  return t.slice(0, cut > 80 ? cut : TEASER_SOFT_MAX).trim();
+  const end = adjustChunkForHtml(t, cut > 80 ? cut : TEASER_SOFT_MAX);
+  return t.slice(0, Math.max(end, 1)).trim();
 }
 
 function firstChunkEnd(core: string): number {
   if (core.length <= TEASER_SOFT_MAX) return core.length;
   const cut = core.lastIndexOf(" ", TEASER_SOFT_MAX);
-  return cut > 80 ? cut : TEASER_SOFT_MAX;
+  let end = cut > 80 ? cut : TEASER_SOFT_MAX;
+  end = adjustChunkForHtml(core, end);
+  if (end <= 0) end = cut > 80 ? cut : TEASER_SOFT_MAX;
+  return Math.min(end, core.length);
 }
 
 export type PaywallLocation = {

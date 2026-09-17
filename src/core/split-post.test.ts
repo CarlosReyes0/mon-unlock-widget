@@ -34,6 +34,23 @@ describe("splitPost", () => {
     assert.ok(r.teaser.length <= 280);
     assert.ok(r.body.includes("end"));
   });
+
+  it("does not split an img tag when the 280-char cut lands inside src", () => {
+    const img = `<img src="https://cdn.example.com/${"a".repeat(300)}.jpg" alt="Hero" />`;
+    const r = splitPost(`${img} and then the rest of a long unpaid-looking block ${"word ".repeat(40)}`);
+    assert.match(r.teaser, /<img /);
+    assert.match(r.teaser, /alt="Hero"/);
+    assert.doesNotMatch(r.teaser, /<img src="https:[^"]*$/);
+    assert.ok(r.teaser.includes("/>") || r.teaser.includes(">"));
+  });
+
+  it("keeps a YouTube iframe intact when it is the free preview", () => {
+    const iframe =
+      '<iframe src="https://www.youtube.com/embed/abc123xyz" allowfullscreen loading="lazy"></iframe>';
+    const r = splitPost(`${iframe}\n\nPaid essay continues here.`);
+    assert.equal(r.teaser, iframe);
+    assert.equal(r.body, "Paid essay continues here.");
+  });
 });
 
 describe("locatePaywall", () => {

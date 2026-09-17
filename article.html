@@ -201,12 +201,9 @@
 
           const teaser = document.createElement("div");
           teaser.setAttribute("slot", "teaser");
-          // Teaser may be plain text or simple HTML from generator
-          if (/<[a-z][\s\S]*>/i.test(article.teaser || "")) {
-            teaser.innerHTML = article.teaser;
-          } else {
-            teaser.innerHTML = escapeHtml(article.teaser || "").replace(/\n/g, "<br>");
-          }
+          // Widget sanitizes HTML teasers on render. Assign as text so a
+          // malicious teaser cannot run script via innerHTML before the widget mounts.
+          teaser.textContent = article.teaser || "";
           widget.appendChild(teaser);
           // Body intentionally omitted — widget fetches from article-body after unlock
           host.replaceChildren(widget);

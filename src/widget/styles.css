@@ -161,7 +161,9 @@ mon-unlock {
 }
 
 .mon-body img,
-.mon-body video {
+.mon-body video,
+.mon-teaser img,
+.mon-teaser video {
   display: block;
   max-width: 100%;
   height: auto;
@@ -169,7 +171,16 @@ mon-unlock {
   margin: 1rem 0;
 }
 
-.mon-body iframe {
+.mon-body audio,
+.mon-teaser audio {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 1rem 0;
+}
+
+.mon-body iframe,
+.mon-teaser iframe {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -178,6 +189,32 @@ mon-unlock {
   border: none;
   border-radius: 8px;
   margin: 1rem 0;
+}
+
+.mon-body figure,
+.mon-teaser figure {
+  margin: 1rem 0;
+}
+
+.mon-body figcaption,
+.mon-teaser figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.mon-title-box img,
+.mon-title-box video {
+  max-height: 16rem;
+  object-fit: cover;
+}
+
+.mon-title-box iframe {
+  max-height: 14rem;
+}
+
+.mon-teaser--unlocked {
+  color: #000;
 }
 
 .mon-badge {
@@ -195,6 +232,7 @@ mon-unlock {
 
 .mon-card h1,
 .mon-card .mon-body,
+.mon-card .mon-teaser,
 .mon-card p.mt-2,
 .mon-card p.mt-6,
 .mon-card div.mb-6 {
@@ -209,6 +247,7 @@ mon-unlock {
 
 .mon-card.dark h1,
 .mon-card.dark .mon-body,
+.mon-card.dark .mon-teaser,
 .mon-card.dark p.mt-2,
 .mon-card.dark p.mt-6,
 .mon-card.dark div.mb-6 {

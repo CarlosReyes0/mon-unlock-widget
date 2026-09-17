@@ -12,6 +12,10 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(html, /Write — Open Paywall/);
   assert.match(app, /Publish/);
   assert.match(app, /Write, or paste/);
+  assert.match(app, /Add image, audio, or video/);
+  assert.match(app, /snippetFromPastedText/);
+  assert.match(app, /WriteMediaSheet/);
+  assert.match(app, /We don’t host files yet/);
   assert.match(app, /\/articles\/\$\{encodeURIComponent\(slug\)\}/);
   assert.doesNotMatch(app, /articleId/);
   assert.doesNotMatch(app, /paymentAsset/);
@@ -52,4 +56,22 @@ test("publisher auth prefers a connected wallet over the Privy embedded wallet",
   assert.match(auth, /Use a different wallet/);
   assert.match(auth, /wantsEmbeddedWallet/);
   assert.match(auth, /mapWalletSendToEthSend/);
+});
+
+test("write media sheet inserts URL snippets without hosting files", () => {
+  const sheet = fs.readFileSync(path.join(ROOT, "src/publisher/WriteMediaSheet.tsx"), "utf8");
+  assert.match(sheet, /Add image, audio, or video/);
+  assert.match(sheet, /validateMediaUrl/);
+  assert.match(sheet, /id: "audio"/);
+  assert.match(sheet, /YouTube, Vimeo, and Loom/);
+});
+
+test("widget sanitizes HTML teasers and does not dump paid body on the hosted page", () => {
+  const widget = fs.readFileSync(path.join(ROOT, "src/widget/mon-unlock.ts"), "utf8");
+  const articlePage = fs.readFileSync(path.join(ROOT, "article.html"), "utf8");
+  assert.match(widget, /slotPreview/);
+  assert.match(widget, /renderTeaser/);
+  assert.match(widget, /sanitizeRichHtml/);
+  assert.match(articlePage, /teaser\.textContent/);
+  assert.match(articlePage, /Body intentionally omitted/);
 });

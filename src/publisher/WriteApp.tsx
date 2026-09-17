@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { locatePaywall } from "../core/split-post.js";
+import { snippetFromPastedText } from "../core/media-url.js";
 import { PublisherAuth } from "./PublisherAuth.js";
 import { SiteNav } from "./SiteNav.js";
+import { insertAtTextareaCursor, WriteMediaSheet } from "./WriteMediaSheet.js";
 import { publishPost } from "./publish-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import type { Address } from "viem";
@@ -25,12 +27,29 @@ function loadDraft(): { title: string; body: string; reservedSlug: string } {
 
 type WriteAuth = "privy" | "injected";
 
-function WriteBody({
+function clipboardHasBinaryMedia(data: DataTransfer | null): boolean {
+  if (!data) return false;
+  const files = Array.from(data.files || []);
+  if (files.some((f) => /^(image|video|audio)\//.test(f.type))) return true;
+  return Array.from(data.items || []).some(
+    (item) => item.kind === "file" && /^(image|video|audio)\//.test(item.type)
+  );
+}
+
+export type WriteBodyHandle = {
+  insertSnippet: (snippet: string, note: string) => void;
+};
+
+const WriteBody = function WriteBody({
   value,
   onChange,
+  onMediaNote,
+  bodyRef,
 }: {
   value: string;
   onChange: (next: string) => void;
+  onMediaNote: (note: string) => void;
+  bodyRef: React.RefObject<WriteBodyHandle | null>;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -75,15 +94,69 @@ function WriteBody({
     return () => ro.disconnect();
   }, [layout]);
 
+  const insertSnippet = useCallback(
+    (snippet: string, note: string) => {
+      const area = areaRef.current;
+      if (!area) {
+        onChange(`${value.replace(/\s+$/, "")}\n${snippet.trim()}\n`);
+        onMediaNote(note);
+        return;
+      }
+      const { next, cursor } = insertAtTextareaCursor(area, value, snippet);
+      onChange(next);
+      onMediaNote(note);
+      requestAnimationFrame(() => {
+        area.focus();
+        area.setSelectionRange(cursor, cursor);
+      });
+    },
+    [onChange, onMediaNote, value]
+  );
+
+  useImperativeHandle(bodyRef, () => ({ insertSnippet }), [insertSnippet, bodyRef]);
+
+  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (clipboardHasBinaryMedia(e.clipboardData)) {
+      e.preventDefault();
+      onMediaNote("We don’t host files yet. Paste a public image, audio, or video URL.");
+      return;
+    }
+    const text = e.clipboardData.getData("text/plain");
+    const snippet = snippetFromPastedText(text);
+    if (!snippet) return;
+    e.preventDefault();
+    insertSnippet(snippet, "Embedded from URL.");
+  }
+
+  function onDrop(e: React.DragEvent<HTMLTextAreaElement>) {
+    if (clipboardHasBinaryMedia(e.dataTransfer)) {
+      e.preventDefault();
+      onMediaNote("We don’t host files yet. Drop a public URL instead.");
+      return;
+    }
+    const text = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    const snippet = snippetFromPastedText(text);
+    if (!snippet) return;
+    e.preventDefault();
+    insertSnippet(snippet, "Embedded from URL.");
+  }
+
   return (
     <div className="mon-write__body-wrap" ref={wrapRef}>
       <textarea
         id="writeBody"
         ref={areaRef}
         className="mon-write__body"
-        placeholder="Write, or paste…"
+        placeholder="Write, or paste a photo, audio, or video URL…"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onPaste={onPaste}
+        onDragOver={(e) => {
+          if (e.dataTransfer?.types.includes("text/uri-list") || e.dataTransfer?.types.includes("Files")) {
+            e.preventDefault();
+          }
+        }}
+        onDrop={onDrop}
       />
       {fold.hasFold ? (
         <div className="mon-write__fold-measure" ref={measureRef} aria-hidden="true">
@@ -111,6 +184,9 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [draftNote, setDraftNote] = useState("");
+  const [mediaNote, setMediaNote] = useState("");
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const bodyHandleRef = useRef<WriteBodyHandle | null>(null);
 
   useEffect(() => {
     const d = loadDraft();
@@ -273,9 +349,33 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         <label className="mon-write__sr" htmlFor="writeBody">
           Body
         </label>
-        <WriteBody value={body} onChange={setBody} />
-        <p className="mon-write__draft">{draftNote}</p>
+        <div className="mon-write__media-row">
+          <button
+            type="button"
+            className="mon-write__media-btn"
+            onClick={() => setMediaOpen(true)}
+          >
+            Add image, audio, or video
+          </button>
+          <span className="mon-write__media-hint">
+            Or paste a public URL. Media above the fold is free.
+          </span>
+        </div>
+        <WriteBody
+          value={body}
+          onChange={setBody}
+          onMediaNote={setMediaNote}
+          bodyRef={bodyHandleRef}
+        />
+        <p className="mon-write__draft">{mediaNote || draftNote}</p>
       </div>
+      <WriteMediaSheet
+        open={mediaOpen}
+        onClose={() => setMediaOpen(false)}
+        onInsert={(snippet) => {
+          bodyHandleRef.current?.insertSnippet(snippet, "Media added.");
+        }}
+      />
     </div>
   );
 }

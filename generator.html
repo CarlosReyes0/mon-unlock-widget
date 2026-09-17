@@ -476,6 +476,7 @@
           <div class="media-type-tabs" role="tablist" aria-label="Media type">
             <button type="button" role="tab" data-media-kind="image" aria-selected="true">Image</button>
             <button type="button" role="tab" data-media-kind="video" aria-selected="false">Video</button>
+            <button type="button" role="tab" data-media-kind="audio" aria-selected="false">Audio</button>
             <button type="button" role="tab" data-media-kind="embed" aria-selected="false">Embed</button>
           </div>
           <label for="mediaUrlInput" style="font-size:0.875rem; font-weight:600; color:#374151;">URL</label>
@@ -1156,6 +1157,15 @@
           return;
         }
 
+        if (result.kind === "audio") {
+          const audio = document.createElement("audio");
+          audio.src = url;
+          audio.controls = true;
+          audio.preload = "metadata";
+          preview.appendChild(audio);
+          return;
+        }
+
         const img = document.createElement("img");
         img.src = url;
         img.alt = "Preview";
@@ -1233,7 +1243,9 @@
           prefillUrl && detectMediaKind
             ? detectMediaKind(prefillUrl)
             : prefillKind;
-        setSelectedMediaKind(kind === "embed" ? "embed" : kind === "video" ? "video" : "image");
+        setSelectedMediaKind(
+          kind === "embed" || kind === "video" || kind === "audio" ? kind : "image"
+        );
         setMediaValidationUi({ status: "checking", message: prefillUrl ? "Checking link…" : "Paste a link to check it." });
         syncMediaSheetLayout();
         input.focus();

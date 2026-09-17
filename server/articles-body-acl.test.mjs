@@ -76,6 +76,13 @@ test("public listing surfaces never request or return body", () => {
   );
 });
 
+test("hosted article page assigns teaser as text, never innerHTML of listing teaser", () => {
+  const articlePage = read("article.html");
+  assert.match(articlePage, /teaser\.textContent\s*=\s*article\.teaser/);
+  assert.doesNotMatch(articlePage, /teaser\.innerHTML\s*=\s*article\.teaser/);
+  assert.match(articlePage, /Body intentionally omitted/);
+});
+
 test("article-body unlock paths read body with the service role key", () => {
   const edge = read("supabase/functions/article-body/index.ts");
   const railway = read("server/subscriptions.mjs");

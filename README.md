@@ -159,9 +159,9 @@ npm run build
 
 Output: `dist/mon-unlock.js` and `dist/mon-unlock.css`.
 
-## Media cookbook (pictures + videos)
+## Media cookbook (pictures, audio, videos)
 
-The body supports safe HTML for rich content. Common examples:
+On **/write**, paste a public image, MP3, MP4, or YouTube/Vimeo/Loom URL — or use **Add image, audio, or video**. The sanitizer still accepts the same HTML if you type it:
 
 ### Image
 
@@ -186,6 +186,12 @@ The body supports safe HTML for rich content. Common examples:
 <video controls preload="metadata" src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"></video>
 ```
 
+### Audio
+
+```html
+<audio controls preload="metadata" src="https://cdn.example.com/track.mp3"></audio>
+```
+
 ### What is allowed
 
 - Body HTML allows: text tags, links, images, video/audio tags, and iframe embeds.
@@ -195,7 +201,8 @@ The body supports safe HTML for rich content. Common examples:
 ### Troubleshooting media
 
 - Image not showing: confirm the URL is a *direct* link to the image binary (e.g. `https://i.postimg.cc/.../photo.jpg` or `https://picsum.photos/...`), not a web page like `postimg.cc/...` or an HTML gallery. The sanitizer keeps http/https but the browser can only decode real image responses.
-- Video (self-hosted) not playing: must be a direct `.mp4`/`.webm` URL. YouTube/Vimeo share or watch URLs do not work in `<video src>` — use an `<iframe>` embed instead (or paste a YouTube link and the widget will auto-convert it to an embed).
+- Video (self-hosted) not playing: must be a direct `.mp4`/`.webm` URL. YouTube/Vimeo share or watch URLs do not work in `<video src>` — use an `<iframe>` embed instead (or paste a YouTube/Vimeo/Loom link and the widget will auto-convert it to an embed).
+- Audio not playing: use a direct `.mp3` / `.m4a` / `.ogg` file URL, not a streaming page.
 - Iframe not showing: use an allowlisted host and embed URL format (not watch/share page URL).
 - Works in generator preview but not production: deploy latest widget bundle and refresh cache.
 

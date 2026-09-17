@@ -43,10 +43,13 @@ const ALLOWED_TAGS = new Set([
   "iframe",
 ]);
 
-const ALLOWED_IFRAME_HOSTS = new Set([
+export const ALLOWED_IFRAME_HOSTS = new Set([
   "www.youtube.com",
   "youtube.com",
+  "m.youtube.com",
   "youtu.be",
+  "www.youtube-nocookie.com",
+  "youtube-nocookie.com",
   "player.vimeo.com",
   "www.loom.com",
   "loom.com",
@@ -74,31 +77,81 @@ function isSafeUrl(value: string, allowedProtocols: string[] = ["http:", "https:
   }
 }
 
-function youtubeUrlToEmbed(src: string): string | null {
+function videoIdFromPath(pathname: string, prefix: string): string | null {
+  if (!pathname.startsWith(prefix)) return null;
+  return pathname.slice(prefix.length).split("/")[0]?.split(/[?#]/)[0] || null;
+}
+
+export function youtubeUrlToEmbed(src: string): string | null {
   try {
     const u = new URL(src, "https://example.com");
     const host = u.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
     let id: string | null = null;
+    const nocookie = host === "youtube-nocookie.com";
 
-    if (host === "youtube.com" || host === "youtube") {
-      if (u.pathname.startsWith("/shorts/")) {
-        id = u.pathname.split("/")[2]?.split(/[?#]/)[0] || null;
-      } else if (u.pathname.startsWith("/watch")) {
-        id = u.searchParams.get("v");
-      } else if (u.pathname.startsWith("/embed/")) {
-        id = u.pathname.split("/")[2]?.split(/[?#]/)[0] || null;
-      }
+    if (host === "youtube.com" || host === "youtube" || nocookie) {
+      id =
+        videoIdFromPath(u.pathname, "/shorts/") ||
+        videoIdFromPath(u.pathname, "/embed/") ||
+        (u.pathname.startsWith("/watch") ? u.searchParams.get("v") : null);
     } else if (host === "youtu.be") {
       id = u.pathname.slice(1).split(/[?#]/)[0] || null;
     }
 
-    if (id) {
-      return `https://www.youtube.com/embed/${id}`;
+    if (!id) return null;
+    const root = nocookie ? "https://www.youtube-nocookie.com" : "https://www.youtube.com";
+    return `${root}/embed/${id}`;
+  } catch {
+    return null;
+  }
+}
+
+export function vimeoUrlToEmbed(src: string): string | null {
+  try {
+    const u = new URL(src, "https://example.com");
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "vimeo.com" && host !== "player.vimeo.com") return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    const id = parts.find((p) => /^\d{6,12}$/.test(p));
+    if (!id) return null;
+    return `https://player.vimeo.com/video/${id}`;
+  } catch {
+    return null;
+  }
+}
+
+export function loomUrlToEmbed(src: string): string | null {
+  try {
+    const u = new URL(src, "https://example.com");
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "loom.com") return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    if ((parts[0] === "share" || parts[0] === "embed") && parts[1]) {
+      return `https://www.loom.com/embed/${parts[1]}`;
     }
     return null;
   } catch {
     return null;
   }
+}
+
+/** Canonical iframe src for YouTube / Vimeo / Loom share and watch URLs. */
+export function trustedEmbedSrc(src: string): string | null {
+  return youtubeUrlToEmbed(src) || vimeoUrlToEmbed(src) || loomUrlToEmbed(src);
+}
+
+function iframeFromTrustedUrl(doc: Document, src: string): HTMLIFrameElement | null {
+  const embed = trustedEmbedSrc(src);
+  if (!embed) return null;
+  const iframe = doc.createElement("iframe");
+  iframe.setAttribute("src", embed);
+  iframe.setAttribute(
+    "allow",
+    "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  );
+  iframe.setAttribute("allowfullscreen", "");
+  iframe.setAttribute("loading", "lazy");
+  return iframe;
 }
 
 function sanitizeElement(el: Element) {
@@ -131,19 +184,13 @@ function sanitizeElement(el: Element) {
       continue;
     }
 
-    // If a <video> mistakenly uses a YouTube watch/shorts URL as src (common),
+    // If a <video> mistakenly uses a YouTube/Vimeo/Loom watch URL as src,
     // auto-convert it to a working iframe embed so the video actually loads.
     if (name === "src" && tag === "video") {
-      const embed = youtubeUrlToEmbed(value);
-      if (embed) {
+      const iframe = el.ownerDocument ? iframeFromTrustedUrl(el.ownerDocument, value) : null;
+      if (iframe) {
         const parent = el.parentNode;
-        if (parent && el.ownerDocument) {
-          const iframe = el.ownerDocument.createElement("iframe");
-          iframe.setAttribute("src", embed);
-          iframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture");
-          iframe.setAttribute("allowfullscreen", "");
-          iframe.setAttribute("loading", "lazy");
-          // Transfer any explicit size attrs if present
+        if (parent) {
           if (el.hasAttribute("width")) iframe.setAttribute("width", el.getAttribute("width")!);
           if (el.hasAttribute("height")) iframe.setAttribute("height", el.getAttribute("height")!);
           parent.replaceChild(iframe, el);
@@ -167,11 +214,11 @@ function sanitizeElement(el: Element) {
       return;
     }
 
-    // Writers often paste youtube.com/watch?... into iframe src. That page refuses
-    // to render in an iframe — rewrite to /embed/VIDEO_ID when possible.
-    const youtubeEmbed = youtubeUrlToEmbed(src);
-    if (youtubeEmbed) {
-      el.setAttribute("src", youtubeEmbed);
+    // Writers often paste watch/share URLs into iframe src. Those pages refuse
+    // to render in an iframe — rewrite to the provider embed URL when possible.
+    const embedSrc = trustedEmbedSrc(src);
+    if (embedSrc) {
+      el.setAttribute("src", embedSrc);
       if (!el.hasAttribute("allow")) {
         el.setAttribute(
           "allow",
