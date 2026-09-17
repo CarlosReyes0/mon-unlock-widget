@@ -91,8 +91,23 @@ test("article-body unlock paths read body with the service role key", () => {
   assert.match(railway, /includeBody/);
   assert.match(
     railway,
-    /article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,body/
+    /article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,title,author,teaser,body/
   );
+});
+
+test("download is gated on the same entitlement as article-body", () => {
+  const index = read("server/index.mjs");
+  const download = read("server/article-download.mjs");
+  const widget = read("src/widget/mon-unlock.ts");
+  const listings = read("server/listings-api.mjs");
+  const og = read("server/article-og.mjs");
+  assert.match(index, /parseDownloadPath/);
+  assert.match(download, /includeBody: true/);
+  assert.match(download, /not_unlocked/);
+  assert.match(widget, /downloadArticle/);
+  assert.match(widget, /Free with your unlock/);
+  assert.doesNotMatch(listings.split("PUBLIC_COLS")[1].split(";")[0], /\bbody\b/);
+  assert.doesNotMatch(og, /\/api\/articles\/.*\/download/);
 });
 
 async function rest(url, key, select) {
@@ -197,4 +212,56 @@ test("production /api/article-body with a fake wallet is not_unlocked (live)", a
   // 500 would mean the body column grant/lookup broke.
   assert.equal(got.res.status, 403, got.text.slice(0, 300));
   assert.equal(got.json?.error, "not_unlocked");
+});
+
+async function railwayDownload(slug, params) {
+  const qs = params ? `?${params}` : "";
+  const res = await fetch(`${RAILWAY}/api/articles/${encodeURIComponent(slug)}/download${qs}`);
+  const text = await res.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  return { res, text, json };
+}
+
+test("production article download without proof is not a public file (live)", async (t) => {
+  let got;
+  try {
+    got = await railwayDownload(SLUG);
+  } catch (e) {
+    t.skip(`railway unreachable: ${e?.message || e}`);
+    return;
+  }
+  if (got.res.status === 404) {
+    t.skip("production has not deployed article download yet");
+    return;
+  }
+  assert.equal(got.res.status, 400, got.text.slice(0, 300));
+  assert.equal(got.json?.error, "reader_or_fiat_session_required");
+  assert.match(got.res.headers.get("content-type") || "", /application\/json/);
+  assert.equal(typeof got.json?.body, "undefined");
+});
+
+test("production article download with a fake wallet is not_unlocked (live)", async (t) => {
+  let got;
+  try {
+    got = await railwayDownload(
+      SLUG,
+      "reader=0x0000000000000000000000000000000000000001"
+    );
+  } catch (e) {
+    t.skip(`railway unreachable: ${e?.message || e}`);
+    return;
+  }
+  if (got.res.status === 404) {
+    t.skip("production has not deployed article download yet");
+    return;
+  }
+  assert.equal(got.res.status, 403, got.text.slice(0, 300));
+  assert.equal(got.json?.error, "not_unlocked");
+  assert.match(got.res.headers.get("content-type") || "", /application\/json/);
+  assert.equal(typeof got.json?.body, "undefined");
 });

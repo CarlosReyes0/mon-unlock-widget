@@ -179,6 +179,17 @@ test("GET /og/{listed-slug}.jpg is image/jpeg", async () => {
   assert.ok(buf.length > 1000);
 });
 
+test("GET /api/articles/{slug}/download without a session is 400, not a public file", async () => {
+  const slug = await listedSlug();
+  const res = await fetch(`${origin}/api/articles/${encodeURIComponent(slug)}/download`);
+  assert.equal(res.status, 400);
+  assert.match(res.headers.get("content-type") || "", /application\/json/);
+  const text = await res.text();
+  const body = JSON.parse(text);
+  assert.equal(body.error, "reader_or_fiat_session_required");
+  assert.equal(body.body, undefined);
+});
+
 async function listedSlug() {
   const forced = String(process.env.SMOKE_ARTICLE_SLUG || "").trim();
   if (forced) return forced;

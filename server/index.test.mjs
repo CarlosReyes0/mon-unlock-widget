@@ -139,6 +139,24 @@ test("GET /api/article-body without reader or fiat session returns 400", async (
   assert.equal(body.error, "reader_or_fiat_session_required");
 });
 
+test("GET /api/articles/{slug}/download without reader is 400 JSON, not a file", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/articles/demo-slug/download`);
+  assert.equal(res.status, 400);
+  assert.match(res.headers.get("content-type") || "", /application\/json/);
+  const body = await res.json();
+  assert.equal(body.error, "reader_or_fiat_session_required");
+  assert.equal(body.body, undefined);
+});
+
+test("GET /api/articles/{slug}/download with a wallet and no Supabase is 503", async () => {
+  const res = await fetch(
+    `http://127.0.0.1:${PORT}/api/articles/demo-slug/download?reader=0x1111111111111111111111111111111111111111`
+  );
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "supabase_not_configured");
+});
+
 test("POST /api/subscriptions/stripe/checkout returns 503 without secrets", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/subscriptions/stripe/checkout`, {
     method: "POST",

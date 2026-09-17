@@ -207,7 +207,7 @@ async function lookupArticleRow(articleId, cols) {
 
 async function lookupArticleForAccess(articleId) {
   const cols =
-    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,body";
+    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,title,author,teaser,body";
   return lookupArticleRow(articleId, cols);
 }
 
@@ -307,6 +307,9 @@ export async function resolveArticleAccess(input) {
       throw err;
     }
     payload.body = article.body || "";
+    payload.title = article.title || article.article_id;
+    payload.author = article.author || "Author";
+    payload.teaser = article.teaser || "";
   }
   return payload;
 }

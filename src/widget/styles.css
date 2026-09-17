@@ -217,6 +217,23 @@ mon-unlock {
   color: #000;
 }
 
+.mon-download-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.mon-download-note {
+  font-size: 0.75rem;
+  color: #57534e;
+}
+
+.mon-card.dark .mon-download-note {
+  color: #a8a29e;
+}
+
 .mon-badge {
   font-size: 0.6875rem;
   font-weight: 600;
