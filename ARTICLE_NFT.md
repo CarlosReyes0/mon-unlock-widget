@@ -73,12 +73,13 @@ forge script script/DeployArticleNft.s.sol \
   -vvvv
 ```
 
+Live: [`0xFe467952918F744606e70876b2af0C083D269f92`](https://monadvision.com/address/0xFe467952918F744606e70876b2af0C083D269f92) (see `deployments/monad-mainnet-article-nft.json`).
+
 Then:
 
-1. Put the address in `deployments/monad-mainnet-article-nft.json`.
-2. Set Railway `ARTICLE_NFT_CONTRACT=0x…` (and optional `VITE_ARTICLE_NFT_CONTRACT` if you rebuild the widget).
-3. Apply the Supabase migration `0011_article_nfts.sql`.
-4. Confirm `GET /api/article-nfts/config` returns `"configured": true`.
+1. Set Railway `ARTICLE_NFT_CONTRACT=0xFe467952918F744606e70876b2af0C083D269f92` (and optional `VITE_ARTICLE_NFT_CONTRACT` if you rebuild the widget).
+2. Apply the Supabase migration `0011_article_nfts.sql`.
+3. Confirm `GET /api/article-nfts/config` returns `"configured": true`.
 
 Owner can later `setBaseURI` / `setUnlockContracts` if the metadata host or unlock addresses change. No minting key lives on the server.
 
