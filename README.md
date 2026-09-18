@@ -8,7 +8,7 @@ Readers unlock the full article with **MON** on Monad, or with **card / Apple Pa
 
 **What to build next:** see **[POSTING.md](./POSTING.md)** (write, Publish, it’s up), **[FOCUS.md](./FOCUS.md)**, and **[PRODUCT_OPTIONS.md](./PRODUCT_OPTIONS.md)**.
 
-**Smart contract:** [`contracts/`](./contracts/) — `ArticleUnlock.sol` (Foundry). Optional article collectible: `ArticleEditionNFT.sol` on Base — see **[ARTICLE_NFT.md](./ARTICLE_NFT.md)**. Run `forge test` in `contracts/`.
+**Smart contract:** [`contracts/`](./contracts/) — `ArticleUnlock.sol` (Foundry). Optional **Article NFTs:** [`ARTICLE_NFT.md`](./ARTICLE_NFT.md) (writer edition + reader receipt on Monad; optional 1/1 `ArticleEditionNFT.sol` on Base; unlock stays access). Run `forge test` in `contracts/`.
 
 ## Branding note
 
@@ -43,8 +43,8 @@ https://mon-unlock-widget-production.up.railway.app
 Pages:
 - `/` – Public article feed (also `/articles`)
 - `/demo` – Unlock demo video (former homepage)
-- `/write` – New post (title, write, Publish). Optional **Mint edition NFT** after publish (Base 1/1 collectible — not a read gate). Optional **Draft posts in your voice** (never auto-posts) and **Preview how this might land** (MiroShark) do not block Publish.
-- `/articles/{slug}` – Hosted article page (same unlock as embed). After unlock, **Download** is free (HTML of title + body). Locked readers cannot fetch the file. If the author minted an edition, a **Collectible minted** link is shown; reading does not require it.
+- `/write` – New post (title, write, Publish). Optional **Mint edition on Monad** and **Mint edition NFT** (Base 1/1) after publish — not a read gate. Optional **Draft posts in your voice** (never auto-posts) and **Preview how this might land** (MiroShark) do not block Publish.
+- `/articles/{slug}` – Hosted article page (same unlock as embed). After unlock, **Download** is free (HTML of title + body). Locked readers cannot fetch the file. If the author minted a Base edition, a **Collectible minted** link is shown; reading does not require it.
 - `/generator.html` – Create embed for your own site
 - `/account.html` – Publisher account (email / Google / wallet)
 - `/dashboard.html` – Writer dashboard + Stripe payouts + listing controls
@@ -78,9 +78,9 @@ The articles homepage already has `<meta name="base:app_id" content="6aab87b69b2
 
 Write can draft 2–3 X posts in the writer's voice from pasted samples. **Nothing posts** — copy/reply-seed only. Autopost is out of scope. Setup: **[VOICE_DRAFTS.md](./VOICE_DRAFTS.md)**.
 
-### Article edition NFT (optional collectible)
+### Article NFTs (optional collectibles)
 
-After Publish, the author can mint a **1/1 edition** on Base. Unlock/USDC is still how readers pay to read. Set `ARTICLE_NFT_CONTRACT` on Railway after deploy. Setup: **[ARTICLE_NFT.md](./ARTICLE_NFT.md)**.
+After Publish, the author can mint a **writer edition on Monad** (`ARTICLE_NFT_CONTRACT`) and/or a **1/1 edition on Base** (`ARTICLE_EDITION_NFT_CONTRACT`). Unlock/USDC is still how readers pay to read. Setup: **[ARTICLE_NFT.md](./ARTICLE_NFT.md)**.
 
 ### Make yourself findable (manual Stripe step)
 

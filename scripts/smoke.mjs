@@ -95,6 +95,9 @@ test("GET /api/agents/health is ok", async () => {
   assert.ok(body.articleNft);
   assert.equal(typeof body.articleNft.configured, "boolean");
   assert.equal(body.articleNft.unlockSeparate, true);
+  assert.ok(body.articleEditionNft);
+  assert.equal(typeof body.articleEditionNft.configured, "boolean");
+  assert.equal(body.articleEditionNft.unlockSeparate, true);
 });
 
 test("GET /api/miroshark/status is fail-soft JSON", async () => {
@@ -106,6 +109,16 @@ test("GET /api/miroshark/status is fail-soft JSON", async () => {
   if (!body.enabled) {
     assert.match(String(body.message || ""), /BASE_BUILDER_CODE|Builder Code/i);
   }
+});
+
+test("GET /api/article-nfts/config is JSON and does not mint", async () => {
+  const res = await fetch(`${origin}/api/article-nfts/config`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.configured, "boolean");
+  assert.equal(body.chainId, 143);
+  assert.equal(body.mintAuth, "user-wallet");
 });
 
 test("GET /api/voice-drafts/status is drafts-only JSON", async () => {

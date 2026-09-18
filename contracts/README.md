@@ -116,12 +116,16 @@ Mainnet deploy: `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f` (wired as the app/i
 Override with `VITE_USDC_UNLOCK_CONTRACT` / `USDC_CONTRACT_ADDRESS` for forks.
 Publishers receive USDC; readers only need a tiny MON balance for gas.
 
+## Article NFTs (optional)
+
+Writer editions and reader receipts share one ERC-1155: `ArticleNFT.sol` (Monad). Unlock is still access. Deploy with `script/DeployArticleNft.s.sol`, then set `ARTICLE_NFT_CONTRACT`. Full steps: [ARTICLE_NFT.md](../ARTICLE_NFT.md).
+
 ## Article edition NFT (optional, Base)
 
-`ArticleEditionNFT.sol` is a 1/1 collectible of an article. Unlock/USDC stays the access gate. Deploy + Railway env: **[ARTICLE_NFT.md](../ARTICLE_NFT.md)**.
+`ArticleEditionNFT.sol` is a 1/1 collectible of an article on Base. Unlock/USDC stays the access gate. Deploy + Railway env: **[ARTICLE_NFT.md](../ARTICLE_NFT.md)**.
 
 ```bash
 forge test --match-contract ArticleEditionNFTTest
 # Base Sepolia
-forge script script/DeployArticleNft.s.sol --rpc-url https://sepolia.base.org --broadcast -vvvv
+forge script script/DeployArticleEditionNft.s.sol --rpc-url https://sepolia.base.org --broadcast -vvvv
 ```

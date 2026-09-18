@@ -136,6 +136,23 @@
             <a class="btn btn-secondary" id="listingViewLink" href="/articles" style="text-decoration:none;">View feed</a>
           </div>
           <p id="listingSaveStatus" style="margin:0.55rem 0 0;font-size:0.75rem;color:#6b7280;"></p>
+          <div id="listingNftBox" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #e5e7eb;display:none;">
+            <h3 class="section-title" style="font-size:1rem;">Mint edition on Monad</h3>
+            <p style="margin:0 0 0.65rem;font-size:0.875rem;color:#6b7280;line-height:1.45;">
+              Optional 1/1 or small edition you own. Not required to publish or to read. You pay gas.
+            </p>
+            <label for="listingNftAmount">Edition size</label>
+            <select id="listingNftAmount" style="width:auto;margin-bottom:0.75rem;">
+              <option value="1">1/1</option>
+              <option value="5">Edition of 5</option>
+              <option value="10">Edition of 10</option>
+              <option value="25">Edition of 25</option>
+            </select>
+            <div>
+              <button class="btn btn-secondary" id="listingNftMintBtn" type="button">Mint edition on Monad</button>
+            </div>
+            <p id="listingNftStatus" style="margin:0.55rem 0 0;font-size:0.75rem;color:#6b7280;"></p>
+          </div>
         </div>
 
         <div class="card" style="margin-top: 1.5rem;">
@@ -486,7 +503,71 @@
             article.listingStatus === "listed" ? "Open hosted page" : "View feed";
         }
         document.getElementById("listingSaveStatus").textContent = "";
+        void refreshListingNft(article);
         card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      async function refreshListingNft(article) {
+        const box = document.getElementById("listingNftBox");
+        const status = document.getElementById("listingNftStatus");
+        if (!box) return;
+        try {
+          const { fetchArticleNftConfig } = await import("/dist/mon-unlock.js");
+          const cfg = await fetchArticleNftConfig(window.location.origin);
+          if (!cfg?.configured) {
+            box.style.display = "none";
+            return;
+          }
+          box.style.display = "block";
+          if (status) status.textContent = "";
+          const mintBtn = document.getElementById("listingNftMintBtn");
+          if (mintBtn && !mintBtn.dataset.wired) {
+            mintBtn.dataset.wired = "1";
+            mintBtn.addEventListener("click", () => void mintListingEdition());
+          }
+        } catch {
+          box.style.display = "none";
+        }
+        void article;
+      }
+
+      async function mintListingEdition() {
+        const status = document.getElementById("listingNftStatus");
+        const btn = document.getElementById("listingNftMintBtn");
+        if (!listingEditorArticle || !currentWallet) {
+          status.textContent = "Sign in first.";
+          return;
+        }
+        const provider = window.__monPublisherProvider || window.ethereum;
+        if (!provider) {
+          status.textContent = "Connect a wallet to mint. You pay a little MON for gas.";
+          return;
+        }
+        btn.disabled = true;
+        status.textContent = "Minting…";
+        status.style.color = "#6b7280";
+        try {
+          const { fetchArticleNftConfig, mintArticleNft, explorerTxUrl } = await import("/dist/mon-unlock.js");
+          const cfg = await fetchArticleNftConfig(window.location.origin);
+          if (!cfg?.configured || !cfg.contract) throw new Error("nft_not_configured");
+          const amount = Number(document.getElementById("listingNftAmount").value || 1);
+          const result = await mintArticleNft({
+            provider,
+            account: currentWallet,
+            contract: cfg.contract,
+            slug: listingEditorArticle.articleId,
+            role: "edition",
+            amount,
+            apiBase: window.location.origin,
+          });
+          status.innerHTML = `Minted. <a href="${explorerTxUrl(result.txHash)}" target="_blank" rel="noopener">View on MonadVision</a>`;
+          status.style.color = "#16a34a";
+        } catch (e) {
+          status.textContent = e.message || "Mint failed";
+          status.style.color = "#b91c1c";
+        } finally {
+          btn.disabled = false;
+        }
       }
 
       async function saveListingFromDashboard() {

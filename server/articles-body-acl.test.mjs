@@ -52,7 +52,7 @@ test("migration revokes articles.body from anon/authenticated and re-grants list
 });
 
 test("article edition NFT columns are granted without exposing body", () => {
-  const sql = read("supabase/migrations/0011_article_edition_nft.sql");
+  const sql = read("supabase/migrations/0012_article_edition_nft.sql");
   assert.match(sql, /nft_token_id/);
   assert.match(sql, /nft_contract/);
   assert.match(sql, /grant select \(/i);
@@ -60,6 +60,16 @@ test("article edition NFT columns are granted without exposing body", () => {
     sql.replace(/--[^\n]*/g, ""),
     /grant select \([^)]*\bbody\b/i
   );
+});
+
+test("article NFT metadata never selects articles.body", () => {
+  const nft = read("server/article-nft.mjs");
+  const sql = read("supabase/migrations/0011_article_nfts.sql");
+  assert.match(nft, /ARTICLE_META_COLS/);
+  assert.doesNotMatch(nft.split("ARTICLE_META_COLS")[1].split(";")[0], /\bbody\b/);
+  assert.match(nft, /delete metadata.body/);
+  assert.match(sql, /article_nfts/);
+  assert.match(sql, /role in \('edition', 'receipt'\)/);
 });
 
 test("dashboard does not select articles.body or wildcard columns", () => {

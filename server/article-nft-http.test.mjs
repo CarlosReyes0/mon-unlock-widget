@@ -17,8 +17,8 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
   env: {
     ...process.env,
     PORT: String(PORT),
-    ARTICLE_NFT_CONTRACT: "",
-    ARTICLE_NFT_CHAIN_ID: "",
+    ARTICLE_EDITION_NFT_CONTRACT: "",
+    ARTICLE_EDITION_NFT_CHAIN_ID: "",
     SUPABASE_URL: "",
     SUPABASE_SERVICE_ROLE_KEY: "",
     CDP_API_KEY_ID: "",
@@ -90,4 +90,6 @@ test("GET /api/agents/health includes articleNft and does not require mint", asy
   const body = await res.json();
   assert.equal(body.articleNft.configured, false);
   assert.equal(body.articleNft.unlockSeparate, true);
+  assert.equal(body.articleEditionNft.configured, false);
+  assert.equal(body.articleEditionNft.unlockSeparate, true);
 });

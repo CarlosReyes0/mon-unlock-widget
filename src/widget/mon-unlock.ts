@@ -25,6 +25,11 @@ import {
   resolveSubscriptionContract,
   subscribeOnchain,
   transferUsdcToWriter,
+  cardUnlockNftCopy,
+  explorerTxUrl,
+  fetchArticleNftConfig,
+  mintArticleNft,
+  type ArticleNftConfig,
 } from "../core/index.js";
 import type { Address } from "viem";
 import "./styles.css";
@@ -81,6 +86,10 @@ export class MonUnlock extends LitElement {
   @state() private checkoutOpen = false;
   @state() private showMetaMaskHelp = false;
   @state() private downloadBusy = false;
+  @state() private nftConfig: ArticleNftConfig | null = null;
+  @state() private nftBusy = false;
+  @state() private nftError: string | null = null;
+  @state() private nftTxHash: string | null = null;
 
   private walletManager = new WalletManager();
   private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
@@ -127,6 +136,15 @@ export class MonUnlock extends LitElement {
     this.consumeFiatReturnParams();
     this.restoreFiatSession();
     void this.refreshPlanAndAccess();
+    void this.loadNftConfig();
+  }
+
+  private async loadNftConfig() {
+    try {
+      this.nftConfig = await fetchArticleNftConfig();
+    } catch {
+      this.nftConfig = { ok: true, configured: false, contract: "", chainId: 143 };
+    }
   }
 
   /** After mobile same-tab checkout, article URL includes mon_fiat_session. */
@@ -379,6 +397,87 @@ export class MonUnlock extends LitElement {
     } finally {
       this.downloadBusy = false;
     }
+  }
+
+  private cryptoUnlockEligibleForReceipt(): boolean {
+    if (!this.unlocked) return false;
+    if (this.accessReason === "subscription") return false;
+    return Boolean(this.wallet.address || this.txHash);
+  }
+
+  private async mintReceipt() {
+    if (!this.article || this.nftBusy) return;
+    const contract = this.nftConfig?.contract;
+    const provider = this.walletManager.getProvider();
+    const account = this.wallet.address;
+    if (!this.nftConfig?.configured || !contract) return;
+    if (!provider || !account) {
+      this.nftError = "Connect the wallet you unlocked with to mint a receipt.";
+      return;
+    }
+    this.nftBusy = true;
+    this.nftError = null;
+    try {
+      const result = await mintArticleNft({
+        provider,
+        account: account as Address,
+        contract: contract as Address,
+        slug: this.article.id,
+        role: "receipt",
+        apiBase: getCheckoutBaseUrl(),
+      });
+      this.nftTxHash = result.txHash;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Mint failed.";
+      this.nftError = /reject|denied|cancel/i.test(msg) ? "Mint cancelled." : msg;
+    } finally {
+      this.nftBusy = false;
+    }
+  }
+
+  private renderReceiptMint() {
+    if (!this.nftConfig?.configured) return nothing;
+    if (this.accessReason === "subscription") return nothing;
+
+    if (this.fiatSession && !this.cryptoUnlockEligibleForReceipt()) {
+      return html`
+        <div class="mon-nft-row">
+          <p>${cardUnlockNftCopy()}</p>
+        </div>
+      `;
+    }
+
+    if (!this.cryptoUnlockEligibleForReceipt()) return nothing;
+
+    const provider = this.walletManager.getProvider();
+    return html`
+      <div class="mon-nft-row">
+        <p>
+          Optional souvenir NFT on Monad. Not required to read. You pay a little MON for gas.
+        </p>
+        ${this.nftTxHash
+          ? html`<p>
+              Receipt minted.
+              <a href=${explorerTxUrl(this.nftTxHash)} target="_blank" rel="noopener noreferrer">View on MonadVision</a>
+            </p>`
+          : html`
+              <button
+                type="button"
+                class="mon-btn mon-btn-secondary"
+                ?disabled=${this.nftBusy}
+                @click=${() =>
+                  provider ? this.mintReceipt() : this.connect()}
+              >
+                ${this.nftBusy
+                  ? "Minting…"
+                  : provider
+                    ? "Mint receipt"
+                    : "Connect wallet to mint receipt"}
+              </button>
+            `}
+        ${this.nftError ? html`<p>${this.nftError}</p>` : nothing}
+      </div>
+    `;
   }
 
   private renderTeaser(teaser: string, className: string) {
@@ -1235,6 +1334,7 @@ export class MonUnlock extends LitElement {
                   </button>
                   <span class="mon-download-note">Free with your unlock</span>
                 </div>
+                ${this.renderReceiptMint()}
                 <p class="mt-6 text-xs text-black">
                   ${this.accessReason === "subscription"
                     ? "Unlocked with subscription"

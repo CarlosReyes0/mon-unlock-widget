@@ -5,5 +5,5 @@
   "explorer": "https://basescan.org",
   "contract": "",
   "status": "not_deployed",
-  "notes": "Optional 1/1 article edition NFT on Base mainnet. Do not mint from CI. After deploy, set ARTICLE_NFT_CONTRACT and ARTICLE_NFT_CHAIN_ID=8453 on Railway (no deployer private key needed at runtime — the writer mints)."
+  "notes": "Optional 1/1 article edition NFT on Base mainnet. Do not mint from CI. After forge script DeployArticleEditionNft.s.sol, paste the address here and set ARTICLE_EDITION_NFT_CONTRACT and ARTICLE_EDITION_NFT_CHAIN_ID=8453 on Railway (no deployer private key needed at runtime — the writer mints)."
 }

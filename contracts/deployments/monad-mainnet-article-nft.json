@@ -1,0 +1,11 @@
+{
+  "network": "monad-mainnet",
+  "chainId": 143,
+  "rpcUrl": "https://rpc.monad.xyz",
+  "explorer": "https://monadvision.com/address/0xFe467952918F744606e70876b2af0C083D269f92",
+  "contract": "0xFe467952918F744606e70876b2af0C083D269f92",
+  "unlockMon": "0x27cA0c23835328e2Ab1424b66330be86fe177FA6",
+  "unlockUsdc": "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f",
+  "status": "deployed",
+  "notes": "ArticleNFT ERC-1155 — writer editions + reader receipts. Minter wallet pays gas. Railway ARTICLE_NFT_CONTRACT should match this address."
+}

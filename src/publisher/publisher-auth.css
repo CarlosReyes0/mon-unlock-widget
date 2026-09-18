@@ -785,3 +785,72 @@
     width: 100%;
   }
 }
+
+.mon-nft {
+  margin: 1.25rem 0 0;
+  padding: 1rem 1.05rem;
+  border: 1px solid #ddd6fe;
+  border-radius: 14px;
+  background: #faf5ff;
+}
+
+.mon-nft__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.mon-nft__copy {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: #57534e;
+  line-height: 1.45;
+}
+
+.mon-nft__label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  margin: 0 0 0.75rem;
+}
+
+.mon-nft__select {
+  max-width: 12rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  background: #fff;
+}
+
+.mon-nft__error {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.mon-nft__ok {
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+  color: #166534;
+}
+
+.mon-nft__ok a {
+  color: #5b21b6;
+}
+
+.mon-nft__skip {
+  display: inline-block;
+  margin: 0.65rem 0 0 0.5rem;
+  appearance: none;
+  border: none;
+  background: none;
+  color: #5b21b6;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}

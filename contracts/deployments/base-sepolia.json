@@ -5,5 +5,5 @@
   "explorer": "https://sepolia.basescan.org",
   "contract": "",
   "status": "not_deployed",
-  "notes": "Optional 1/1 article edition NFT. Unlock/USDC on Monad is still the access gate. After forge script DeployArticleNft.s.sol, paste the address here and set ARTICLE_NFT_CONTRACT + ARTICLE_NFT_CHAIN_ID=84532 on Railway."
+  "notes": "Optional 1/1 article edition NFT. Unlock/USDC on Monad is still the access gate. After forge script DeployArticleEditionNft.s.sol, paste the address here and set ARTICLE_EDITION_NFT_CONTRACT + ARTICLE_EDITION_NFT_CHAIN_ID=84532 on Railway."
 }

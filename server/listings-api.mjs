@@ -7,7 +7,7 @@ import {
   normalizeExternalUrl,
   toPublicListing,
 } from "./listings.mjs";
-import { nftFromRow } from "./article-nft.mjs";
+import { nftFromRow } from "./article-edition-nft.mjs";
 import { getWriterPlan } from "./subscriptions.mjs";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");

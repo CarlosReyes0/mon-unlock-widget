@@ -1,6 +1,126 @@
-# Article edition NFT (optional collectible)
+# Article NFTs (optional collectibles)
 
-Open Paywall’s access gate stays **USDC / MON unlock**. This is a writer-optional **1/1 edition NFT** on **Base** after publish — a receipt / provenance collectible, not a second paywall. Readers can still unlock and read with no NFT.
+Unlock stays the access gate — **USDC / MON** is how readers pay to read. NFTs are souvenirs / provenance only. Holding one is never required to read, and token metadata never includes the paid body.
+
+Two optional contracts can be enabled independently:
+
+| Contract | Chain | Token | Who mints |
+|----------|-------|--------|-----------|
+| `ArticleNFT.sol` | Monad | ERC-1155 writer edition + reader receipt | Writer after publish; reader after a **crypto** unlock |
+| `ArticleEditionNFT.sol` | Base | ERC-721 1/1 edition | Writer after publish |
+
+The **minter’s wallet pays gas**. There is no server minting key. `RELAYER_PRIVATE_KEY` stays unlock-registration / gas-drip only.
+
+`ARTICLE_NFT_CONTRACT` is the **Monad** ERC-1155 (already used in production). The Base 1/1 uses **`ARTICLE_EDITION_NFT_CONTRACT`** so the two addresses cannot collide.
+
+---
+
+# Article NFTs on Monad
+
+Optional **writer editions** and **reader receipts**. One ERC-1155 on **Monad**.
+
+## What mints
+
+| Path | Who | Token | Auth on-chain |
+|------|-----|--------|----------------|
+| Writer edition | Publisher after publish (Write or Dashboard) | 1/1 or small edition (max 25) they own | `getArticle` publisher on ArticleUnlock / ArticleUnlockUsdc |
+| Reader receipt | Unlocker after a **crypto** unlock | One receipt per wallet per article | `hasUnlocked` on either unlock contract |
+
+Apple Pay / card unlocks still grant access. The UI skips the receipt mint and explains that receipts need a wallet unlock.
+
+## Env
+
+| Variable | Where | Purpose |
+|----------|--------|---------|
+| `ARTICLE_NFT_CONTRACT` | Railway server | ERC-1155 address. Empty = mint UI hidden. |
+| `VITE_ARTICLE_NFT_CONTRACT` | optional browser build | Same address if you rebuild the widget without relying on `/api/article-nfts/config`. |
+| `MONAD_RPC_URL` | server | Defaults to `https://rpc.monad.xyz` (chain id **143**), same as the USDC relayer. |
+
+Mint auth is **user-wallet signed**: `mintEdition` / `mintReceipt` from the connected wallet. Do **not** add a hot server key as the only mint path.
+
+After mint, the app records `tokenId ↔ articleSlug ↔ role` in Postgres (`article_nfts`). Apply `supabase/migrations/0011_article_nfts.sql`.
+
+## Deploy (Foundry)
+
+Install Foundry, then from `contracts/`:
+
+```bash
+forge install foundry-rs/forge-std --no-commit
+forge test
+```
+
+CI runs `forge test` only (local / Anvil). It does **not** mint on Monad mainnet.
+
+### Testnet (optional, docs / CI dry-run)
+
+Match the existing MON testnet unlock if you want a sandbox:
+
+```bash
+cd contracts
+export PRIVATE_KEY=...          # deployer; becomes owner (setBaseURI only)
+export UNLOCK_MON=0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D
+export UNLOCK_USDC=0x...        # if you have a testnet USDC unlock
+export NFT_BASE_URI=https://your-host/api/article-nfts/metadata/
+export MONAD_TESTNET_RPC_URL=https://testnet-rpc.monad.xyz
+
+forge script script/DeployArticleNft.s.sol \
+  --rpc-url monad_testnet \
+  --broadcast \
+  -vvvv
+```
+
+Copy the address into `deployments/monad-testnet-article-nft.json`.
+
+### Mainnet (production)
+
+USDC unlocks already use Monad **mainnet** (chain id 143, RPC `MONAD_RPC_URL` / `https://rpc.monad.xyz`).
+
+```bash
+cd contracts
+export PRIVATE_KEY=...
+export MONAD_RPC_URL=https://rpc.monad.xyz
+# defaults: mainnet ArticleUnlock + ArticleUnlockUsdc
+export NFT_BASE_URI=https://mon-unlock-widget-production.up.railway.app/api/article-nfts/metadata/
+
+forge script script/DeployArticleNft.s.sol \
+  --rpc-url monad_mainnet \
+  --broadcast \
+  -vvvv
+```
+
+Live: [`0xFe467952918F744606e70876b2af0C083D269f92`](https://monadvision.com/address/0xFe467952918F744606e70876b2af0C083D269f92) (see `deployments/monad-mainnet-article-nft.json`).
+
+Then:
+
+1. Set Railway `ARTICLE_NFT_CONTRACT=0xFe467952918F744606e70876b2af0C083D269f92` (and optional `VITE_ARTICLE_NFT_CONTRACT` if you rebuild the widget).
+2. Apply the Supabase migration `0011_article_nfts.sql`.
+3. Confirm `GET /api/article-nfts/config` returns `"configured": true`.
+
+Owner can later `setBaseURI` / `setUnlockContracts` if the metadata host or unlock addresses change. No minting key lives on the server.
+
+## tokenURI
+
+`GET /api/article-nfts/metadata/{tokenId}`:
+
+- `name`, `description` (title + **teaser** only)
+- `external_url` — hosted article `/articles/{slug}`
+- `image` — existing OG card `/og/{slug}.jpg`
+- attributes: `role=edition|receipt`, `articleSlug`, optional `price`
+
+Paid body is never selected from the database and is stripped if a caller tries to pass it.
+
+## Product surfaces
+
+- **Write** — after a successful publish, optional “Mint edition on Monad” (skipped when the contract env is empty; then Write still jumps to the article unless the Base edition is configured).
+- **Dashboard → Listing** — same writer mint when a wallet is connected.
+- **Article widget / crypto checkout** — optional “Mint receipt” after an on-chain unlock.
+- Card / Apple Pay — copy that receipts need a crypto unlock; reading is unchanged.
+
+---
+
+# Article edition NFT on Base
+
+A writer-optional **1/1 ERC-721** on **Base** after publish — a second collectible, not a second paywall. Independent of the Monad ERC-1155.
 
 ## What it is
 
@@ -14,8 +134,6 @@ Open Paywall’s access gate stays **USDC / MON unlock**. This is a writer-optio
 The writer mints from **/write** (wallet already connected). The platform does **not** mint from a Railway private key.
 
 ## Contract
-
-Foundry, same `contracts/` tree as `ArticleUnlock`.
 
 ```bash
 cd contracts
@@ -42,8 +160,8 @@ Deployer key is **only** for `forge script`. It is not a Railway runtime secret.
 cd contracts
 # Base Sepolia
 export PRIVATE_KEY=your_deployer_key_without_or_with_0x
-export ARTICLE_NFT_BASE_URI=https://mon-unlock-widget-production.up.railway.app/api/nft/
-forge script script/DeployArticleNft.s.sol \
+export ARTICLE_EDITION_NFT_BASE_URI=https://mon-unlock-widget-production.up.railway.app/api/nft/
+forge script script/DeployArticleEditionNft.s.sol \
   --rpc-url https://sepolia.base.org \
   --broadcast -vvvv
 ```
@@ -56,31 +174,31 @@ Gas on Base is typically a fraction of a cent. The writer needs a little **ETH o
 
 ## Railway env (after deploy)
 
-Set on the production service — **no private key**:
+Set on the production service — **no private key**. Do **not** reuse `ARTICLE_NFT_CONTRACT` (that is the Monad ERC-1155).
 
 ```env
-# Required to show "Mint edition NFT" on /write
-ARTICLE_NFT_CONTRACT=0xYourDeployedAddress
+# Required to show "Mint edition NFT" on /write (Base 1/1)
+ARTICLE_EDITION_NFT_CONTRACT=0xYourDeployedAddress
 
 # 8453 Base (default) or 84532 Base Sepolia
-ARTICLE_NFT_CHAIN_ID=8453
+ARTICLE_EDITION_NFT_CHAIN_ID=8453
 
 # Optional public RPC for the Write page to wait on the mint tx
-# ARTICLE_NFT_RPC_URL=https://mainnet.base.org
+# ARTICLE_EDITION_NFT_RPC_URL=https://mainnet.base.org
 
 # Used at deploy time (contract constructor). Change later with setBaseURI as owner.
-# ARTICLE_NFT_BASE_URI=https://mon-unlock-widget-production.up.railway.app/api/nft/
+# ARTICLE_EDITION_NFT_BASE_URI=https://mon-unlock-widget-production.up.railway.app/api/nft/
 ```
 
 Also apply the mapping migration (token id ↔ article slug):
 
 ```bash
-# supabase/migrations/0011_article_edition_nft.sql
+# supabase/migrations/0012_article_edition_nft.sql
 # Adds nft_token_id, nft_contract, nft_chain_id, nft_tx_hash, nft_owner, nft_minted_at
 # and GRANTs those columns to anon (body stays revoked).
 ```
 
-Until `ARTICLE_NFT_CONTRACT` is set, Publish still redirects to the article as today. Mint UI is hidden. Read path is unchanged.
+Until `ARTICLE_EDITION_NFT_CONTRACT` is set, the Base mint UI is hidden. If the Monad contract is also unset, Publish still redirects to the article as today. Read path is unchanged.
 
 ## Metadata (`tokenURI`)
 

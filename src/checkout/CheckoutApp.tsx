@@ -11,6 +11,7 @@ import { resolvePaymentAsset } from "../core/payment-asset.js";
 import { estimateUsdcForMon, formatUsdc } from "../core/swap-usdc-to-mon.js";
 import { StripeFiatPay, stripeFiatEnabled } from "./StripeFiatPay.js";
 import { CryptoPaySection, cryptoPrivyConfigured } from "./CryptoPaySection.js";
+import { cardUnlockNftCopy } from "../core/article-nft.js";
 
 type CheckoutQuery = {
   articleId: string;
@@ -228,6 +229,13 @@ export function CheckoutApp() {
     finishCheckout(query, message);
   };
 
+  const onCryptoUnlocked = (message: CheckoutMessage) => {
+    const openerAlive = hasOpener();
+    if (openerAlive) {
+      notifyParent(query.parentOrigin, message);
+    }
+  };
+
   return (
     <div className="checkout-shell">
       <div className="checkout-card">
@@ -256,7 +264,10 @@ export function CheckoutApp() {
             <p className="checkout-copy">Pay with Apple Pay, Google Pay, or card.</p>
             {error ? <p className="checkout-error">{error}</p> : null}
             {phaseDone ? (
-              <p className="checkout-status ok">Unlocked — returning to article…</p>
+              <>
+                <p className="checkout-status ok">Unlocked — returning to article…</p>
+                <p className="checkout-copy">{cardUnlockNftCopy()}</p>
+              </>
             ) : (
               <StripeFiatPay
                 articleId={query.articleId}
@@ -295,6 +306,7 @@ export function CheckoutApp() {
             usdEstimate={usdEstimate}
             paymentAsset={query.paymentAsset}
             onCloseWith={onCryptoClose}
+            onUnlocked={onCryptoUnlocked}
             disabled={fiatBusy || phaseDone}
           />
         ) : null}

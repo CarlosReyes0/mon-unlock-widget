@@ -6,9 +6,11 @@ import { SiteNav } from "./SiteNav.js";
 import { insertAtTextareaCursor, WriteMediaSheet } from "./WriteMediaSheet.js";
 import { MirosharkPreview } from "./MirosharkPreview.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
+import { ArticleNftMint } from "./ArticleNftMint.js";
 import { publishPost } from "./publish-post.js";
 import { fetchNftConfig, mintArticleEdition } from "./mint-edition.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
+import { fetchArticleNftConfig } from "../core/article-nft.js";
 import type { Address } from "viem";
 
 const DRAFT_KEY = "openpaywall-write-draft";
@@ -280,20 +282,21 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       } catch {
         /* ignore */
       }
-      let showMint = false;
+      const monadNft = await fetchArticleNftConfig().catch(() => null);
+      let showBaseMint = false;
       try {
         const cfg = await fetchNftConfig();
-        showMint = Boolean(cfg.configured);
-        setNftReady(showMint);
+        showBaseMint = Boolean(cfg.configured);
+        setNftReady(showBaseMint);
       } catch {
-        showMint = false;
+        showBaseMint = false;
       }
-      if (!showMint) {
-        window.location.assign(`/articles/${encodeURIComponent(slug)}`);
+      if (monadNft?.configured || showBaseMint) {
+        setPublishedSlug(slug);
+        setStatus("Published. Optional: mint an edition NFT, or open the article.");
         return;
       }
-      setPublishedSlug(slug);
-      setStatus("Published. Mint an optional edition NFT, or open the article.");
+      window.location.assign(`/articles/${encodeURIComponent(slug)}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not publish.";
       if (!/reject|denied|cancel/i.test(msg)) setError(msg);
@@ -385,9 +388,14 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
               <a href={`/articles/${encodeURIComponent(publishedSlug)}`}>
                 /articles/{publishedSlug}
               </a>
-              . Unlock/USDC is still the access gate — the NFT is an optional 1/1
-              collectible.
+              . Unlock/USDC is still the access gate — NFTs are optional collectibles.
             </p>
+            <ArticleNftMint
+              slug={publishedSlug}
+              role="edition"
+              provider={window.__monPublisherProvider}
+              account={window.__monPublisherAddress}
+            />
             <div className="mon-write__published-row">
               {nftReady && !nftMinted ? (
                 <button

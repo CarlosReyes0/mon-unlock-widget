@@ -1,160 +1,152 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  explorerTokenUrl,
-  nftChainId,
-  nftConfigured,
-  nftFromRow,
-  nftPublicStatus,
-  openseaTokenUrl,
-  parseNftArticlePath,
-  parseNftTokenPath,
-  recordArticleMint,
-  tokenMetadata,
+  ARTICLE_NFT_CHAIN_ID,
+  articleNftConfigured,
+  buildTokenMetadata,
+  getNftConfig,
+  metadataHasPaidBody,
+  parseMetadataPath,
+  parseRecordBody,
+  recordMint,
+  roleFromOnchain,
 } from "./article-nft.mjs";
 
-test("parseNftTokenPath only matches /api/nft/{tokenId}", () => {
-  assert.equal(parseNftTokenPath("/api/nft/1"), "1");
-  assert.equal(parseNftTokenPath("/api/nft/42/"), "42");
-  assert.equal(parseNftTokenPath("/api/nft/health"), null);
-  assert.equal(parseNftTokenPath("/api/nft/0xabc"), null);
-  assert.equal(parseNftTokenPath("/api/articles/hello/nft"), null);
+test("parseMetadataPath only matches /api/article-nfts/metadata/{id}", () => {
+  assert.equal(parseMetadataPath("/api/article-nfts/metadata/12"), "12");
+  assert.equal(parseMetadataPath("/api/article-nfts/metadata/12/"), "12");
+  assert.equal(parseMetadataPath("/api/article-nfts/metadata/abc"), null);
+  assert.equal(parseMetadataPath("/api/article-nfts/config"), null);
+  assert.equal(parseMetadataPath("/api/articles/demo/download"), null);
 });
 
-test("parseNftArticlePath reads /api/articles/{slug}/nft", () => {
-  assert.equal(parseNftArticlePath("/api/articles/july-rain/nft"), "july-rain");
-  assert.equal(parseNftArticlePath("/api/articles/hello%20world/nft"), "hello world");
-  assert.equal(parseNftArticlePath("/api/articles/july-rain"), null);
-  assert.equal(parseNftArticlePath("/api/articles/july-rain/download"), null);
-});
-
-test("nftFromRow is null without a token, never a read gate", () => {
-  assert.equal(nftFromRow(null), null);
-  assert.equal(nftFromRow({ listing_status: "listed", article_id: "x" }), null);
-  const nft = nftFromRow({
-    nft_token_id: "7",
-    nft_contract: "0x1111111111111111111111111111111111111111",
-    nft_chain_id: 8453,
-    nft_tx_hash: "0x" + "ab".repeat(32),
-    nft_owner: "0xABC",
-    nft_minted_at: "2026-09-17T00:00:00.000Z",
+test("buildTokenMetadata never includes paid body", () => {
+  const meta = buildTokenMetadata({
+    slug: "july-rain-walk",
+    role: "edition",
+    title: "July rain",
+    teaser: "A free preview.",
+    body: "SECRET PAID BODY SHOULD NOT APPEAR",
+    paid_body: "nope",
+    articleBody: "nope",
+    priceLabel: "$0.50 USDC",
+    origin: "https://example.test",
   });
-  assert.equal(nft.tokenId, "7");
-  assert.equal(nft.contract, "0x1111111111111111111111111111111111111111");
-  assert.match(nft.explorerUrl, /basescan\.org\/token\//);
-  assert.match(nft.openseaUrl, /opensea\.io\/assets\/base\//);
+  assert.equal(meta.name, "July rain — Writer edition");
+  assert.equal(meta.description, "A free preview.");
+  assert.equal(meta.external_url, "https://example.test/articles/july-rain-walk");
+  assert.match(meta.image, /\/og\/july-rain-walk\.jpg/);
+  assert.deepEqual(
+    meta.attributes.find((a) => a.trait_type === "role"),
+    { trait_type: "role", value: "edition" }
+  );
+  assert.deepEqual(
+    meta.attributes.find((a) => a.trait_type === "articleSlug"),
+    { trait_type: "articleSlug", value: "july-rain-walk" }
+  );
+  assert.deepEqual(
+    meta.attributes.find((a) => a.trait_type === "price"),
+    { trait_type: "price", value: "$0.50 USDC" }
+  );
+  assert.equal(metadataHasPaidBody(meta), false);
+  assert.equal("body" in meta, false);
+  assert.doesNotMatch(JSON.stringify(meta), /SECRET PAID BODY/);
 });
 
-test("tokenMetadata uses title, teaser, article URL, and OG image", () => {
-  const meta = tokenMetadata({
-    origin: "https://host.example",
+test("receipt metadata uses the article URL not the unlock contract", () => {
+  const meta = buildTokenMetadata({
+    slug: "july-rain-walk",
+    role: "receipt",
+    title: "July rain",
+    origin: "https://example.test",
+  });
+  assert.match(meta.name, /Unlock receipt/);
+  assert.match(meta.description, /Not required to read/);
+  assert.equal(meta.external_url, "https://example.test/articles/july-rain-walk");
+});
+
+test("roleFromOnchain maps 0/1", () => {
+  assert.equal(roleFromOnchain(0), "edition");
+  assert.equal(roleFromOnchain(1n), "receipt");
+});
+
+test("parseRecordBody requires slug, role, minter, tokenId", () => {
+  const parsed = parseRecordBody({
+    slug: "july-rain-walk",
+    role: "edition",
+    minter: "0x1111111111111111111111111111111111111111",
     tokenId: "3",
-    article: {
-      slug: "the-quote-was-a-trap",
-      title: "The Quote Was a Trap",
-      teaser: "A short free preview everyone can read.",
-      priceWei: "500000",
-      paymentAsset: "usdc",
-      body: "SECRET PAID TEXT",
-    },
+    txHash: "0x" + "ab".repeat(32),
   });
-  assert.equal(meta.name, "The Quote Was a Trap");
-  assert.match(meta.description, /short free preview/);
-  assert.equal(meta.external_url, "https://host.example/articles/the-quote-was-a-trap");
-  assert.equal(meta.image, "https://host.example/og/the-quote-was-a-trap.jpg");
-  assert.equal(
-    meta.attributes.find((a) => a.trait_type === "Price")?.value,
-    "$0.5 USDC"
+  assert.equal(parsed.slug, "july-rain-walk");
+  assert.equal(parsed.role, "edition");
+  assert.equal(parsed.tokenId, "3");
+  assert.throws(() => parseRecordBody({ role: "edition", minter: "0x11", tokenId: "1" }));
+  assert.throws(() =>
+    parseRecordBody({
+      slug: "x",
+      role: "gate",
+      minter: "0x1111111111111111111111111111111111111111",
+      tokenId: "1",
+    })
   );
-  assert.equal(meta.attributes.find((a) => a.trait_type === "Edition")?.value, "1/1");
-  assert.match(
-    String(meta.attributes.find((a) => a.trait_type === "Access")?.value || ""),
-    /not required to read/i
-  );
-  assert.ok(!("body" in meta));
-  assert.doesNotMatch(JSON.stringify(meta), /SECRET PAID TEXT/);
 });
 
-test("explorer URLs distinguish Base mainnet and Sepolia", () => {
-  const main = {
-    chainId: 8453,
-    contract: "0x2222222222222222222222222222222222222222",
-    tokenId: "1",
-  };
-  const sepolia = { ...main, chainId: 84532 };
-  assert.match(explorerTokenUrl(main), /^https:\/\/basescan\.org\//);
-  assert.match(explorerTokenUrl(sepolia), /^https:\/\/sepolia\.basescan\.org\//);
-  assert.match(openseaTokenUrl(main), /opensea\.io\/assets\/base\//);
-  assert.match(openseaTokenUrl(sepolia), /testnets\.opensea\.io\/assets\/base-sepolia\//);
-});
-
-test("nftPublicStatus is unconfigured without ARTICLE_NFT_CONTRACT", () => {
+test("getNftConfig reports unconfigured without ARTICLE_NFT_CONTRACT", () => {
   const prev = process.env.ARTICLE_NFT_CONTRACT;
   delete process.env.ARTICLE_NFT_CONTRACT;
+  delete process.env.VITE_ARTICLE_NFT_CONTRACT;
   try {
-    assert.equal(nftConfigured(), false);
-    assert.equal(nftChainId(), 8453);
-    const status = nftPublicStatus();
-    assert.equal(status.ok, true);
-    assert.equal(status.configured, false);
-    assert.equal(status.contract, null);
-    assert.equal(status.unlockSeparate, true);
-    assert.match(status.message, /ARTICLE_NFT_CONTRACT/);
+    assert.equal(articleNftConfigured(), false);
+    const cfg = getNftConfig();
+    assert.equal(cfg.configured, false);
+    assert.equal(cfg.chainId, ARTICLE_NFT_CHAIN_ID);
+    assert.equal(cfg.mintAuth, "user-wallet");
+    assert.match(cfg.note, /No server private key/);
   } finally {
-    if (prev == null) delete process.env.ARTICLE_NFT_CONTRACT;
-    else process.env.ARTICLE_NFT_CONTRACT = prev;
+    if (prev) process.env.ARTICLE_NFT_CONTRACT = prev;
   }
 });
 
-test("recordArticleMint validates publisher and token before supabase", async () => {
-  await assert.rejects(() => recordArticleMint({}), (err) => err.message === "missing_slug");
-  await assert.rejects(
-    () => recordArticleMint({ slug: "hello", publisher: "not-an-address", tokenId: "1" }),
-    (err) => err.message === "invalid_publisher"
-  );
-  await assert.rejects(
-    () =>
-      recordArticleMint({
-        slug: "hello",
-        publisher: "0x1111111111111111111111111111111111111111",
-        tokenId: "0",
-      }),
-    (err) => err.message === "invalid_token"
-  );
+test("recordMint without a contract is nft_not_configured", async () => {
   const prev = process.env.ARTICLE_NFT_CONTRACT;
   delete process.env.ARTICLE_NFT_CONTRACT;
+  delete process.env.VITE_ARTICLE_NFT_CONTRACT;
   try {
     await assert.rejects(
       () =>
-        recordArticleMint({
-          slug: "hello",
-          publisher: "0x1111111111111111111111111111111111111111",
+        recordMint({
+          slug: "july-rain-walk",
+          role: "receipt",
+          minter: "0x1111111111111111111111111111111111111111",
           tokenId: "1",
         }),
-      (err) => err.message === "nft_not_configured" && err.status === 503
+      /nft_not_configured/
     );
   } finally {
-    if (prev == null) delete process.env.ARTICLE_NFT_CONTRACT;
-    else process.env.ARTICLE_NFT_CONTRACT = prev;
+    if (prev) process.env.ARTICLE_NFT_CONTRACT = prev;
   }
 });
 
-test("recordArticleMint rejects a contract that does not match env", async () => {
+test("recordMint persists when on-chain verify is skipped (CI, no mainnet mint)", async () => {
   const prev = process.env.ARTICLE_NFT_CONTRACT;
-  process.env.ARTICLE_NFT_CONTRACT = "0x1111111111111111111111111111111111111111";
+  process.env.ARTICLE_NFT_CONTRACT = "0x2222222222222222222222222222222222222222";
   try {
-    await assert.rejects(
-      () =>
-        recordArticleMint({
-          slug: "hello",
-          publisher: "0x1111111111111111111111111111111111111111",
-          tokenId: "1",
-          contract: "0x2222222222222222222222222222222222222222",
-        }),
-      (err) => err.message === "contract_mismatch"
+    const result = await recordMint(
+      {
+        slug: "july-rain-walk",
+        role: "edition",
+        minter: "0x1111111111111111111111111111111111111111",
+        tokenId: "9",
+        txHash: "0x" + "cd".repeat(32),
+      },
+      { verifyOnchain: false }
     );
+    assert.equal(result.recorded, false);
+    assert.equal(result.reason, "supabase_not_configured");
+    assert.equal(result.tokenId, "9");
   } finally {
-    if (prev == null) delete process.env.ARTICLE_NFT_CONTRACT;
-    else process.env.ARTICLE_NFT_CONTRACT = prev;
+    if (prev) process.env.ARTICLE_NFT_CONTRACT = prev;
+    else delete process.env.ARTICLE_NFT_CONTRACT;
   }
 });
