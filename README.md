@@ -8,7 +8,7 @@ Readers unlock the full article with **MON** on Monad, or with **card / Apple Pa
 
 **What to build next:** see **[POSTING.md](./POSTING.md)** (write, Publish, it’s up), **[FOCUS.md](./FOCUS.md)**, and **[PRODUCT_OPTIONS.md](./PRODUCT_OPTIONS.md)**.
 
-**Smart contract:** [`contracts/`](./contracts/) — `ArticleUnlock.sol` (Foundry). Run `forge test` in `contracts/`.
+**Smart contract:** [`contracts/`](./contracts/) — `ArticleUnlock.sol` (Foundry). Optional **Article NFTs:** [`ARTICLE_NFT.md`](./ARTICLE_NFT.md) (writer edition + reader receipt on Monad; unlock stays access). Run `forge test` in `contracts/`.
 
 ## Branding note
 

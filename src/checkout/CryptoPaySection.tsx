@@ -10,6 +10,8 @@ import { OnchainUnlockService } from "../core/unlock.js";
 import { formatMon, formatUsd, parseMonAmount, parseUsdAmount } from "../core/types.js";
 import { monadMainnet } from "../core/chains.js";
 import { normalizePaymentAsset, type PaymentAsset } from "../core/payment-asset.js";
+import { ArticleNftMint } from "../publisher/ArticleNftMint.js";
+import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import {
   cardFundUsdcConfig,
   openCardBuy,
@@ -39,6 +41,8 @@ type Props = {
   /** "usdc" = settle USDC to publisher (no swap). "mon" = legacy native MON path. */
   paymentAsset?: PaymentAsset | string;
   onCloseWith: (message: CheckoutMessage) => void;
+  /** Notify the article without closing — used so readers can mint a receipt first. */
+  onUnlocked?: (message: CheckoutMessage) => void;
   disabled?: boolean;
 };
 
@@ -51,6 +55,7 @@ export function CryptoPaySection({
   usdEstimate,
   paymentAsset: paymentAssetProp = "mon",
   onCloseWith,
+  onUnlocked,
   disabled = false,
 }: Props) {
   const settleUsdc = normalizePaymentAsset(paymentAssetProp) === "usdc";
@@ -64,6 +69,7 @@ export function CryptoPaySection({
   const [balanceWei, setBalanceWei] = useState<bigint | null>(null);
   const [usdcBal, setUsdcBal] = useState<bigint | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [mintProvider, setMintProvider] = useState<Eip1193Provider | null>(null);
 
   const embedded = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
   const address = embedded?.address ?? null;
@@ -245,12 +251,41 @@ export function CryptoPaySection({
   };
 
   const emitUnlocked = (addr: string, hash?: string | null) => {
-    onCloseWith({
+    void (async () => {
+      try {
+        const provider = await embedded?.getEthereumProvider();
+        if (provider) setMintProvider(mapWalletSendToEthSend(provider));
+      } catch {
+        /* mint UI can still prompt to connect */
+      }
+    })();
+    const message: CheckoutMessage = {
       source: CHECKOUT_MESSAGE_SOURCE,
       type: "mon:unlocked",
       articleId,
       address: addr,
       ...(hash ? { txHash: hash } : {}),
+      mode: "onchain",
+    };
+    if (onUnlocked) onUnlocked(message);
+    else onCloseWith(message);
+  };
+
+  const finishAfterMint = () => {
+    if (!address) {
+      onCloseWith({
+        source: CHECKOUT_MESSAGE_SOURCE,
+        type: "mon:checkout-closed",
+        articleId,
+      });
+      return;
+    }
+    onCloseWith({
+      source: CHECKOUT_MESSAGE_SOURCE,
+      type: "mon:unlocked",
+      articleId,
+      address,
+      ...(txHash ? { txHash } : {}),
       mode: "onchain",
     });
   };
@@ -435,7 +470,17 @@ export function CryptoPaySection({
       {phase === "swapping" ? <p className="checkout-status">Converting USDC → MON…</p> : null}
       {phase === "paying" ? <p className="checkout-status">Unlocking…</p> : null}
       {phase === "done" ? (
-        <p className="checkout-status ok">Unlocked{txHash ? " — returning to article…" : ""}</p>
+        <>
+          <p className="checkout-status ok">Unlocked</p>
+          <ArticleNftMint
+            slug={articleId}
+            role="receipt"
+            provider={mintProvider}
+            account={address}
+            skipLabel="Continue to article"
+            onSkip={finishAfterMint}
+          />
+        </>
       ) : null}
 
       {error ? <p className="checkout-error">{error}</p> : null}

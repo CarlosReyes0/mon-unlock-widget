@@ -54,6 +54,7 @@ jobs:
           MPP_TEMPO_RECIPIENT: ""
           MPP_DEV_BYPASS: ""
           RELAYER_PRIVATE_KEY: ""
+          ARTICLE_NFT_CONTRACT: ""
         run: |
           mkdir -p /tmp/og-cache
           npm start > /tmp/op-server.log 2>&1 &
@@ -72,3 +73,16 @@ jobs:
       - name: Server logs
         if: failure()
         run: cat /tmp/op-server.log || true
+
+  contract:
+    name: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install forge-std and test (no mainnet mint)
+        working-directory: contracts
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge test

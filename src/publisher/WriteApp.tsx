@@ -6,8 +6,10 @@ import { SiteNav } from "./SiteNav.js";
 import { insertAtTextareaCursor, WriteMediaSheet } from "./WriteMediaSheet.js";
 import { MirosharkPreview } from "./MirosharkPreview.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
+import { ArticleNftMint } from "./ArticleNftMint.js";
 import { publishPost } from "./publish-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
+import { fetchArticleNftConfig } from "../core/article-nft.js";
 import type { Address } from "viem";
 
 const DRAFT_KEY = "openpaywall-write-draft";
@@ -188,6 +190,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [draftNote, setDraftNote] = useState("");
   const [mediaNote, setMediaNote] = useState("");
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [publishedSlug, setPublishedSlug] = useState("");
   const bodyHandleRef = useRef<WriteBodyHandle | null>(null);
 
   useEffect(() => {
@@ -272,6 +275,12 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       } catch {
         /* ignore */
       }
+      const nft = await fetchArticleNftConfig().catch(() => null);
+      if (nft?.configured) {
+        setPublishedSlug(slug);
+        setStatus("Published. Optional: mint a writer edition on Monad.");
+        return;
+      }
       window.location.assign(`/articles/${encodeURIComponent(slug)}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not publish.";
@@ -290,7 +299,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         <button
           type="button"
           className="mon-pub-auth__btn mon-pub-auth__btn--primary mon-write__publish"
-          disabled={busy}
+          disabled={busy || Boolean(publishedSlug)}
           onClick={() => void onPublish()}
         >
           {busy ? "Publishing…" : "Publish"}
@@ -331,6 +340,18 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         </div>
         {error ? <p className="mon-pub-auth__error">{error}</p> : null}
         {status ? <p className="mon-write__status">{status}</p> : null}
+        {publishedSlug ? (
+          <ArticleNftMint
+            slug={publishedSlug}
+            role="edition"
+            provider={window.__monPublisherProvider}
+            account={window.__monPublisherAddress}
+            skipLabel="View article"
+            onSkip={() => {
+              window.location.assign(`/articles/${encodeURIComponent(publishedSlug)}`);
+            }}
+          />
+        ) : null}
 
         <label className="mon-write__sr" htmlFor="writeTitle">
           Title

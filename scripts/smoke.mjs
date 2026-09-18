@@ -105,6 +105,16 @@ test("GET /api/miroshark/status is fail-soft JSON", async () => {
   }
 });
 
+test("GET /api/article-nfts/config is JSON and does not mint", async () => {
+  const res = await fetch(`${origin}/api/article-nfts/config`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.configured, "boolean");
+  assert.equal(body.chainId, 143);
+  assert.equal(body.mintAuth, "user-wallet");
+});
+
 test("GET /api/voice-drafts/status is drafts-only JSON", async () => {
   const res = await fetch(`${origin}/api/voice-drafts/status`);
   assert.equal(res.status, 200);

@@ -1,0 +1,10 @@
+{
+  "network": "monad-testnet",
+  "chainId": 10143,
+  "rpcUrl": "https://testnet-rpc.monad.xyz",
+  "explorer": "https://testnet.monadvision.com",
+  "contract": "",
+  "unlockMon": "0x1E03AE1C88B26C0bcbdE57e26e97fdaFb61A356D",
+  "unlockUsdc": "",
+  "notes": "Optional CI/docs target. Pass UNLOCK_MON / UNLOCK_USDC for the testnet unlock contracts. Do not mint on mainnet from CI."
+}

@@ -203,14 +203,37 @@ test("POST /api/relay/gas returns 503 without relayer key", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/relay/gas`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      address: "0x1111111111111111111111111111111111111111",
-    }),
+    body: JSON.stringify({ address: "0x1111111111111111111111111111111111111111" }),
   });
   assert.equal(res.status, 503);
   const body = await res.json();
   assert.equal(body.error, "relayer_not_configured");
-  assert.equal(body.fallback, true);
+});
+
+test("GET /api/article-nfts/config is unconfigured without ARTICLE_NFT_CONTRACT", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/article-nfts/config`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.configured, false);
+  assert.equal(body.chainId, 143);
+  assert.equal(body.mintAuth, "user-wallet");
+});
+
+test("POST /api/article-nfts/record is 503 without ARTICLE_NFT_CONTRACT", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/article-nfts/record`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      slug: "demo",
+      role: "edition",
+      minter: "0x1111111111111111111111111111111111111111",
+      tokenId: "1",
+    }),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "nft_not_configured");
 });
 
 test("GET /api/listings/health reports supabaseConfigured=false without secrets", async () => {

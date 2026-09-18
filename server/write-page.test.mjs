@@ -28,12 +28,16 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /locatePaywall/);
   assert.match(app, /MirosharkPreview/);
   assert.match(app, /VoiceDrafts/);
+  assert.match(app, /ArticleNftMint/);
+  assert.match(app, /Mint edition on Monad|role="edition"/);
+  assert.match(app, /fetchArticleNftConfig/);
   const publishStart = app.indexOf("async function onPublish");
   const publishEnd = app.indexOf("return (", publishStart);
   assert.ok(publishStart >= 0 && publishEnd > publishStart);
   const publishFn = app.slice(publishStart, publishEnd);
   assert.doesNotMatch(publishFn, /MirosharkPreview|\/api\/miroshark/);
   assert.doesNotMatch(publishFn, /VoiceDrafts|\/api\/voice-drafts/);
+  assert.doesNotMatch(publishFn, /mintArticleNft|mintEdition/);
 });
 
 test("Miroshark preview is optional and fail-soft", () => {
@@ -97,6 +101,25 @@ test("write media sheet inserts URL snippets without hosting files", () => {
   assert.match(sheet, /validateMediaUrl/);
   assert.match(sheet, /id: "audio"/);
   assert.match(sheet, /YouTube, Vimeo, and Loom/);
+});
+
+test("optional article NFT mint is after publish and never required to read", () => {
+  const mint = fs.readFileSync(path.join(ROOT, "src/publisher/ArticleNftMint.tsx"), "utf8");
+  const widget = fs.readFileSync(path.join(ROOT, "src/widget/mon-unlock.ts"), "utf8");
+  const checkout = fs.readFileSync(path.join(ROOT, "src/checkout/CheckoutApp.tsx"), "utf8");
+  const crypto = fs.readFileSync(path.join(ROOT, "src/checkout/CryptoPaySection.tsx"), "utf8");
+  const dash = fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8");
+  const nftCore = fs.readFileSync(path.join(ROOT, "src/core/article-nft.ts"), "utf8");
+  assert.match(mint, /Mint edition on Monad/);
+  assert.match(mint, /You pay gas/);
+  assert.match(widget, /Mint receipt/);
+  assert.match(widget, /cardUnlockNftCopy/);
+  assert.match(checkout, /cardUnlockNftCopy/);
+  assert.match(crypto, /role="receipt"/);
+  assert.match(dash, /Mint edition on Monad/);
+  assert.match(nftCore, /eth_sendTransaction/);
+  assert.match(nftCore, /mapWalletSendToEthSend/);
+  assert.doesNotMatch(nftCore, /PRIVATE_KEY|privateKeyToAccount/);
 });
 
 test("widget sanitizes HTML teasers and does not dump paid body on the hosted page", () => {

@@ -9,8 +9,10 @@
  *   CDP_API_KEY_SECRET / CDP_API_SECRET — Secret (Ed25519 or EC PEM)
  *   STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
-   *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
-   *                                        and optional reader USDC-unlock gas drips
+ *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
+ *                                        and optional reader USDC-unlock gas drips
+ *   ARTICLE_NFT_CONTRACT               — optional ERC-1155; writers/readers mint (they pay gas)
+ *   MONAD_RPC_URL                      — optional, defaults to https://rpc.monad.xyz
  *   PORT                               — listen port (Railway sets this)
  */
 import http from "node:http";
@@ -77,6 +79,13 @@ import { parseOgImagePath } from "./og-card.mjs";
 import { publicOrigin } from "./article-og.mjs";
 import { createArticleDownload, parseDownloadPath } from "./article-download.mjs";
 import { relayGasDrip } from "./relay-gas.mjs";
+import {
+  getNftConfig,
+  getTokenMetadata,
+  listNftsForArticle,
+  parseMetadataPath,
+  recordMint,
+} from "./article-nft.mjs";
 import {
   MONAD_BLOCKCHAIN,
   buildPayUrl,
@@ -1105,6 +1114,60 @@ const server = http.createServer(async (req, res) => {
       const payload = { error: e?.message || "gas_drip_failed" };
       if (e?.fallback) payload.fallback = true;
       return sendJson(res, status, payload);
+    }
+  }
+
+  // --- Optional Article NFTs (Monad). Unlock remains access; minter pays gas. ---
+  if (method === "GET" && url.pathname === "/api/article-nfts/config") {
+    return sendJson(res, 200, getNftConfig());
+  }
+
+  const nftMetaId = parseMetadataPath(url.pathname);
+  if ((method === "GET" || method === "HEAD") && nftMetaId) {
+    try {
+      const metadata = await getTokenMetadata(nftMetaId, { origin: publicOrigin(req) });
+      cors(res);
+      const payload = JSON.stringify(metadata);
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "public, max-age=60",
+      });
+      if (method === "HEAD") return res.end();
+      return res.end(payload);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "metadata_failed" });
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/api/article-nfts") {
+    try {
+      const body = await listNftsForArticle({
+        slug: url.searchParams.get("slug") || url.searchParams.get("articleSlug"),
+        wallet: url.searchParams.get("wallet") || url.searchParams.get("minter"),
+      });
+      return sendJson(res, 200, body);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "list_nfts_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/article-nfts/record") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await recordMint(parsed);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      if (e?.message === "body_too_large") {
+        return sendJson(res, 413, { error: "body_too_large" });
+      }
+      if (e instanceof SyntaxError) {
+        return sendJson(res, 400, { error: "invalid_json" });
+      }
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "record_failed" });
     }
   }
 
