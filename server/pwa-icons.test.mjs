@@ -47,7 +47,7 @@ test("committed app icons are PNGs at the sizes iOS/Android expect", () => {
 
 test("committed icons match generate-app-icons.mjs", () => {
   for (const file of ICON_FILES) {
-    const expected = renderAppIconPng(file.size, { padRatio: file.padRatio });
+    const expected = renderAppIconPng(file.size);
     const actual = fs.readFileSync(path.join(ROOT, file.rel));
     assert.equal(actual.equals(expected), true, file.rel);
   }
