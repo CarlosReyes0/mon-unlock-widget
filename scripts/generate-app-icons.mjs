@@ -1,7 +1,10 @@
 /**
  * Home-screen / PWA icons for Open Paywall.
  *
- * The phrase, stacked in a rectangle: Open over Paywall.
+ * Just the words, stacked:
+ *   Open
+ *   Paywall
+ * Open is widened so its letters match the length of Paywall.
  *
  *   node scripts/generate-app-icons.mjs
  */
@@ -16,8 +19,7 @@ const FONT_LITERATA = "OP Literata";
 
 /** Monad primary purple (brand kit). */
 export const ICON_BG = "#6E54FF";
-const PAPER = "#FFFDF8";
-const INK = "#6E54FF";
+export const ICON_FG = "#ffffff";
 
 let fontsRegistered = false;
 function ensureFonts() {
@@ -26,32 +28,14 @@ function ensureFonts() {
   fontsRegistered = true;
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, Math.max(0.4, Math.min(r, w / 2, h / 2)));
-}
-
 function drawPhrase(ctx, size) {
   ensureFonts();
-  const w = size * 0.82;
-  const h = size * 0.5;
-  const x = (size - w) / 2;
-  const y = (size - h) / 2;
-  const r = size * 0.045;
-
-  ctx.fillStyle = PAPER;
-  roundRect(ctx, x, y, w, h, r);
-  ctx.fill();
-
-  ctx.save();
-  roundRect(ctx, x, y, w, h, r);
-  ctx.clip();
-
-  ctx.fillStyle = INK;
+  ctx.fillStyle = ICON_FG;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  const maxW = w * 0.84;
-  let px = size * 0.125;
+
+  const maxW = size * 0.78;
+  let px = size * 0.2;
   const font = () => {
     ctx.font = `600 ${px}px "${FONT_LITERATA}"`;
   };
@@ -60,18 +44,29 @@ function drawPhrase(ctx, size) {
     px -= 0.5;
     font();
   }
+
+  const payW = ctx.measureText("Paywall").width;
+  const openW = Math.max(1, ctx.measureText("Open").width);
+  const openScale = payW / openW;
+
   const cap = ctx.measureText("Hg").actualBoundingBoxAscent || px * 0.78;
   const openDesc = ctx.measureText("Open").actualBoundingBoxDescent || px * 0.22;
   const payDesc = ctx.measureText("Paywall").actualBoundingBoxDescent || px * 0.22;
   const gap = openDesc + px * 0.14;
   const blockH = cap * 2 + gap + payDesc;
-  const cx = x + w / 2;
-  let ty = y + (h - blockH) / 2 + cap;
+  const cx = size / 2;
+  let ty = (size - blockH) / 2 + cap;
+
+  ctx.save();
+  ctx.translate(cx, ty);
+  ctx.scale(openScale, 1);
   font();
-  ctx.fillText("Open", cx, ty);
-  ty += cap + gap;
-  ctx.fillText("Paywall", cx, ty);
+  ctx.fillText("Open", 0, 0);
   ctx.restore();
+
+  ty += cap + gap;
+  font();
+  ctx.fillText("Paywall", cx, ty);
 }
 
 export function renderAppIconPng(size) {
