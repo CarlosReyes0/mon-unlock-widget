@@ -1,7 +1,8 @@
 /**
  * Home-screen / PWA icons for Open Paywall.
  *
- * The mark is the product name, stacked, in Literata — not a pictogram.
+ * The mark is a typeset book page (leaves in a book) on Monad purple —
+ * not a file icon, not a lock, not a wordmark.
  *
  *   node scripts/generate-app-icons.mjs
  */
@@ -16,7 +17,21 @@ const FONT_LITERATA = "OP Literata";
 
 /** Monad primary purple (brand kit). */
 export const ICON_BG = "#6E54FF";
-export const ICON_FG = "#ffffff";
+const PAPER = "#FFFDF8";
+const INK = "#6E54FF";
+const PAGE_BACK = "#D4C9FF";
+const PAGE_MID = "#EDE8FF";
+
+const BODY = [
+  "The press still smelled",
+  "of solvent at five.",
+  "Four pages, same as",
+  "Thursday last, and the",
+  "town bought them not",
+  "because they surprised",
+  "anyone, but because",
+  "they were theirs.",
+];
 
 let fontsRegistered = false;
 function ensureFonts() {
@@ -25,40 +40,76 @@ function ensureFonts() {
   fontsRegistered = true;
 }
 
-function drawWordmark(ctx, size) {
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, Math.max(0.5, Math.min(r, w / 2, h / 2)));
+}
+
+function drawType(ctx, x, y, maxW, size) {
+  ctx.fillStyle = INK;
+  if (size < 72) {
+    const barH = Math.max(1.4, size * 0.026);
+    const gap = barH * 0.72;
+    const widths = [1, 0.94, 0.9, 0.86, 0.72, 0.88, 0.8, 0.58];
+    let yy = y;
+    for (const f of widths) {
+      roundRect(ctx, x, yy, maxW * f, barH, barH / 2);
+      ctx.fill();
+      yy += barH + gap;
+    }
+    return;
+  }
   ensureFonts();
-  ctx.fillStyle = ICON_FG;
+  const px = size * 0.038;
+  ctx.font = `600 ${px}px "${FONT_LITERATA}"`;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  const lines = ["Open", "Paywall"];
-  const pad = size * 0.14;
-  const maxW = size - pad * 2;
-  let px = size * 0.2;
-  const font = () => {
-    ctx.font = `600 ${px}px "${FONT_LITERATA}"`;
-  };
-  font();
-  const longest = lines.reduce((a, b) =>
-    ctx.measureText(a).width > ctx.measureText(b).width ? a : b
-  );
-  while (px > 6 && ctx.measureText(longest).width > maxW) {
-    px -= 0.5;
-    font();
+  let yy = y + px;
+  const lh = px * 1.34;
+  for (const line of BODY) {
+    ctx.fillText(line, x, yy, maxW);
+    yy += lh;
   }
-  const cap = ctx.measureText("Hg").actualBoundingBoxAscent || px * 0.78;
-  const openDesc = ctx.measureText("Open").actualBoundingBoxDescent || px * 0.22;
-  const payDesc = ctx.measureText("Paywall").actualBoundingBoxDescent || px * 0.22;
-  // Keep Open's p from sitting on Paywall; include Paywall's y in the vertical box.
-  const gap = openDesc + px * 0.1;
-  const blockH = cap * lines.length + gap * (lines.length - 1) + payDesc;
-  const blockW = Math.max(...lines.map((t) => ctx.measureText(t).width));
-  const x0 = (size - blockW) / 2;
-  let y = (size - blockH) / 2 + cap;
-  for (const line of lines) {
-    font();
-    ctx.fillText(line, x0, y);
-    y += cap + gap;
-  }
+}
+
+function drawFolio(ctx, cx, y, size) {
+  if (size < 72) return;
+  ensureFonts();
+  const px = size * 0.032;
+  ctx.fillStyle = INK;
+  ctx.font = `600 ${px}px "${FONT_LITERATA}"`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("12", cx, y);
+}
+
+function drawBookPage(ctx, size) {
+  const pad = size * 0.175;
+  const h = size - pad * 2;
+  const w = h * 0.7;
+  const r = size * 0.026;
+  const peek = size * 0.026;
+  const x = (size - (w + peek * 2.4)) / 2;
+  const y = pad;
+
+  ctx.fillStyle = PAGE_BACK;
+  roundRect(ctx, x + peek * 2.4, y + peek * 0.85, w, h, r);
+  ctx.fill();
+  ctx.fillStyle = PAGE_MID;
+  roundRect(ctx, x + peek * 1.2, y + peek * 0.4, w, h, r);
+  ctx.fill();
+  ctx.fillStyle = PAPER;
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fill();
+
+  ctx.save();
+  roundRect(ctx, x, y, w, h, r);
+  ctx.clip();
+  const mx = x + w * 0.16;
+  const my = y + h * 0.13;
+  drawType(ctx, mx, my, w * 0.7, size);
+  drawFolio(ctx, x + w / 2, y + h * 0.91, size);
+  ctx.restore();
 }
 
 export function renderAppIconPng(size) {
@@ -68,7 +119,7 @@ export function renderAppIconPng(size) {
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = ICON_BG;
   ctx.fillRect(0, 0, size, size);
-  drawWordmark(ctx, size);
+  drawBookPage(ctx, size);
   return canvas.toBuffer("image/png");
 }
 
