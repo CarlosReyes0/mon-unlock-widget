@@ -1,7 +1,10 @@
 /**
  * Home-screen / PWA icons for Open Paywall.
  *
- * The mark is the product name, stacked, in Literata — not a pictogram.
+ * Just the words, stacked and left-aligned:
+ *   Open
+ *   Paywall
+ * Open is widened (same letter shapes, thicker) so it matches Paywall’s length.
  *
  *   node scripts/generate-app-icons.mjs
  */
@@ -25,40 +28,43 @@ function ensureFonts() {
   fontsRegistered = true;
 }
 
-function drawWordmark(ctx, size) {
+function drawPhrase(ctx, size) {
   ensureFonts();
   ctx.fillStyle = ICON_FG;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  const lines = ["Open", "Paywall"];
-  const pad = size * 0.14;
-  const maxW = size - pad * 2;
-  let px = size * 0.2;
+
+  const maxW = size * 0.78;
+  let px = size * 0.22;
   const font = () => {
     ctx.font = `600 ${px}px "${FONT_LITERATA}"`;
   };
   font();
-  const longest = lines.reduce((a, b) =>
-    ctx.measureText(a).width > ctx.measureText(b).width ? a : b
-  );
-  while (px > 6 && ctx.measureText(longest).width > maxW) {
+  while (px > 8 && ctx.measureText("Paywall").width > maxW) {
     px -= 0.5;
     font();
   }
+
+  const payW = ctx.measureText("Paywall").width;
+  const openW = Math.max(1, ctx.measureText("Open").width);
+  const openScale = payW / openW;
   const cap = ctx.measureText("Hg").actualBoundingBoxAscent || px * 0.78;
   const openDesc = ctx.measureText("Open").actualBoundingBoxDescent || px * 0.22;
   const payDesc = ctx.measureText("Paywall").actualBoundingBoxDescent || px * 0.22;
-  // Keep Open's p from sitting on Paywall; include Paywall's y in the vertical box.
-  const gap = openDesc + px * 0.1;
-  const blockH = cap * lines.length + gap * (lines.length - 1) + payDesc;
-  const blockW = Math.max(...lines.map((t) => ctx.measureText(t).width));
-  const x0 = (size - blockW) / 2;
+  const gap = openDesc + px * 0.06;
+  const blockH = cap * 2 + gap + payDesc;
+  const x0 = (size - payW) / 2;
   let y = (size - blockH) / 2 + cap;
-  for (const line of lines) {
-    font();
-    ctx.fillText(line, x0, y);
-    y += cap + gap;
-  }
+
+  font();
+  ctx.save();
+  ctx.translate(x0, y);
+  ctx.scale(openScale, 1);
+  ctx.fillText("Open", 0, 0);
+  ctx.restore();
+
+  y += cap + gap;
+  ctx.fillText("Paywall", x0, y);
 }
 
 export function renderAppIconPng(size) {
@@ -68,7 +74,7 @@ export function renderAppIconPng(size) {
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = ICON_BG;
   ctx.fillRect(0, 0, size, size);
-  drawWordmark(ctx, size);
+  drawPhrase(ctx, size);
   return canvas.toBuffer("image/png");
 }
 
