@@ -1,8 +1,7 @@
 /**
  * Home-screen / PWA icons for Open Paywall.
  *
- * A simple newspaper: sheet, masthead bar, three columns of lines.
- * Monad purple. Not a typeset front page, not a Material fold glyph.
+ * A newspaper with no type: a folded sheet on Monad purple.
  *
  *   node scripts/generate-app-icons.mjs
  */
@@ -16,7 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /** Monad primary purple (brand kit). */
 export const ICON_BG = "#6E54FF";
 const PAPER = "#FFFDF8";
-const INK = "#6E54FF";
+const CREASE = "rgba(110, 84, 255, 0.28)";
+const BACK = "#E4DCFF";
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -24,42 +24,24 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 function drawNewspaper(ctx, size) {
-  const w = size * 0.64;
-  const h = size * 0.7;
-  const x = (size - w) / 2;
-  const y = (size - h) / 2;
-  const r = size * 0.028;
-  const inset = w * 0.1;
+  const w = size * 0.62;
+  const h = size * 0.68;
+  const peek = size * 0.032;
+  const r = size * 0.03;
+  const x = (size - (w + peek)) / 2;
+  const y = (size - (h + peek)) / 2;
+
+  ctx.fillStyle = BACK;
+  roundRect(ctx, x + peek, y + peek, w, h, r);
+  ctx.fill();
 
   ctx.fillStyle = PAPER;
   roundRect(ctx, x, y, w, h, r);
   ctx.fill();
 
-  ctx.fillStyle = INK;
-  const headH = h * 0.11;
-  roundRect(ctx, x + inset, y + h * 0.1, w - inset * 2, headH, headH * 0.18);
-  ctx.fill();
-
-  const colY = y + h * 0.3;
-  const colH = h * 0.54;
-  const gutter = w * 0.055;
-  const colW = (w - inset * 2 - gutter * 2) / 3;
-  const lines = 5;
-  const barH = Math.max(1.6, size * 0.018);
-  const gap = (colH - barH * lines) / (lines - 1);
-  const rags = [
-    [1, 1, 0.92, 1, 0.7],
-    [1, 0.88, 1, 0.94, 0.62],
-    [1, 1, 0.84, 1, 0.75],
-  ];
-  for (let c = 0; c < 3; c++) {
-    const cx = x + inset + c * (colW + gutter);
-    for (let i = 0; i < lines; i++) {
-      const bw = colW * rags[c][i];
-      roundRect(ctx, cx, colY + i * (barH + gap), bw, barH, barH / 2);
-      ctx.fill();
-    }
-  }
+  const foldY = y + h * 0.5;
+  ctx.fillStyle = CREASE;
+  ctx.fillRect(x, foldY, w, Math.max(1, size * 0.012));
 }
 
 export function renderAppIconPng(size) {
