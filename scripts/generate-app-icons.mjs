@@ -1,10 +1,10 @@
 /**
  * Home-screen / PWA icons for Open Paywall.
  *
- * Just the words, stacked:
+ * Just the words, stacked and left-aligned:
  *   Open
  *   Paywall
- * Open is widened so its letters match the length of Paywall.
+ * Open is widened (same letter shapes, thicker) so it matches Paywall’s length.
  *
  *   node scripts/generate-app-icons.mjs
  */
@@ -31,11 +31,11 @@ function ensureFonts() {
 function drawPhrase(ctx, size) {
   ensureFonts();
   ctx.fillStyle = ICON_FG;
-  ctx.textAlign = "center";
+  ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 
   const maxW = size * 0.78;
-  let px = size * 0.2;
+  let px = size * 0.22;
   const font = () => {
     ctx.font = `600 ${px}px "${FONT_LITERATA}"`;
   };
@@ -48,25 +48,23 @@ function drawPhrase(ctx, size) {
   const payW = ctx.measureText("Paywall").width;
   const openW = Math.max(1, ctx.measureText("Open").width);
   const openScale = payW / openW;
-
   const cap = ctx.measureText("Hg").actualBoundingBoxAscent || px * 0.78;
   const openDesc = ctx.measureText("Open").actualBoundingBoxDescent || px * 0.22;
   const payDesc = ctx.measureText("Paywall").actualBoundingBoxDescent || px * 0.22;
-  const gap = openDesc + px * 0.14;
+  const gap = openDesc + px * 0.06;
   const blockH = cap * 2 + gap + payDesc;
-  const cx = size / 2;
-  let ty = (size - blockH) / 2 + cap;
+  const x0 = (size - payW) / 2;
+  let y = (size - blockH) / 2 + cap;
 
-  ctx.save();
-  ctx.translate(cx, ty);
-  ctx.scale(openScale, 1);
   font();
+  ctx.save();
+  ctx.translate(x0, y);
+  ctx.scale(openScale, 1);
   ctx.fillText("Open", 0, 0);
   ctx.restore();
 
-  ty += cap + gap;
-  font();
-  ctx.fillText("Paywall", cx, ty);
+  y += cap + gap;
+  ctx.fillText("Paywall", x0, y);
 }
 
 export function renderAppIconPng(size) {
