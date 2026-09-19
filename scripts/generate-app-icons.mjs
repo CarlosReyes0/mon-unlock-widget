@@ -1,7 +1,8 @@
 /**
  * Home-screen / PWA icons for Open Paywall.
  *
- * A newspaper with no type: a folded sheet on Monad purple.
+ * A newspaper with no type: stacked blank sheets on Monad purple.
+ * No masthead, no columns, no crease, no letters.
  *
  *   node scripts/generate-app-icons.mjs
  */
@@ -15,7 +16,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /** Monad primary purple (brand kit). */
 export const ICON_BG = "#6E54FF";
 const PAPER = "#FFFDF8";
-const CREASE = "rgba(110, 84, 255, 0.28)";
 const BACK = "#E4DCFF";
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -38,10 +38,6 @@ function drawNewspaper(ctx, size) {
   ctx.fillStyle = PAPER;
   roundRect(ctx, x, y, w, h, r);
   ctx.fill();
-
-  const foldY = y + h * 0.5;
-  ctx.fillStyle = CREASE;
-  ctx.fillRect(x, foldY, w, Math.max(1, size * 0.012));
 }
 
 export function renderAppIconPng(size) {
