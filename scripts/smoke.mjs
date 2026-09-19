@@ -41,7 +41,24 @@ test("GET / is the articles feed, not a Docker 404", async () => {
   assert.match(contentType, /text\/html/);
   assert.match(text, /Articles — Open Paywall/);
   assert.match(text, /id="feed"/);
+  assert.match(text, /apple-touch-icon\.png/);
+  assert.match(text, /apple-mobile-web-app-title" content="Open Paywall"/);
   assert.doesNotMatch(text, /unlock-demo\.mp4/);
+});
+
+test("GET /apple-touch-icon.png and /manifest.webmanifest are public", async () => {
+  const icon = await fetch(`${origin}/apple-touch-icon.png`);
+  assert.equal(icon.status, 200);
+  assert.equal(icon.headers.get("content-type"), "image/png");
+  const iconBuf = Buffer.from(await icon.arrayBuffer());
+  assert.equal(iconBuf[0], 0x89);
+  assert.equal(iconBuf.readUInt32BE(16), 180);
+  assert.equal(iconBuf.readUInt32BE(20), 180);
+
+  const manifestRes = await fetch(`${origin}/manifest.webmanifest`);
+  assert.equal(manifestRes.status, 200);
+  const manifest = await manifestRes.json();
+  assert.equal(manifest.short_name, "Open Paywall");
 });
 
 test("GET /write, /demo, /generator.html are 200 HTML", async () => {
