@@ -266,6 +266,8 @@ test("GET / serves the articles feed", async () => {
   const text = await res.text();
   assert.match(text, /Directory/i);
   assert.match(text, /id="feed"/);
+  assert.match(text, /apple-touch-icon\.png/);
+  assert.match(text, /apple-mobile-web-app-title" content="Open Paywall"/);
   assert.doesNotMatch(text, /unlock-demo\.mp4/);
 });
 
@@ -354,6 +356,27 @@ test("GET /assets/og-default.jpg is a public JPEG share card", async () => {
   assert.equal(buf[0], 0xff);
   assert.equal(buf[1], 0xd8);
   assert.ok(buf.length > 10_000);
+});
+
+test("GET /apple-touch-icon.png is a 180×180 PNG", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/apple-touch-icon.png`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/png");
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf[0], 0x89);
+  assert.equal(buf[1], 0x50);
+  assert.equal(buf.readUInt32BE(16), 180);
+  assert.equal(buf.readUInt32BE(20), 180);
+});
+
+test("GET /manifest.webmanifest names the home-screen app Open Paywall", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/manifest.webmanifest`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type") || "", /application\/manifest\+json/);
+  const body = await res.json();
+  assert.equal(body.name, "Open Paywall");
+  assert.equal(body.short_name, "Open Paywall");
+  assert.equal(body.start_url, "/");
 });
 
 test("GET /og/missing-slug.jpg falls back to the default 1200x630 JPEG", async () => {
