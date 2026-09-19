@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ICON_FILES, renderAppIconPng } from "../scripts/generate-app-icons.mjs";
+import { ICON_BG, ICON_FILES, renderAppIconPng } from "../scripts/generate-app-icons.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -61,6 +61,7 @@ test("web app manifest names the home-screen app Open Paywall", () => {
   assert.equal(manifest.short_name, "Open Paywall");
   assert.equal(manifest.start_url, "/");
   assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.theme_color, ICON_BG);
   const srcs = (manifest.icons || []).map((icon) => icon.src);
   assert.ok(srcs.includes("/assets/icon-192.png"));
   assert.ok(srcs.includes("/assets/icon-512.png"));

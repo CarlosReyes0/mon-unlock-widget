@@ -5,6 +5,9 @@
  * It uses apple-touch-icon (180×180 PNG). Without that file, Safari draws a
  * letter from the title — "A" from "Articles — Open Paywall".
  *
+ * Mark: open (unlocked) padlock on Monad primary purple — friendlier than a
+ * closed lock, and reads as “open” rather than “blocked.”
+ *
  *   node scripts/generate-app-icons.mjs
  */
 import fs from "node:fs";
@@ -14,9 +17,9 @@ import { createCanvas } from "@napi-rs/canvas";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Same mint ink as OG cards (`MINT_INK` in server/og-card.mjs). */
-export const ICON_BG = "#0f766e";
-export const ICON_LOCK = "#ffffff";
+/** Monad primary purple (brand kit). */
+export const ICON_BG = "#6E54FF";
+export const ICON_FG = "#ffffff";
 
 function roundRect(ctx, x, y, w, h, r) {
   const radius = Math.min(r, w / 2, h / 2);
@@ -24,20 +27,33 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.roundRect(x, y, w, h, radius);
 }
 
-function drawLock(ctx, x, y, size) {
+/** Unlocked padlock: shackle swung open, round body, round keyhole. */
+function drawOpenLock(ctx, x, y, size) {
   ctx.save();
-  ctx.strokeStyle = ICON_LOCK;
-  ctx.fillStyle = ICON_LOCK;
-  ctx.lineWidth = Math.max(2, size * 0.14);
+  ctx.strokeStyle = ICON_FG;
+  ctx.fillStyle = ICON_FG;
+  ctx.lineWidth = Math.max(2, size * 0.145);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const cx = x + size / 2;
+
+  const cx = x + size / 2 - size * 0.04;
+  const shackleR = size * 0.27;
+  const shackleCx = cx + size * 0.1;
+  const shackleCy = y + size * 0.33;
   ctx.beginPath();
-  ctx.arc(cx, y + size * 0.36, size * 0.26, Math.PI, 0, false);
+  ctx.arc(shackleCx, shackleCy, shackleR, Math.PI * 0.92, Math.PI * 0.08, false);
   ctx.stroke();
-  const bodyW = size * 0.7;
-  const bodyH = size * 0.48;
-  roundRect(ctx, cx - bodyW / 2, y + size * 0.4, bodyW, bodyH, Math.max(3, size * 0.1));
+
+  const bodyW = size * 0.78;
+  const bodyH = size * 0.54;
+  const bx = cx - bodyW / 2;
+  const by = y + size * 0.42;
+  roundRect(ctx, bx, by, bodyW, bodyH, bodyH * 0.38);
+  ctx.fill();
+
+  ctx.fillStyle = ICON_BG;
+  ctx.beginPath();
+  ctx.arc(cx, by + bodyH * 0.48, Math.max(1.5, size * 0.09), 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -52,7 +68,7 @@ export function renderAppIconPng(size, { padRatio = 0.26 } = {}) {
   const lockSize = Math.round(size * (1 - padRatio * 2));
   const x = (size - lockSize) / 2;
   const y = (size - lockSize) / 2 - lockSize * 0.02;
-  drawLock(ctx, x, y, lockSize);
+  drawOpenLock(ctx, x, y, lockSize);
   return canvas.toBuffer("image/png");
 }
 
