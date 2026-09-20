@@ -7,17 +7,19 @@
  *
  * Cover images: articles have no image column. Listed posts get a generated
  * layout-B card at /og/{slug}.jpg (title + teaser + price). Missing listings
- * or generator failure fall back to assets/og-default.jpg. A listing object's
- * own https imageUrl / ogImage / coverImage still wins (extension point —
+ * or generator failure fall back to /og.jpg (the bundled default card). A listing
+ * object's own https imageUrl / ogImage / coverImage still wins (extension point —
  * do not select a missing Supabase column).
  *
- * The path `/og/{slug}.jpg` is stable; `?v={fingerprint}` changes when title /
- * teaser / price change so Twitter/iMessage do not keep a stale card.
+ * The path `/og/{slug}.jpg` is stable. `og:image` may append `?v={fingerprint}`
+ * so Slack/iMessage refetch after edits. `twitter:image` stays query-free —
+ * X often fetches no picture when the image URL has a query string.
  */
 
 import { createHash } from "node:crypto";
 
-export const OG_IMAGE_PATH = "/assets/og-default.jpg";
+export const OG_IMAGE_PATH = "/og.jpg";
+export const OG_IMAGE_FILE = "/assets/og-default.jpg";
 export const OG_IMAGE_WIDTH = 1200;
 export const OG_IMAGE_HEIGHT = 630;
 export const OG_DESCRIPTION_MAX = 125;
@@ -133,6 +135,20 @@ export function absoluteHttpUrl(raw) {
   }
 }
 
+/** Drop ?query/#hash so Twitterbot gets a bare image path. */
+export function twitterImageUrl(raw) {
+  const abs = absoluteHttpUrl(raw) || String(raw || "").trim();
+  if (!abs) return "";
+  try {
+    const u = new URL(abs);
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return abs.split("?")[0].split("#")[0];
+  }
+}
+
 /** Prefer a listing's own https image when present; otherwise the default card. */
 export function resolveShareImageUrl(article, fallbackImage) {
   const custom = absoluteHttpUrl(
@@ -217,7 +233,7 @@ export function buildShareMetaTags(share) {
     ["name", "twitter:site", share.twitterSite],
     ["name", "twitter:title", share.title],
     ["name", "twitter:description", share.description],
-    ["name", "twitter:image", share.imageUrl],
+    ["name", "twitter:image", twitterImageUrl(share.twitterImage || share.imageUrl)],
     ["name", "twitter:image:alt", share.imageAlt || share.title],
   ];
   if (share.author) {

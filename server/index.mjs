@@ -74,8 +74,8 @@ import {
   upsertWriterPlan,
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
-import { articleHtmlForSlug, feedHtmlForReq, ogJpegForSlug, parseArticleSlug } from "./og-http.mjs";
-import { parseOgImagePath } from "./og-card.mjs";
+import { articleHtmlForSlug, feedHtmlForReq, isDefaultOgPath, ogJpegForSlug, parseArticleSlug } from "./og-http.mjs";
+import { defaultOgJpegBuffer, parseOgImagePath } from "./og-card.mjs";
 import { publicOrigin } from "./article-og.mjs";
 import { createArticleDownload, parseDownloadPath } from "./article-download.mjs";
 import { relayGasDrip } from "./relay-gas.mjs";
@@ -354,6 +354,18 @@ function serveFeedHtml(req, res) {
     console.error("[article-og] feed inject failed:", e?.message || e);
     return serveStatic(req, res, "/articles.html");
   }
+}
+
+function serveOgJpeg(res, buf, method) {
+  const body = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  cors(res);
+  res.writeHead(200, {
+    "Content-Type": "image/jpeg",
+    "Cache-Control": "public, max-age=86400",
+    "Content-Length": body.length,
+  });
+  if (method === "HEAD") return res.end();
+  return res.end(body);
 }
 
 function serveStatic(req, res, urlPath) {
@@ -1254,22 +1266,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Per-article OG cards (Twitterbot / Slackbot fetch this URL from og:image).
-  // Path is stable; article HTML appends ?v={fingerprint} so title edits bust crawler cache.
+  // Path is stable; article HTML may append ?v= on og:image. twitter:image is bare.
+  if ((method === "GET" || method === "HEAD") && isDefaultOgPath(url.pathname)) {
+    return serveOgJpeg(res, defaultOgJpegBuffer(), method);
+  }
   const ogSlug = parseOgImagePath(url.pathname);
   if ((method === "GET" || method === "HEAD") && ogSlug) {
     try {
       const buf = await ogJpegForSlug(ogSlug);
-      cors(res);
-      res.writeHead(200, {
-        "Content-Type": "image/jpeg",
-        "Cache-Control": "public, max-age=3600",
-        "Content-Length": buf.length,
-      });
-      if (method === "HEAD") return res.end();
-      return res.end(buf);
+      return serveOgJpeg(res, buf, method);
     } catch (e) {
       console.error("[og-card] serve failed:", e?.message || e);
-      return serveStatic(req, res, "/assets/og-default.jpg");
+      return serveOgJpeg(res, defaultOgJpegBuffer(), method);
     }
   }
 

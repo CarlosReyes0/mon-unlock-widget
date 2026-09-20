@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { publicOrigin, renderArticlePage, renderFeedPage } from "./article-og.mjs";
-import { getArticleOgJpeg, parseOgImagePath, warmupOgCard } from "./og-card.mjs";
+import { defaultOgJpegBuffer, getArticleOgJpeg, parseOgImagePath } from "./og-card.mjs";
 import { getPublicArticle, listingsSupabaseConfigured } from "./listings-api.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -55,12 +55,33 @@ export async function loadListedArticle(slug) {
   }
 }
 
+export function isDefaultOgPath(pathname) {
+  const p = String(pathname || "").split("?")[0];
+  return p === "/og.jpg" || p === "/og.jpeg" || p === "/assets/og-default.jpg";
+}
+
+export function sendOgJpeg(res, buf, method) {
+  const body = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.setHeader("Content-Length", String(body.length));
+  if (method === "HEAD") res.end();
+  else res.end(body);
+}
+
 export async function articleHtmlForSlug(req, slug) {
   const html = fs.readFileSync(path.join(ROOT, "article.html"), "utf8");
   const origin = publicOrigin(req);
   const article = await loadListedArticle(slug);
   const body = await renderArticlePage({ html, slug, origin, article });
-  if (article) warmupOgCard(slug, article);
+  if (article) {
+    try {
+      await ogJpegForSlug(slug);
+    } catch {
+      /* image route still falls back to /og.jpg */
+    }
+  }
   return Buffer.from(body, "utf8");
 }
 
@@ -90,12 +111,12 @@ export async function tryHandleOgRequest(req, res) {
   const ogSlug = parseOgImagePath(pathOnly);
   if (ogSlug) {
     const buf = await ogJpegForSlug(ogSlug);
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=60");
-    res.setHeader("Content-Length", String(buf.length));
-    if (method === "HEAD") res.end();
-    else res.end(buf);
+    sendOgJpeg(res, buf, method);
+    return true;
+  }
+
+  if (isDefaultOgPath(pathOnly)) {
+    sendOgJpeg(res, defaultOgJpegBuffer(), method);
     return true;
   }
 

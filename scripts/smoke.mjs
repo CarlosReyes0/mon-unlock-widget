@@ -46,10 +46,10 @@ test("GET / is the articles feed, not a Docker 404", async () => {
   assert.doesNotMatch(text, /unlock-demo\.mp4/);
   assert.match(text, /name="twitter:card" content="summary_large_image"/);
   assert.match(text, /property="og:image"/);
-  assert.match(text, /\/assets\/og-default\.jpg/);
+  assert.match(text, /\/og\.jpg/);
 });
 
-test("GET /apple-touch-icon.png and /manifest.webmanifest are public", async () => {
+test("GET /apple-touch-icon.png, /manifest.webmanifest, and /og.jpg are public", async () => {
   const icon = await fetch(`${origin}/apple-touch-icon.png`);
   assert.equal(icon.status, 200);
   assert.equal(icon.headers.get("content-type"), "image/png");
@@ -62,6 +62,14 @@ test("GET /apple-touch-icon.png and /manifest.webmanifest are public", async () 
   assert.equal(manifestRes.status, 200);
   const manifest = await manifestRes.json();
   assert.equal(manifest.short_name, "Open Paywall");
+
+  const og = await fetch(`${origin}/og.jpg`);
+  assert.equal(og.status, 200);
+  assert.match(og.headers.get("content-type") || "", /image\/jpeg/);
+  const ogBuf = Buffer.from(await og.arrayBuffer());
+  assert.equal(ogBuf[0], 0xff);
+  assert.equal(ogBuf[1], 0xd8);
+  assert.ok(ogBuf.length > 1000);
 });
 
 test("GET /write, /demo, /generator.html are 200 HTML", async () => {
