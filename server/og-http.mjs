@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { publicOrigin, renderArticlePage } from "./article-og.mjs";
+import { publicOrigin, renderArticlePage, renderFeedPage } from "./article-og.mjs";
 import { getArticleOgJpeg, parseOgImagePath, warmupOgCard } from "./og-card.mjs";
 import { getPublicArticle, listingsSupabaseConfigured } from "./listings-api.mjs";
 
@@ -64,6 +64,17 @@ export async function articleHtmlForSlug(req, slug) {
   return Buffer.from(body, "utf8");
 }
 
+export function feedHtmlForReq(req) {
+  const html = fs.readFileSync(path.join(ROOT, "articles.html"), "utf8");
+  const body = renderFeedPage({ html, origin: publicOrigin(req) });
+  return Buffer.from(body, "utf8");
+}
+
+export function isFeedPath(pathname) {
+  const p = String(pathname || "").split("?")[0];
+  return p === "/" || p === "/articles" || p === "/articles/";
+}
+
 export async function ogJpegForSlug(slug) {
   return getArticleOgJpeg(slug, { loadArticle: listingLoader() });
 }
@@ -91,6 +102,17 @@ export async function tryHandleOgRequest(req, res) {
   const slug = parseArticleSlug(pathOnly);
   if (slug) {
     const buf = await articleHtmlForSlug(req, slug);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.setHeader("Content-Length", String(buf.length));
+    if (method === "HEAD") res.end();
+    else res.end(buf);
+    return true;
+  }
+
+  if (isFeedPath(pathOnly)) {
+    const buf = feedHtmlForReq(req);
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=60");

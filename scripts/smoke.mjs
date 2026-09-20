@@ -44,6 +44,9 @@ test("GET / is the articles feed, not a Docker 404", async () => {
   assert.match(text, /apple-touch-icon\.png/);
   assert.match(text, /apple-mobile-web-app-title" content="Open Paywall"/);
   assert.doesNotMatch(text, /unlock-demo\.mp4/);
+  assert.match(text, /name="twitter:card" content="summary_large_image"/);
+  assert.match(text, /property="og:image"/);
+  assert.match(text, /\/assets\/og-default\.jpg/);
 });
 
 test("GET /apple-touch-icon.png and /manifest.webmanifest are public", async () => {

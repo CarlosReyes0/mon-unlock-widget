@@ -329,6 +329,23 @@ test("GET /articles/demo-slug serves article.html", async () => {
   assert.match(text, /open-paywall|Loading article/i);
 });
 
+test("GET / includes Open Graph and Twitter Card tags for X", async () => {
+  const origin = `http://127.0.0.1:${PORT}`;
+  const res = await fetch(`${origin}/`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /property="og:title" content="Open Paywall"/);
+  assert.match(text, /property="og:url" content="http:\/\/127\.0\.0\.1:\d+\/"/);
+  assert.match(
+    text,
+    /property="og:image" content="http:\/\/127\.0\.0\.1:\d+\/assets\/og-default\.jpg"/
+  );
+  assert.match(text, /name="twitter:card" content="summary_large_image"/);
+  assert.match(text, /name="twitter:image" content="http:\/\/127\.0\.0\.1:\d+\/assets\/og-default\.jpg"/);
+  assert.match(text, /name="twitter:site" content="@openpaywall"/);
+  assert.doesNotMatch(text, /property="og:image" content="\/assets\//);
+});
+
 test("GET /articles/demo-slug includes Open Graph and Twitter Card tags", async () => {
   const origin = `http://127.0.0.1:${PORT}`;
   const res = await fetch(`${origin}/articles/demo-slug`);
@@ -471,6 +488,9 @@ test("GET /agents.md and /skill.md are served", async () => {
     const res = await fetch(`http://127.0.0.1:${PORT}${path}`);
     assert.equal(res.status, 200, path);
   }
+  const robots = await fetch(`http://127.0.0.1:${PORT}/robots.txt`).then((r) => r.text());
+  assert.match(robots, /User-agent: Twitterbot/);
+  assert.match(robots, /Allow: \//);
 });
 
 test("GET /.well-known/skills/mon-unlock/SKILL.md is served", async () => {

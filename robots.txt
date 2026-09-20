@@ -10,4 +10,8 @@ Allow: /openapi.json
 Allow: /.well-known/
 Allow: /api/agents/
 
+# X (Twitter) card crawler — keep explicit so a future * deny cannot hide previews.
+User-agent: Twitterbot
+Allow: /
+
 Sitemap: https://mon-unlock-widget-production.up.railway.app/llms.txt

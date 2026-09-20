@@ -1,8 +1,9 @@
 /**
  * Open Graph / Twitter Card tags for hosted article URLs.
  *
- * Crawlers (Twitterbot, Slackbot, iMessage) do not run the article page JS, so
- * /articles/{slug} injects these tags into the HTML response.
+ * Crawlers (Twitterbot, Slackbot, iMessage) do not run JS, so / and
+ * /articles/{slug} inject these tags into the HTML response. The feed at /
+ * has no per-article listing, so it uses the default Open Paywall card.
  *
  * Cover images: articles have no image column. Listed posts get a generated
  * layout-B card at /og/{slug}.jpg (title + teaser + price). Missing listings
@@ -24,6 +25,8 @@ export const TWITTER_SITE = "@openpaywall";
 export const SITE_NAME = "Open Paywall";
 export const DEFAULT_DESCRIPTION =
   "Read this article on Open Paywall. One unlock works here and on the publisher’s site.";
+export const FEED_DESCRIPTION =
+  "Read paywalled articles hosted on Open Paywall. Unlock once, read on Open Paywall and on the publisher’s own site.";
 
 /** Short content hash for disk cache keys and og:image cache-busting. */
 export function ogCardFingerprint(article) {
@@ -152,6 +155,21 @@ export function defaultShareMeta({ canonical, fallbackImage }) {
   };
 }
 
+/** Share card for the public articles feed (`/` and `/articles`). */
+export function feedShareMeta({ canonical, fallbackImage }) {
+  return {
+    title: SITE_NAME,
+    documentTitle: "Articles — Open Paywall",
+    description: plainText(FEED_DESCRIPTION, OG_DESCRIPTION_MAX),
+    url: canonical,
+    imageUrl: fallbackImage,
+    imageAlt: SITE_NAME,
+    siteName: SITE_NAME,
+    twitterSite: TWITTER_SITE,
+    type: "website",
+  };
+}
+
 export function shareMetaFromArticle(article, { canonical, fallbackImage, generatedImage }) {
   const title = plainText(article?.title, 70) || SITE_NAME;
   const description =
@@ -251,5 +269,14 @@ export async function renderArticlePage({ html, slug, origin, loadArticle, artic
   const share = listing
     ? shareMetaFromArticle(listing, { canonical, fallbackImage, generatedImage })
     : defaultShareMeta({ canonical, fallbackImage });
+  return injectShareMeta(html, buildShareMetaTags(share), share.documentTitle);
+}
+
+/** Inject crawler-visible OG / Twitter tags into the articles feed HTML. */
+export function renderFeedPage({ html, origin }) {
+  const share = feedShareMeta({
+    canonical: `${origin}/`,
+    fallbackImage: `${origin}${OG_IMAGE_PATH}`,
+  });
   return injectShareMeta(html, buildShareMetaTags(share), share.documentTitle);
 }

@@ -74,7 +74,7 @@ import {
   upsertWriterPlan,
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
-import { articleHtmlForSlug, ogJpegForSlug, parseArticleSlug } from "./og-http.mjs";
+import { articleHtmlForSlug, feedHtmlForReq, ogJpegForSlug, parseArticleSlug } from "./og-http.mjs";
 import { parseOgImagePath } from "./og-card.mjs";
 import { publicOrigin } from "./article-og.mjs";
 import { createArticleDownload, parseDownloadPath } from "./article-download.mjs";
@@ -336,6 +336,23 @@ async function serveArticleHtml(req, res, slug) {
   } catch (e) {
     console.error("[article-og] inject failed:", e?.message || e);
     return serveStatic(req, res, "/article.html");
+  }
+}
+
+function serveFeedHtml(req, res) {
+  try {
+    const buf = feedHtmlForReq(req);
+    cors(res);
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=60",
+      "Content-Length": buf.length,
+    });
+    if ((req.method || "GET") === "HEAD") return res.end();
+    return res.end(buf);
+  } catch (e) {
+    console.error("[article-og] feed inject failed:", e?.message || e);
+    return serveStatic(req, res, "/articles.html");
   }
 }
 
@@ -1227,7 +1244,7 @@ const server = http.createServer(async (req, res) => {
 
   // Site root is the articles feed. Old homepage lives at /demo.
   if ((method === "GET" || method === "HEAD") && url.pathname === "/") {
-    return serveStatic(req, res, "/articles.html");
+    return serveFeedHtml(req, res);
   }
   if (
     (method === "GET" || method === "HEAD") &&
@@ -1258,7 +1275,7 @@ const server = http.createServer(async (req, res) => {
 
   // Pretty URLs: /articles → feed, /articles/:slug → hosted article
   if ((method === "GET" || method === "HEAD") && url.pathname === "/articles") {
-    return serveStatic(req, res, "/articles.html");
+    return serveFeedHtml(req, res);
   }
   if ((method === "GET" || method === "HEAD") && (url.pathname === "/write" || url.pathname === "/write.html")) {
     return serveStatic(req, res, "/write.html");

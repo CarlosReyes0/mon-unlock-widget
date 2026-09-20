@@ -11,16 +11,55 @@ import {
   ogCardFingerprint,
   buildShareMetaTags,
   defaultShareMeta,
+  feedShareMeta,
   injectShareMeta,
   plainText,
   publicOrigin,
   renderArticlePage,
+  renderFeedPage,
   resolveShareImageUrl,
   shareMetaFromArticle,
 } from "./article-og.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ARTICLE_HTML = fs.readFileSync(path.join(ROOT, "article.html"), "utf8");
+const FEED_HTML = fs.readFileSync(path.join(ROOT, "articles.html"), "utf8");
+
+test("feedShareMeta is a website card with the default photo", () => {
+  const share = feedShareMeta({
+    canonical: "https://host/",
+    fallbackImage: "https://host/assets/og-default.jpg",
+  });
+  assert.equal(share.title, "Open Paywall");
+  assert.equal(share.documentTitle, "Articles — Open Paywall");
+  assert.equal(share.type, "website");
+  assert.equal(share.url, "https://host/");
+  assert.equal(share.imageUrl, "https://host/assets/og-default.jpg");
+  assert.ok(share.description.length > 0);
+  assert.ok(share.description.length <= OG_DESCRIPTION_MAX);
+});
+
+test("renderFeedPage injects crawler-visible tags into articles.html", () => {
+  const html = renderFeedPage({
+    html: FEED_HTML,
+    origin: "https://mon-unlock-widget-production.up.railway.app",
+  });
+  assert.match(html, /<title>Articles — Open Paywall<\/title>/);
+  assert.match(html, /property="og:title" content="Open Paywall"/);
+  assert.match(
+    html,
+    /property="og:url" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/"/
+  );
+  assert.match(
+    html,
+    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/assets\/og-default\.jpg"/
+  );
+  assert.match(html, /name="twitter:card" content="summary_large_image"/);
+  assert.match(html, /name="twitter:site" content="@openpaywall"/);
+  assert.match(html, /id="feed"/);
+  assert.equal((html.match(/property="og:title"/g) || []).length, 1);
+  assert.equal((html.match(/name="description"/g) || []).length, 1);
+});
 
 test("plainText strips tags and truncates on a word boundary", () => {
   assert.equal(plainText("<p>Hello <em>world</em></p>"), "Hello world");

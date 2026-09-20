@@ -26,6 +26,22 @@ test("tryHandleOgRequest serves a JPEG for /og/{slug}.jpg", async () => {
   assert.equal(res.body[1], 0xd8);
 });
 
+test("tryHandleOgRequest injects OG tags for the articles feed at /", async () => {
+  const res = mockRes();
+  const handled = await tryHandleOgRequest(
+    { method: "GET", url: "/", headers: { host: "127.0.0.1:5173" } },
+    res
+  );
+  assert.equal(handled, true);
+  assert.equal(res.statusCode, 200);
+  assert.match(res.headers["Content-Type"], /text\/html/);
+  const html = res.body.toString("utf8");
+  assert.match(html, /property="og:title" content="Open Paywall"/);
+  assert.match(html, /name="twitter:card" content="summary_large_image"/);
+  assert.match(html, /http:\/\/127\.0\.0\.1:5173\/assets\/og-default\.jpg/);
+  assert.match(html, /id="feed"/);
+});
+
 test("tryHandleOgRequest injects OG tags for /articles/{slug}", async () => {
   const res = mockRes();
   const handled = await tryHandleOgRequest(
