@@ -329,6 +329,23 @@ test("GET /articles/demo-slug serves article.html", async () => {
   assert.match(text, /open-paywall|Loading article/i);
 });
 
+test("GET / includes Open Graph and Twitter Card tags for X", async () => {
+  const origin = `http://127.0.0.1:${PORT}`;
+  const res = await fetch(`${origin}/`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /property="og:title" content="Open Paywall"/);
+  assert.match(text, /property="og:url" content="http:\/\/127\.0\.0\.1:\d+\/"/);
+  assert.match(
+    text,
+    /property="og:image" content="http:\/\/127\.0\.0\.1:\d+\/og\.jpg"/
+  );
+  assert.match(text, /name="twitter:card" content="summary_large_image"/);
+  assert.match(text, /name="twitter:image" content="http:\/\/127\.0\.0\.1:\d+\/og\.jpg"/);
+  assert.match(text, /name="twitter:site" content="@openpaywall"/);
+  assert.doesNotMatch(text, /property="og:image" content="\/assets\//);
+});
+
 test("GET /articles/demo-slug includes Open Graph and Twitter Card tags", async () => {
   const origin = `http://127.0.0.1:${PORT}`;
   const res = await fetch(`${origin}/articles/demo-slug`);
@@ -340,22 +357,25 @@ test("GET /articles/demo-slug includes Open Graph and Twitter Card tags", async 
   assert.match(text, /property="og:url" content="http:\/\/127\.0\.0\.1:\d+\/articles\/demo-slug"/);
   assert.match(
     text,
-    /property="og:image" content="http:\/\/127\.0\.0\.1:\d+\/assets\/og-default\.jpg"/
+    /property="og:image" content="http:\/\/127\.0\.0\.1:\d+\/og\.jpg"/
   );
   assert.match(text, /name="twitter:card" content="summary_large_image"/);
-  assert.match(text, /name="twitter:image" content="http:\/\/127\.0\.0\.1:\d+\/assets\/og-default\.jpg"/);
+  assert.match(text, /name="twitter:image" content="http:\/\/127\.0\.0\.1:\d+\/og\.jpg"/);
   assert.match(text, /name="twitter:site" content="@openpaywall"/);
   assert.doesNotMatch(text, /property="og:image" content="\/assets\//);
 });
 
-test("GET /assets/og-default.jpg is a public JPEG share card", async () => {
-  const res = await fetch(`http://127.0.0.1:${PORT}/assets/og-default.jpg`);
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get("content-type"), "image/jpeg");
-  const buf = Buffer.from(await res.arrayBuffer());
-  assert.equal(buf[0], 0xff);
-  assert.equal(buf[1], 0xd8);
-  assert.ok(buf.length > 10_000);
+test("GET /og.jpg and /assets/og-default.jpg are cacheable JPEGs for X", async () => {
+  for (const imagePath of ["/og.jpg", "/assets/og-default.jpg"]) {
+    const res = await fetch(`http://127.0.0.1:${PORT}${imagePath}`);
+    assert.equal(res.status, 200, imagePath);
+    assert.equal(res.headers.get("content-type"), "image/jpeg", imagePath);
+    assert.match(res.headers.get("cache-control") || "", /public/, imagePath);
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert.equal(buf[0], 0xff, imagePath);
+    assert.equal(buf[1], 0xd8, imagePath);
+    assert.ok(buf.length > 10_000, imagePath);
+  }
 });
 
 test("GET /apple-touch-icon.png is a 180×180 PNG", async () => {
@@ -416,6 +436,11 @@ test("GET /articles/{listed-slug} points og:image at the generated card with a c
   const m = text.match(/property="og:image" content="([^"]+)"/);
   assert.ok(m, "missing og:image");
   assert.match(m[1], new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/og/the-quote-was-a-trap\\.jpg\\?v=[a-f0-9]{16}$`));
+  assert.match(
+    text,
+    new RegExp(`name="twitter:image" content="${origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/og/the-quote-was-a-trap\\.jpg"`)
+  );
+  assert.doesNotMatch(text, /name="twitter:image" content="[^"]+\?v=/);
   assert.match(text, /property="og:title" content="The Quote Was a Trap"/);
 
   const img = await fetch(m[1]);
@@ -471,6 +496,9 @@ test("GET /agents.md and /skill.md are served", async () => {
     const res = await fetch(`http://127.0.0.1:${PORT}${path}`);
     assert.equal(res.status, 200, path);
   }
+  const robots = await fetch(`http://127.0.0.1:${PORT}/robots.txt`).then((r) => r.text());
+  assert.match(robots, /User-agent: Twitterbot/);
+  assert.match(robots, /Allow: \//);
 });
 
 test("GET /.well-known/skills/mon-unlock/SKILL.md is served", async () => {

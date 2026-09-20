@@ -26,6 +26,22 @@ test("tryHandleOgRequest serves a JPEG for /og/{slug}.jpg", async () => {
   assert.equal(res.body[1], 0xd8);
 });
 
+test("tryHandleOgRequest injects OG tags for the articles feed at /", async () => {
+  const res = mockRes();
+  const handled = await tryHandleOgRequest(
+    { method: "GET", url: "/", headers: { host: "127.0.0.1:5173" } },
+    res
+  );
+  assert.equal(handled, true);
+  assert.equal(res.statusCode, 200);
+  assert.match(res.headers["Content-Type"], /text\/html/);
+  const html = res.body.toString("utf8");
+  assert.match(html, /property="og:title" content="Open Paywall"/);
+  assert.match(html, /name="twitter:card" content="summary_large_image"/);
+  assert.match(html, /http:\/\/127\.0\.0\.1:5173\/og\.jpg/);
+  assert.match(html, /id="feed"/);
+});
+
 test("tryHandleOgRequest injects OG tags for /articles/{slug}", async () => {
   const res = mockRes();
   const handled = await tryHandleOgRequest(
@@ -38,7 +54,7 @@ test("tryHandleOgRequest injects OG tags for /articles/{slug}", async () => {
   const html = res.body.toString("utf8");
   assert.match(html, /property="og:image"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
-  assert.match(html, /http:\/\/127\.0\.0\.1:5173\/assets\/og-default\.jpg/);
+  assert.match(html, /http:\/\/127\.0\.0\.1:5173\/og\.jpg/);
 });
 
 test("tryHandleOgRequest uses https og:image on Railway when proto is omitted", async () => {
@@ -55,8 +71,22 @@ test("tryHandleOgRequest uses https og:image on Railway when proto is omitted", 
   const html = res.body.toString("utf8");
   assert.match(
     html,
-    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/assets\/og-default\.jpg"/
+    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\.jpg"/
   );
+});
+
+test("tryHandleOgRequest serves /og.jpg as a cacheable JPEG", async () => {
+  const res = mockRes();
+  const handled = await tryHandleOgRequest(
+    { method: "GET", url: "/og.jpg", headers: { host: "127.0.0.1:5173" } },
+    res
+  );
+  assert.equal(handled, true);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers["Content-Type"], "image/jpeg");
+  assert.match(res.headers["Cache-Control"], /public/);
+  assert.equal(res.body[0], 0xff);
+  assert.equal(res.body[1], 0xd8);
 });
 
 test("tryHandleOgRequest ignores unrelated paths", async () => {
@@ -94,6 +124,8 @@ test("tryHandleOgRequest serves a generated listing card from OG_LISTING_FIXTURE
     assert.equal(handledHtml, true);
     const html = htmlRes.body.toString("utf8");
     assert.match(html, /\/og\/the-quote-was-a-trap\.jpg\?v=[a-f0-9]{16}/);
+    assert.match(html, /name="twitter:image" content="http:\/\/127\.0\.0\.1:5173\/og\/the-quote-was-a-trap\.jpg"/);
+    assert.doesNotMatch(html, /name="twitter:image" content="[^"]+\?v=/);
     assert.match(html, /property="og:title" content="The Quote Was a Trap"/);
 
     const imgRes = mockRes();

@@ -1,22 +1,25 @@
 /**
  * Open Graph / Twitter Card tags for hosted article URLs.
  *
- * Crawlers (Twitterbot, Slackbot, iMessage) do not run the article page JS, so
- * /articles/{slug} injects these tags into the HTML response.
+ * Crawlers (Twitterbot, Slackbot, iMessage) do not run JS, so / and
+ * /articles/{slug} inject these tags into the HTML response. The feed at /
+ * has no per-article listing, so it uses the default Open Paywall card.
  *
  * Cover images: articles have no image column. Listed posts get a generated
  * layout-B card at /og/{slug}.jpg (title + teaser + price). Missing listings
- * or generator failure fall back to assets/og-default.jpg. A listing object's
- * own https imageUrl / ogImage / coverImage still wins (extension point —
+ * or generator failure fall back to /og.jpg (the bundled default card). A listing
+ * object's own https imageUrl / ogImage / coverImage still wins (extension point —
  * do not select a missing Supabase column).
  *
- * The path `/og/{slug}.jpg` is stable; `?v={fingerprint}` changes when title /
- * teaser / price change so Twitter/iMessage do not keep a stale card.
+ * The path `/og/{slug}.jpg` is stable. `og:image` may append `?v={fingerprint}`
+ * so Slack/iMessage refetch after edits. `twitter:image` stays query-free —
+ * X often fetches no picture when the image URL has a query string.
  */
 
 import { createHash } from "node:crypto";
 
-export const OG_IMAGE_PATH = "/assets/og-default.jpg";
+export const OG_IMAGE_PATH = "/og.jpg";
+export const OG_IMAGE_FILE = "/assets/og-default.jpg";
 export const OG_IMAGE_WIDTH = 1200;
 export const OG_IMAGE_HEIGHT = 630;
 export const OG_DESCRIPTION_MAX = 125;
@@ -24,6 +27,8 @@ export const TWITTER_SITE = "@openpaywall";
 export const SITE_NAME = "Open Paywall";
 export const DEFAULT_DESCRIPTION =
   "Read this article on Open Paywall. One unlock works here and on the publisher’s site.";
+export const FEED_DESCRIPTION =
+  "Read paywalled articles hosted on Open Paywall. Unlock once, read on Open Paywall and on the publisher’s own site.";
 
 /** Short content hash for disk cache keys and og:image cache-busting. */
 export function ogCardFingerprint(article) {
@@ -130,6 +135,20 @@ export function absoluteHttpUrl(raw) {
   }
 }
 
+/** Drop ?query/#hash so Twitterbot gets a bare image path. */
+export function twitterImageUrl(raw) {
+  const abs = absoluteHttpUrl(raw) || String(raw || "").trim();
+  if (!abs) return "";
+  try {
+    const u = new URL(abs);
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return abs.split("?")[0].split("#")[0];
+  }
+}
+
 /** Prefer a listing's own https image when present; otherwise the default card. */
 export function resolveShareImageUrl(article, fallbackImage) {
   const custom = absoluteHttpUrl(
@@ -143,6 +162,21 @@ export function defaultShareMeta({ canonical, fallbackImage }) {
     title: SITE_NAME,
     documentTitle: "Article — Open Paywall",
     description: DEFAULT_DESCRIPTION,
+    url: canonical,
+    imageUrl: fallbackImage,
+    imageAlt: SITE_NAME,
+    siteName: SITE_NAME,
+    twitterSite: TWITTER_SITE,
+    type: "website",
+  };
+}
+
+/** Share card for the public articles feed (`/` and `/articles`). */
+export function feedShareMeta({ canonical, fallbackImage }) {
+  return {
+    title: SITE_NAME,
+    documentTitle: "Articles — Open Paywall",
+    description: plainText(FEED_DESCRIPTION, OG_DESCRIPTION_MAX),
     url: canonical,
     imageUrl: fallbackImage,
     imageAlt: SITE_NAME,
@@ -199,7 +233,7 @@ export function buildShareMetaTags(share) {
     ["name", "twitter:site", share.twitterSite],
     ["name", "twitter:title", share.title],
     ["name", "twitter:description", share.description],
-    ["name", "twitter:image", share.imageUrl],
+    ["name", "twitter:image", twitterImageUrl(share.twitterImage || share.imageUrl)],
     ["name", "twitter:image:alt", share.imageAlt || share.title],
   ];
   if (share.author) {
@@ -251,5 +285,14 @@ export async function renderArticlePage({ html, slug, origin, loadArticle, artic
   const share = listing
     ? shareMetaFromArticle(listing, { canonical, fallbackImage, generatedImage })
     : defaultShareMeta({ canonical, fallbackImage });
+  return injectShareMeta(html, buildShareMetaTags(share), share.documentTitle);
+}
+
+/** Inject crawler-visible OG / Twitter tags into the articles feed HTML. */
+export function renderFeedPage({ html, origin }) {
+  const share = feedShareMeta({
+    canonical: `${origin}/`,
+    fallbackImage: `${origin}${OG_IMAGE_PATH}`,
+  });
   return injectShareMeta(html, buildShareMetaTags(share), share.documentTitle);
 }

@@ -5,22 +5,67 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   OG_DESCRIPTION_MAX,
+  OG_IMAGE_FILE,
   OG_IMAGE_PATH,
   absoluteHttpUrl,
   articleOgImagePath,
   ogCardFingerprint,
   buildShareMetaTags,
   defaultShareMeta,
+  feedShareMeta,
   injectShareMeta,
   plainText,
   publicOrigin,
   renderArticlePage,
+  renderFeedPage,
   resolveShareImageUrl,
   shareMetaFromArticle,
+  twitterImageUrl,
 } from "./article-og.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ARTICLE_HTML = fs.readFileSync(path.join(ROOT, "article.html"), "utf8");
+const FEED_HTML = fs.readFileSync(path.join(ROOT, "articles.html"), "utf8");
+
+test("feedShareMeta is a website card with the default photo", () => {
+  const share = feedShareMeta({
+    canonical: "https://host/",
+    fallbackImage: "https://host/assets/og-default.jpg",
+  });
+  assert.equal(share.title, "Open Paywall");
+  assert.equal(share.documentTitle, "Articles — Open Paywall");
+  assert.equal(share.type, "website");
+  assert.equal(share.url, "https://host/");
+  assert.equal(share.imageUrl, "https://host/assets/og-default.jpg");
+  assert.ok(share.description.length > 0);
+  assert.ok(share.description.length <= OG_DESCRIPTION_MAX);
+});
+
+test("renderFeedPage injects crawler-visible tags into articles.html", () => {
+  const html = renderFeedPage({
+    html: FEED_HTML,
+    origin: "https://mon-unlock-widget-production.up.railway.app",
+  });
+  assert.match(html, /<title>Articles — Open Paywall<\/title>/);
+  assert.match(html, /property="og:title" content="Open Paywall"/);
+  assert.match(
+    html,
+    /property="og:url" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/"/
+  );
+  assert.match(
+    html,
+    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\.jpg"/
+  );
+  assert.match(
+    html,
+    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\.jpg"/
+  );
+  assert.match(html, /name="twitter:card" content="summary_large_image"/);
+  assert.match(html, /name="twitter:site" content="@openpaywall"/);
+  assert.match(html, /id="feed"/);
+  assert.equal((html.match(/property="og:title"/g) || []).length, 1);
+  assert.equal((html.match(/name="description"/g) || []).length, 1);
+});
 
 test("plainText strips tags and truncates on a word boundary", () => {
   assert.equal(plainText("<p>Hello <em>world</em></p>"), "Hello world");
@@ -29,6 +74,14 @@ test("plainText strips tags and truncates on a word boundary", () => {
   assert.ok(out.endsWith("…"));
   assert.ok(out.length <= 80);
   assert.doesNotMatch(out, /</);
+});
+
+test("twitterImageUrl strips query strings X often fails to fetch", () => {
+  assert.equal(
+    twitterImageUrl("https://host/og/slug.jpg?v=abc123"),
+    "https://host/og/slug.jpg"
+  );
+  assert.equal(twitterImageUrl("https://host/og.jpg"), "https://host/og.jpg");
 });
 
 test("absoluteHttpUrl accepts only http(s)", () => {
@@ -163,8 +216,9 @@ test("renderArticlePage injects crawler-visible tags into article.html", async (
   );
   assert.match(
     html,
-    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg\?v=[a-f0-9]{16}"/
+    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg"/
   );
+  assert.doesNotMatch(html, /name="twitter:image" content="[^"]+\?v=/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
   assert.match(
     html,
@@ -187,7 +241,7 @@ test("renderArticlePage falls back to default card when the listing is missing",
     },
   });
   assert.match(html, /property="og:title" content="Open Paywall"/);
-  assert.match(html, /content="http:\/\/127\.0\.0\.1:8080\/assets\/og-default\.jpg"/);
+  assert.match(html, /content="http:\/\/127\.0\.0\.1:8080\/og\.jpg"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
 });
 
@@ -294,8 +348,9 @@ test("publicOrigin prefers x-forwarded-host over Host", () => {
 });
 
 test("default OG asset is a 1200x630 JPEG in assets/", () => {
-  const file = path.join(ROOT, OG_IMAGE_PATH.replace(/^\//, ""));
-  assert.equal(fs.existsSync(file), true, `missing ${OG_IMAGE_PATH}`);
+  const file = path.join(ROOT, OG_IMAGE_FILE.replace(/^\//, ""));
+  assert.equal(fs.existsSync(file), true, `missing ${OG_IMAGE_FILE}`);
+  assert.equal(OG_IMAGE_PATH, "/og.jpg");
   const buf = fs.readFileSync(file);
   assert.equal(buf[0], 0xff);
   assert.equal(buf[1], 0xd8);
