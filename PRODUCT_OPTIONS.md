@@ -45,7 +45,7 @@ See **[POSTING.md](./POSTING.md)** (mockups in `docs/posting/`). Live at **/writ
 (You liked this direction. Fits posting once Publish exists.)
 
 - [ ] **Dashboard edit + save** — best default
-- [ ] **Draft → Publish**
+- [x] **Draft → Publish** — local multi-draft on `/write` (device-only; server sync later)
 - [ ] **Reopen in generator and save** (update instead of create)
 - [ ] **API / CMS-style updates**
 - [ ] **In-place edit on the live site** — nicest UX, more work
