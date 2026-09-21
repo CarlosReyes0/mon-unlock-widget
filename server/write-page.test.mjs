@@ -59,7 +59,7 @@ test("write drafts stay on-device and do not require sign-in", () => {
   assert.doesNotMatch(drafts, /fetch\(|supabase|localStorage\.setItem\("openpaywall-write-draft"/);
   assert.match(app, /migrateLegacyWriteDraft/);
   assert.match(account, /peekResumableDraft/);
-  assert.match(account, /Your draft is waiting/);
+  assert.match(account, /ResumeDraftCard/);
   assert.match(articles, /id="resume-draft"/);
   assert.match(articles, /write-draft-resume\.js/);
   assert.match(dash, /write-draft-resume\.js/);

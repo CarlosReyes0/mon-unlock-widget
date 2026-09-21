@@ -26,9 +26,15 @@ test("account page is You + Get paid, no wallet address", () => {
   assert.doesNotMatch(app, /USDC is on/);
   assert.doesNotMatch(app, /Copy address/);
   assert.doesNotMatch(app, /<summary>Advanced<\/summary>/);
-  assert.match(app, /href="\/write"/);
   assert.match(app, /peekResumableDraft/);
-  assert.match(app, /Continue/);
+  assert.match(app, /ResumeDraftCard/);
+  const fallback = fs.readFileSync(path.join(ROOT, "src/publisher/main.tsx"), "utf8");
+  assert.match(fallback, /AccountFallback|ResumeDraftCard/);
+  assert.match(fallback, /peekResumableDraft/);
+  const card = fs.readFileSync(path.join(ROOT, "src/publisher/ResumeDraftCard.tsx"), "utf8");
+  assert.match(card, /Your draft is waiting/);
+  assert.match(card, /Continue/);
+  assert.match(card, /href="\/write"/);
   assert.doesNotMatch(app, /Your writer plan/);
   assert.doesNotMatch(app, /Subscriptions you pay for/);
   assert.doesNotMatch(app, /Set up Stripe payouts/);
