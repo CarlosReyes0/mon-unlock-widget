@@ -43,7 +43,7 @@ https://mon-unlock-widget-production.up.railway.app
 Pages:
 - `/` – Public article feed (also `/articles`)
 - `/demo` – Unlock demo video (former homepage)
-- `/write` – New post (title, write, Publish). Optional **Draft posts in your voice** (never auto-posts) and **Preview how this might land** (MiroShark) do not block Publish.
+- `/write` – New post (title, write, Publish). Drafts autosave on this device (multiple pieces, starters on a blank page). Optional **Draft posts in your voice** (never auto-posts) and **Preview how this might land** (MiroShark) do not block Publish.
 - `/articles/{slug}` – Hosted article page (same unlock as embed). After unlock, **Download** is free (HTML of title + body). Locked readers cannot fetch the file.
 - `/generator.html` – Create embed for your own site
 - `/account.html` – Publisher account (email / Google / wallet)

@@ -41,6 +41,8 @@ test("GET / is the articles feed, not a Docker 404", async () => {
   assert.match(contentType, /text\/html/);
   assert.match(text, /Articles — Open Paywall/);
   assert.match(text, /id="feed"/);
+  assert.match(text, /id="resume-draft"/);
+  assert.match(text, /write-draft-resume\.js/);
   assert.match(text, /apple-touch-icon\.png/);
   assert.match(text, /apple-mobile-web-app-title" content="Open Paywall"/);
   assert.doesNotMatch(text, /unlock-demo\.mp4/);
@@ -70,6 +72,14 @@ test("GET /apple-touch-icon.png, /manifest.webmanifest, and /og.jpg are public",
   assert.equal(ogBuf[0], 0xff);
   assert.equal(ogBuf[1], 0xd8);
   assert.ok(ogBuf.length > 1000);
+});
+
+test("GET /write-draft-resume.js is served", async () => {
+  const res = await fetch(`${origin}/write-draft-resume.js`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /openpaywall-write-drafts/);
+  assert.match(text, /Your draft is waiting/);
 });
 
 test("GET /write, /demo, /generator.html are 200 HTML", async () => {

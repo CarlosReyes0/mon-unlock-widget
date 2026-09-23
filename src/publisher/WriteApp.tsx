@@ -1,33 +1,34 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { locatePaywall } from "../core/split-post.js";
 import { snippetFromPastedText } from "../core/media-url.js";
+import {
+  createWriteDraft,
+  deleteWriteDraft,
+  formatSavedAt,
+  getActiveDraft,
+  getWriteDraft,
+  isDraftEmpty,
+  listWriteDrafts,
+  migrateLegacyWriteDraft,
+  promptsForDay,
+  saveWriteDraft,
+  setActiveWriteDraft,
+  wordCount,
+  writeNudge,
+  type WriteDraft,
+  type WritePrompt,
+} from "../core/write-drafts.js";
 import { PublisherAuth } from "./PublisherAuth.js";
 import { SiteNav } from "./SiteNav.js";
 import { insertAtTextareaCursor, WriteMediaSheet } from "./WriteMediaSheet.js";
 import { MirosharkPreview } from "./MirosharkPreview.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
+import { WriteDraftsPanel } from "./WriteDraftsPanel.js";
 import { publishPost } from "./publish-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import { fetchArticleNftConfig } from "../core/article-nft.js";
 import type { Address } from "viem";
-
-const DRAFT_KEY = "openpaywall-write-draft";
-
-function loadDraft(): { title: string; body: string; reservedSlug: string } {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return { title: "", body: "", reservedSlug: "" };
-    const parsed = JSON.parse(raw) as { title?: string; body?: string; reservedSlug?: string };
-    return {
-      title: String(parsed.title || ""),
-      body: String(parsed.body || ""),
-      reservedSlug: String(parsed.reservedSlug || ""),
-    };
-  } catch {
-    return { title: "", body: "", reservedSlug: "" };
-  }
-}
 
 type WriteAuth = "privy" | "injected";
 
@@ -40,8 +41,27 @@ function clipboardHasBinaryMedia(data: DataTransfer | null): boolean {
   );
 }
 
+function draftQuery(): { draft?: string; newDraft: boolean } {
+  if (typeof window === "undefined") return { newDraft: false };
+  const q = new URLSearchParams(window.location.search);
+  return {
+    draft: q.get("draft") || undefined,
+    newDraft: q.get("new") === "1",
+  };
+}
+
+function syncDraftUrl(id: string) {
+  if (typeof window === "undefined" || !id) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("draft", id);
+  url.searchParams.delete("new");
+  const next = `${url.pathname}?${url.searchParams.toString()}${url.hash}`;
+  window.history.replaceState({}, "", next);
+}
+
 export type WriteBodyHandle = {
   insertSnippet: (snippet: string, note: string) => void;
+  focus: () => void;
 };
 
 const WriteBody = function WriteBody({
@@ -117,7 +137,14 @@ const WriteBody = function WriteBody({
     [onChange, onMediaNote, value]
   );
 
-  useImperativeHandle(bodyRef, () => ({ insertSnippet }), [insertSnippet, bodyRef]);
+  useImperativeHandle(
+    bodyRef,
+    () => ({
+      insertSnippet,
+      focus: () => areaRef.current?.focus(),
+    }),
+    [insertSnippet, bodyRef]
+  );
 
   function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     if (clipboardHasBinaryMedia(e.clipboardData)) {
@@ -153,7 +180,7 @@ const WriteBody = function WriteBody({
         className="mon-write__body"
         placeholder="Write, or paste a photo, audio, or video URL…"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(e.currentTarget.value)}
         onPaste={onPaste}
         onDragOver={(e) => {
           if (e.dataTransfer?.types.includes("text/uri-list") || e.dataTransfer?.types.includes("Files")) {
@@ -176,55 +203,198 @@ const WriteBody = function WriteBody({
       ) : null}
     </div>
   );
-}
+};
 
 export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [reservedSlug, setReservedSlug] = useState("");
+  const [promptId, setPromptId] = useState("");
+  const [draftId, setDraftId] = useState("");
+  const [drafts, setDrafts] = useState<WriteDraft[]>([]);
   const [draftReady, setDraftReady] = useState(false);
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [signedIn, setSignedIn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [draftNote, setDraftNote] = useState("");
   const [mediaNote, setMediaNote] = useState("");
   const [mediaOpen, setMediaOpen] = useState(false);
   const [publishedSlug, setPublishedSlug] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteNote, setDeleteNote] = useState("");
   const bodyHandleRef = useRef<WriteBodyHandle | null>(null);
+  const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const hasDraft = Boolean(title.trim() || body.trim() || reservedSlug);
+  const starters = promptsForDay();
+  const empty = !title.trim() && !body.trim();
+  const words = wordCount(body);
+  const filledDrafts = drafts.filter((d) => !isDraftEmpty(d) || d.id === draftId).length;
 
-  useEffect(() => {
-    const d = loadDraft();
-    setTitle(d.title);
-    setBody(d.body);
-    setReservedSlug(d.reservedSlug);
-    setDraftReady(true);
+  const applyDraft = useCallback((draft: WriteDraft) => {
+    setDraftId(draft.id);
+    setTitle(draft.title);
+    setBody(draft.body);
+    setReservedSlug(draft.reservedSlug);
+    setPromptId(draft.promptId || "");
+    setSavedAt(draft.updatedAt);
+    setMediaNote("");
+    setConfirmDelete(false);
+    setDeleteNote("");
     requestAnimationFrame(() => {
-      const el = document.getElementById("writeTitle") as HTMLTextAreaElement | null;
+      const el = titleRef.current;
       if (!el) return;
       el.style.height = "auto";
       el.style.height = `${el.scrollHeight}px`;
     });
   }, []);
 
-  useEffect(() => {
-    if (!draftReady) return;
-    const t = window.setTimeout(() => {
+  const persist = useCallback(
+    (id: string, next: { title: string; body: string; reservedSlug: string; promptId: string }) => {
+      if (!id) return null;
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, body, reservedSlug }));
-        if (title.trim() || body.trim()) setDraftNote("Draft saved.");
+        const saved = saveWriteDraft(window.localStorage, id, next);
+        if (saved) {
+          setSavedAt(saved.updatedAt);
+          setDrafts(listWriteDrafts(window.localStorage));
+        }
+        return saved;
       } catch {
-        /* ignore quota */
+        return null;
       }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const storage = window.localStorage;
+    migrateLegacyWriteDraft(storage);
+    const q = draftQuery();
+    let current: WriteDraft | null = null;
+    if (q.newDraft) {
+      const active = getActiveDraft(storage);
+      current = active && isDraftEmpty(active) ? active : createWriteDraft(storage);
+    } else if (q.draft) {
+      current = getWriteDraft(storage, q.draft) || getActiveDraft(storage) || createWriteDraft(storage);
+    } else {
+      current = getActiveDraft(storage) || createWriteDraft(storage);
+    }
+    setActiveWriteDraft(storage, current.id);
+    applyDraft(current);
+    setDrafts(listWriteDrafts(storage));
+    syncDraftUrl(current.id);
+    setDraftReady(true);
+  }, [applyDraft]);
+
+  useEffect(() => {
+    if (!draftReady || !draftId || publishedSlug) return;
+    const t = window.setTimeout(() => {
+      persist(draftId, { title, body, reservedSlug, promptId });
     }, 400);
     return () => window.clearTimeout(t);
-  }, [title, body, reservedSlug, draftReady]);
+  }, [title, body, reservedSlug, promptId, draftId, draftReady, publishedSlug, persist]);
+
+  useEffect(() => {
+    if (!draftReady || !draftId || publishedSlug) return;
+    const flush = () => {
+      persist(draftId, { title, body, reservedSlug, promptId });
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [title, body, reservedSlug, promptId, draftId, draftReady, publishedSlug, persist]);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(t);
+  }, []);
 
   const onReadyChange = useCallback((ready: boolean) => {
     setSignedIn(ready);
   }, []);
+
+  function onNewDraft() {
+    if (publishedSlug) return;
+    const storage = window.localStorage;
+    persist(draftId, { title, body, reservedSlug, promptId });
+    const active = getWriteDraft(storage, draftId);
+    const next = active && isDraftEmpty(active) ? active : createWriteDraft(storage);
+    setActiveWriteDraft(storage, next.id);
+    applyDraft(next);
+    setDrafts(listWriteDrafts(storage));
+    setDraftsOpen(false);
+    syncDraftUrl(next.id);
+    titleRef.current?.focus();
+  }
+
+  function onOpenDraft(id: string) {
+    if (publishedSlug) return;
+    if (id === draftId) {
+      setDraftsOpen(false);
+      return;
+    }
+    const storage = window.localStorage;
+    persist(draftId, { title, body, reservedSlug, promptId });
+    const next = getWriteDraft(storage, id);
+    if (!next) return;
+    setActiveWriteDraft(storage, next.id);
+    applyDraft(next);
+    setDrafts(listWriteDrafts(storage));
+    setDraftsOpen(false);
+    syncDraftUrl(next.id);
+  }
+
+  function onDeleteDraft(id: string) {
+    if (publishedSlug) return;
+    const storage = window.localStorage;
+    if (id === draftId) persist(draftId, { title, body, reservedSlug, promptId });
+    let next = deleteWriteDraft(storage, id);
+    if (!next) next = createWriteDraft(storage);
+    setActiveWriteDraft(storage, next.id);
+    if (id === draftId || next.id !== draftId) applyDraft(next);
+    setDrafts(listWriteDrafts(storage));
+    syncDraftUrl(next.id);
+  }
+
+  function onDeleteCurrentDraft() {
+    if (busy || publishedSlug || !hasDraft) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setConfirmDelete(false);
+    onDeleteDraft(draftId);
+    setDeleteNote("Draft deleted.");
+  }
+
+  function onUsePrompt(prompt: WritePrompt) {
+    if (publishedSlug) return;
+    const storage = window.localStorage;
+    persist(draftId, { title, body, reservedSlug, promptId });
+    const active = getWriteDraft(storage, draftId);
+    const target = !active || isDraftEmpty(active) ? active || createWriteDraft(storage) : createWriteDraft(storage);
+    const next = saveWriteDraft(storage, target.id, {
+      title: prompt.title,
+      body: prompt.seed ? `${prompt.seed}\n\n` : "",
+      reservedSlug: "",
+      promptId: prompt.id,
+    });
+    const applied = next || target;
+    setActiveWriteDraft(storage, applied.id);
+    applyDraft(applied);
+    setDrafts(listWriteDrafts(storage));
+    setDraftsOpen(false);
+    syncDraftUrl(applied.id);
+    requestAnimationFrame(() => bodyHandleRef.current?.focus());
+  }
 
   async function connectInjected() {
     setError("");
@@ -247,37 +417,6 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not connect wallet.");
     }
-  }
-
-  function resetTitleHeight() {
-    requestAnimationFrame(() => {
-      const el = document.getElementById("writeTitle") as HTMLTextAreaElement | null;
-      if (!el) return;
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
-    });
-  }
-
-  function onDeleteDraft() {
-    if (busy || publishedSlug || !hasDraft) return;
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    setTitle("");
-    setBody("");
-    setReservedSlug("");
-    setMediaNote("");
-    setError("");
-    setStatus("");
-    setConfirmDelete(false);
-    setDraftNote("Draft deleted.");
-    try {
-      localStorage.removeItem(DRAFT_KEY);
-    } catch {
-      /* ignore quota */
-    }
-    resetTitleHeight();
   }
 
   async function onPublish() {
@@ -304,7 +443,8 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         onSlugReserved: setReservedSlug,
       });
       try {
-        localStorage.removeItem(DRAFT_KEY);
+        deleteWriteDraft(window.localStorage, draftId);
+        setDrafts(listWriteDrafts(window.localStorage));
       } catch {
         /* ignore */
       }
@@ -325,18 +465,31 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     }
   }
 
+  const draftNote = empty
+    ? "Start anywhere. Saved on this device."
+    : `${writeNudge(words)}${savedAt ? ` · ${formatSavedAt(savedAt, now)}` : ""}`;
+
   return (
     <div className="mon-write">
       <header className="mon-write__bar">
         <SiteNav />
-        <button
-          type="button"
-          className="mon-pub-auth__btn mon-pub-auth__btn--primary mon-write__publish"
-          disabled={busy || Boolean(publishedSlug)}
-          onClick={() => void onPublish()}
-        >
-          {busy ? "Publishing…" : "Publish"}
-        </button>
+        <div className="mon-write__actions">
+          <button
+            type="button"
+            className="mon-write__drafts-btn"
+            onClick={() => setDraftsOpen(true)}
+          >
+            Drafts{filledDrafts > 1 ? ` (${filledDrafts})` : ""}
+          </button>
+          <button
+            type="button"
+            className="mon-pub-auth__btn mon-pub-auth__btn--primary mon-write__publish"
+            disabled={busy || Boolean(publishedSlug)}
+            onClick={() => void onPublish()}
+          >
+            {busy ? "Publishing…" : "Publish"}
+          </button>
+        </div>
       </header>
 
       <div className="mon-write__page">
@@ -391,12 +544,14 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         </label>
         <textarea
           id="writeTitle"
+          ref={titleRef}
           className="mon-write__title"
           rows={1}
           placeholder="Title"
           value={title}
           onChange={(e) => {
             setConfirmDelete(false);
+            setDeleteNote("");
             setTitle(e.target.value);
           }}
           onInput={(e) => {
@@ -420,16 +575,34 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
             Or paste a public URL. Media above the fold is free.
           </span>
         </div>
+        {empty ? (
+          <div className="mon-write__starters">
+            <p className="mon-write__starter-copy">Don’t wait for a perfect title. Tap a line and keep going.</p>
+            <div className="mon-write__starter-list">
+              {starters.map((prompt) => (
+                <button
+                  key={prompt.id}
+                  type="button"
+                  className="mon-write__starter"
+                  onClick={() => onUsePrompt(prompt)}
+                >
+                  {prompt.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <WriteBody
           value={body}
           onChange={(next) => {
             setConfirmDelete(false);
+            setDeleteNote("");
             setBody(next);
           }}
           onMediaNote={setMediaNote}
           bodyRef={bodyHandleRef}
         />
-        <p className="mon-write__draft">{mediaNote || draftNote}</p>
+        <p className="mon-write__draft">{mediaNote || deleteNote || draftNote}</p>
         <VoiceDrafts
           title={title}
           body={body}
@@ -443,7 +616,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
               <div className="mon-write__delete-confirm" role="group" aria-label="Confirm delete draft">
                 <p>Delete this draft? This can’t be undone.</p>
                 <div className="mon-write__delete-actions">
-                  <button type="button" className="mon-write__delete-btn" onClick={onDeleteDraft}>
+                  <button type="button" className="mon-write__delete-btn" onClick={onDeleteCurrentDraft}>
                     Delete draft
                   </button>
                   <button
@@ -460,7 +633,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
                 type="button"
                 className="mon-write__delete-btn"
                 disabled={busy || !hasDraft}
-                onClick={onDeleteDraft}
+                onClick={onDeleteCurrentDraft}
               >
                 Delete draft
               </button>
@@ -474,6 +647,16 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         onInsert={(snippet) => {
           bodyHandleRef.current?.insertSnippet(snippet, "Media added.");
         }}
+      />
+      <WriteDraftsPanel
+        open={draftsOpen}
+        drafts={drafts}
+        activeId={draftId}
+        now={now}
+        onClose={() => setDraftsOpen(false)}
+        onNew={onNewDraft}
+        onOpen={onOpenDraft}
+        onDelete={onDeleteDraft}
       />
     </div>
   );

@@ -56,6 +56,11 @@ test("Dockerfile copies VOICE_DRAFTS.md so /VOICE_DRAFTS.md is not a production 
   assert.match(dockerfile, /VOICE_DRAFTS\.md/);
 });
 
+test("Dockerfile copies write-draft-resume.js so resume banners work in production", () => {
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  assert.match(dockerfile, /write-draft-resume\.js/);
+});
+
 test("Dockerfile still excludes Vite-built publisher/checkout source HTML", () => {
   const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
   // Source account.html / write.html must not overwrite dist-publisher output.
