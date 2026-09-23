@@ -25,6 +25,10 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /onSlugReserved: setReservedSlug/);
   assert.match(app, /reservedSlug/);
   assert.match(app, /Free above · paid below/);
+  assert.match(app, /Delete draft/);
+  assert.match(app, /onDeleteCurrentDraft/);
+  assert.match(app, /Keep draft/);
+  assert.doesNotMatch(app, /DRAFT_KEY/);
   assert.match(app, /locatePaywall/);
   assert.match(app, /MirosharkPreview/);
   assert.match(app, /VoiceDrafts/);

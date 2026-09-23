@@ -618,6 +618,50 @@
   color: #57534e;
 }
 
+.mon-write__delete {
+  margin: 2.5rem 0 0;
+  padding: 1.5rem 0 0;
+  border-top: 1px solid #e7e5e4;
+}
+
+.mon-write__delete-confirm p {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #57534e;
+  line-height: 1.45;
+}
+
+.mon-write__delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.mon-write__delete-btn {
+  appearance: none;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #b91c1c;
+  border-radius: 9999px;
+  padding: 0.55rem 1.05rem;
+  min-height: 2.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mon-write__delete-btn:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.mon-write__delete-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .mon-write__preview {
   margin: 1.75rem 0 0;
   padding: 1.15rem 0 0;
@@ -936,6 +980,11 @@
 
 @media (max-width: 720px) {
   .mon-write__media-hint {
+    width: 100%;
+  }
+
+  .mon-write__delete-btn,
+  .mon-write__delete-actions .mon-write__media-btn {
     width: 100%;
   }
 }

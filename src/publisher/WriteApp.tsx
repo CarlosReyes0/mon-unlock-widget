@@ -223,8 +223,11 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [mediaNote, setMediaNote] = useState("");
   const [mediaOpen, setMediaOpen] = useState(false);
   const [publishedSlug, setPublishedSlug] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteNote, setDeleteNote] = useState("");
   const bodyHandleRef = useRef<WriteBodyHandle | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
+  const hasDraft = Boolean(title.trim() || body.trim() || reservedSlug);
   const starters = promptsForDay();
   const empty = !title.trim() && !body.trim();
   const words = wordCount(body);
@@ -238,6 +241,8 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     setPromptId(draft.promptId || "");
     setSavedAt(draft.updatedAt);
     setMediaNote("");
+    setConfirmDelete(false);
+    setDeleteNote("");
     requestAnimationFrame(() => {
       const el = titleRef.current;
       if (!el) return;
@@ -357,6 +362,17 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     if (id === draftId || next.id !== draftId) applyDraft(next);
     setDrafts(listWriteDrafts(storage));
     syncDraftUrl(next.id);
+  }
+
+  function onDeleteCurrentDraft() {
+    if (busy || publishedSlug || !hasDraft) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setConfirmDelete(false);
+    onDeleteDraft(draftId);
+    setDeleteNote("Draft deleted.");
   }
 
   function onUsePrompt(prompt: WritePrompt) {
@@ -533,7 +549,11 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           rows={1}
           placeholder="Title"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            setConfirmDelete(false);
+            setDeleteNote("");
+            setTitle(e.target.value);
+          }}
           onInput={(e) => {
             const el = e.currentTarget;
             el.style.height = "auto";
@@ -574,11 +594,15 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         ) : null}
         <WriteBody
           value={body}
-          onChange={setBody}
+          onChange={(next) => {
+            setConfirmDelete(false);
+            setDeleteNote("");
+            setBody(next);
+          }}
           onMediaNote={setMediaNote}
           bodyRef={bodyHandleRef}
         />
-        <p className="mon-write__draft">{mediaNote || draftNote}</p>
+        <p className="mon-write__draft">{mediaNote || deleteNote || draftNote}</p>
         <VoiceDrafts
           title={title}
           body={body}
@@ -586,6 +610,36 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           writerId={signedIn ? window.__monPublisherAddress || "" : ""}
         />
         <MirosharkPreview title={title} body={body} />
+        {publishedSlug ? null : (
+          <div className="mon-write__delete">
+            {confirmDelete ? (
+              <div className="mon-write__delete-confirm" role="group" aria-label="Confirm delete draft">
+                <p>Delete this draft? This can’t be undone.</p>
+                <div className="mon-write__delete-actions">
+                  <button type="button" className="mon-write__delete-btn" onClick={onDeleteCurrentDraft}>
+                    Delete draft
+                  </button>
+                  <button
+                    type="button"
+                    className="mon-write__media-btn"
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Keep draft
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="mon-write__delete-btn"
+                disabled={busy || !hasDraft}
+                onClick={onDeleteCurrentDraft}
+              >
+                Delete draft
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <WriteMediaSheet
         open={mediaOpen}
