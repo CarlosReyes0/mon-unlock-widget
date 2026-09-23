@@ -145,6 +145,33 @@
         border-top: 1px solid var(--line);
       }
       .error { color: #b91c1c; }
+      .mon-resume-draft {
+        margin: 1.35rem 0 0;
+        padding: 0.95rem 1rem;
+        border: 1px solid #ccfbf1;
+        background: #f0fdfa;
+        border-radius: 12px;
+      }
+      .mon-resume-draft__kicker {
+        margin: 0;
+        font-size: 0.7rem;
+        font-weight: 650;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #0f766e;
+      }
+      .mon-resume-draft a {
+        display: inline-block;
+        margin-top: 0.2rem;
+        color: #0f766e;
+        font-weight: 650;
+        text-decoration: none;
+      }
+      .mon-resume-draft__hint {
+        margin: 0.3rem 0 0;
+        font-size: 0.85rem;
+        color: #57534e;
+      }
     </style>
   </head>
   <body>
@@ -155,12 +182,14 @@
       <p class="lede">
         Writers opt in to list here. Each article shows its price up front and charges a real micropayment to unlock — not a free demo. Unlock once; read here and on the publisher’s site when they embed the same article.
       </p>
+      <div id="resume-draft"></div>
       <div id="feed" class="feed" aria-live="polite">
         <p class="loading" id="status">Loading articles…</p>
       </div>
       <div id="site-footer"></div>
     </div>
     <script src="/site-nav.js"></script>
+    <script src="/write-draft-resume.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://flczjqljgntmkanipugo.supabase.co";

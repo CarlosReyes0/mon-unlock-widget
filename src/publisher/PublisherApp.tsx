@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { peekResumableDraft, type ResumableDraft } from "../core/write-drafts.js";
 import { PublisherAuth } from "./PublisherAuth.js";
+import { ResumeDraftCard } from "./ResumeDraftCard.js";
 import { SiteFooter, SiteNav } from "./SiteNav.js";
 
 type SubRow = {
@@ -23,6 +25,7 @@ export function PublisherApp() {
   const [priceDollars, setPriceDollars] = useState("5");
   const [allowBuy, setAllowBuy] = useState(true);
   const [planMsg, setPlanMsg] = useState("");
+  const [resume, setResume] = useState<ResumableDraft | null>(null);
 
   const address = () => window.__monPublisherAddress || "";
 
@@ -74,6 +77,14 @@ export function PublisherApp() {
     void loadSubs(wallet);
     void loadPlan(wallet);
   }, [signedIn, loadPlan, loadSubs]);
+
+  useEffect(() => {
+    try {
+      setResume(peekResumableDraft(window.localStorage));
+    } catch {
+      setResume(null);
+    }
+  }, []);
 
   async function setupStripePayouts() {
     const publisher = address();
@@ -163,7 +174,7 @@ export function PublisherApp() {
         <p className="mon-pub-shell__lead">
           {signedIn
             ? "Set your price. Readers pay you with a card or USDC."
-            : "Sign in to write and get paid. Email or Google — no password."}
+            : "Drafts save without an account. Sign in to publish and get paid — email or Google, no password."}
         </p>
 
         <div className="mon-pub-shell__card">
@@ -219,12 +230,6 @@ export function PublisherApp() {
               {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}
             </div>
 
-            <p className="mon-pub-shell__next">
-              <a href="/write">Write a post</a>
-              <span aria-hidden="true"> · </span>
-              <a href="/articles">Articles feed</a>
-            </p>
-
             {following.length > 0 ? (
               <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
                 <h2 className="mon-pub-shell__card-title">Following</h2>
@@ -247,6 +252,8 @@ export function PublisherApp() {
             ) : null}
           </>
         ) : null}
+
+        <ResumeDraftCard resume={resume} />
         <SiteFooter />
       </div>
     </div>

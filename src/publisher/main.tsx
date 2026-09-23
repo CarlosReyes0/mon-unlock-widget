@@ -1,8 +1,11 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { peekResumableDraft, type ResumableDraft } from "../core/write-drafts.js";
 import { PublisherApp } from "./PublisherApp.js";
+import { ResumeDraftCard } from "./ResumeDraftCard.js";
 import { publisherPrivyConfig } from "./privy-config.js";
+import { SiteFooter, SiteNav } from "./SiteNav.js";
 import "./publisher-auth.css";
 
 const appId = (import.meta.env.VITE_PRIVY_APP_ID as string | undefined)?.trim() ?? "";
@@ -11,28 +14,35 @@ if (!rootEl) throw new Error("Missing #root");
 
 const root = createRoot(rootEl);
 
-if (!appId) {
-  root.render(
+function AccountFallback() {
+  const [resume, setResume] = useState<ResumableDraft | null>(null);
+  useEffect(() => {
+    try {
+      setResume(peekResumableDraft(window.localStorage));
+    } catch {
+      setResume(null);
+    }
+  }, []);
+  return (
     <div className="mon-pub-shell">
       <div className="mon-pub-shell__inner">
-        <nav className="mon-site-nav" aria-label="Product">
-          <a href="/">Home</a>
-          <a href="/write">Write</a>
-          <a className="active" href="/account.html">
-            Account
-          </a>
-          <a href="/dashboard.html">Dashboard</a>
-          <a href="/agents">Agents</a>
-        </nav>
+        <SiteNav />
         <p className="mon-pub-shell__brand">Account</p>
         <h1>Publisher account</h1>
         <p className="mon-pub-shell__lead">
-          Set <code>VITE_PRIVY_APP_ID</code> to enable email / Google accounts. Until then, use MetaMask on the{" "}
-          <a href="/generator.html">generator</a> or <a href="/dashboard.html">dashboard</a>.
+          Drafts save without an account. Set <code>VITE_PRIVY_APP_ID</code> to enable email / Google
+          sign-in. Until then, use MetaMask on the <a href="/generator.html">generator</a> or{" "}
+          <a href="/dashboard.html">dashboard</a> to publish.
         </p>
+        <ResumeDraftCard resume={resume} />
+        <SiteFooter />
       </div>
     </div>
   );
+}
+
+if (!appId) {
+  root.render(<AccountFallback />);
 } else {
   root.render(
     <React.StrictMode>

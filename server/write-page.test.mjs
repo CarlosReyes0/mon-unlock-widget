@@ -31,6 +31,10 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /ArticleNftMint/);
   assert.match(app, /Mint edition on Monad|role="edition"/);
   assert.match(app, /fetchArticleNftConfig/);
+  assert.match(app, /openpaywall-write-drafts|WRITE_DRAFTS_KEY|createWriteDraft/);
+  assert.match(app, /promptsForDay/);
+  assert.match(app, /Don’t wait for a perfect title/);
+  assert.match(app, /New draft|WriteDraftsPanel/);
   const publishStart = app.indexOf("async function onPublish");
   const publishEnd = app.indexOf("return (", publishStart);
   assert.ok(publishStart >= 0 && publishEnd > publishStart);
@@ -38,6 +42,29 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.doesNotMatch(publishFn, /MirosharkPreview|\/api\/miroshark/);
   assert.doesNotMatch(publishFn, /VoiceDrafts|\/api\/voice-drafts/);
   assert.doesNotMatch(publishFn, /mintArticleNft|mintEdition/);
+  assert.match(publishFn, /deleteWriteDraft/);
+});
+
+test("write drafts stay on-device and do not require sign-in", () => {
+  const drafts = fs.readFileSync(path.join(ROOT, "src/core/write-drafts.ts"), "utf8");
+  const resume = fs.readFileSync(path.join(ROOT, "write-draft-resume.js"), "utf8");
+  const app = fs.readFileSync(path.join(ROOT, "src/publisher/WriteApp.tsx"), "utf8");
+  const account = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherApp.tsx"), "utf8");
+  const articles = fs.readFileSync(path.join(ROOT, "articles.html"), "utf8");
+  const dash = fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8");
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  assert.match(drafts, /WRITE_DRAFTS_KEY = "openpaywall-write-drafts"/);
+  assert.match(drafts, /WRITE_DRAFT_LEGACY_KEY/);
+  assert.match(drafts, /A few paragraphs is a post/);
+  assert.doesNotMatch(drafts, /fetch\(|supabase|localStorage\.setItem\("openpaywall-write-draft"/);
+  assert.match(app, /migrateLegacyWriteDraft/);
+  assert.match(account, /peekResumableDraft/);
+  assert.match(account, /ResumeDraftCard/);
+  assert.match(articles, /id="resume-draft"/);
+  assert.match(articles, /write-draft-resume\.js/);
+  assert.match(dash, /write-draft-resume\.js/);
+  assert.match(resume, /openpaywall-write-drafts/);
+  assert.match(dockerfile, /write-draft-resume\.js/);
 });
 
 test("Miroshark preview is optional and fail-soft", () => {

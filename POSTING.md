@@ -2,6 +2,8 @@
 
 Go to **/write**. Title, the piece, **Publish**. Then it’s live on `/articles/…`.
 
+Drafts autosave **on this device** — no sign-in required. Leave and come back; start a second piece from **Drafts** without losing the first. A blank page offers a few starters (“A walk I keep thinking about”). Account, Articles, and Dashboard show **Continue your draft** when one is waiting. Server-side / cross-device drafts can come later.
+
 Paste a public photo, audio, or video URL (or **Add image, audio, or video**) — Write turns it into HTML. Media above the fold is free; everything below stays paid until unlock.
 
 Optional **Preview how this might land** (MiroShark sim, ~$1 USDC on Base) sits under the draft. It never gates Publish. Needs `BASE_BUILDER_CODE` on Railway — see [docs/MIROSHARK.md](docs/MIROSHARK.md).

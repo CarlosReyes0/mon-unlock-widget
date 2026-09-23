@@ -44,10 +44,38 @@
       .empty { color: #6b7280; font-size: 0.875rem; padding: 2rem 0; text-align: center; }
       .success { color: #16a34a; font-size: 0.875rem; }
       .tx-link { color: #7c3aed; text-decoration: underline; }
+      .mon-resume-draft {
+        margin: 0 0 1.5rem;
+        padding: 0.95rem 1rem;
+        border: 1px solid #ccfbf1;
+        background: #f0fdfa;
+        border-radius: 12px;
+      }
+      .mon-resume-draft__kicker {
+        margin: 0;
+        font-size: 0.7rem;
+        font-weight: 650;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #0f766e;
+      }
+      .mon-resume-draft a {
+        display: inline-block;
+        margin-top: 0.2rem;
+        color: #0f766e;
+        font-weight: 650;
+        text-decoration: none;
+      }
+      .mon-resume-draft__hint {
+        margin: 0.3rem 0 0;
+        font-size: 0.85rem;
+        color: #57534e;
+      }
     </style>
   </head>
   <body>
     <div id="site-nav"></div>
+    <div id="resume-draft"></div>
 
     <div class="header">
       <div>
@@ -197,6 +225,7 @@
     <link rel="stylesheet" href="/publisher-auth.css" />
     <script type="module" src="/publisher-auth.js"></script>
     <script src="/site-nav.js"></script>
+    <script src="/write-draft-resume.js"></script>
     <script type="module">
       // === Network configuration (Mainnet only) ===
       const NETWORKS = {
