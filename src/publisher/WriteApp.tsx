@@ -191,7 +191,9 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [mediaNote, setMediaNote] = useState("");
   const [mediaOpen, setMediaOpen] = useState(false);
   const [publishedSlug, setPublishedSlug] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const bodyHandleRef = useRef<WriteBodyHandle | null>(null);
+  const hasDraft = Boolean(title.trim() || body.trim() || reservedSlug);
 
   useEffect(() => {
     const d = loadDraft();
@@ -245,6 +247,37 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not connect wallet.");
     }
+  }
+
+  function resetTitleHeight() {
+    requestAnimationFrame(() => {
+      const el = document.getElementById("writeTitle") as HTMLTextAreaElement | null;
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    });
+  }
+
+  function onDeleteDraft() {
+    if (busy || publishedSlug || !hasDraft) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setTitle("");
+    setBody("");
+    setReservedSlug("");
+    setMediaNote("");
+    setError("");
+    setStatus("");
+    setConfirmDelete(false);
+    setDraftNote("Draft deleted.");
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignore quota */
+    }
+    resetTitleHeight();
   }
 
   async function onPublish() {
@@ -362,7 +395,10 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           rows={1}
           placeholder="Title"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            setConfirmDelete(false);
+            setTitle(e.target.value);
+          }}
           onInput={(e) => {
             const el = e.currentTarget;
             el.style.height = "auto";
@@ -386,7 +422,10 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         </div>
         <WriteBody
           value={body}
-          onChange={setBody}
+          onChange={(next) => {
+            setConfirmDelete(false);
+            setBody(next);
+          }}
           onMediaNote={setMediaNote}
           bodyRef={bodyHandleRef}
         />
@@ -398,6 +437,36 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           writerId={signedIn ? window.__monPublisherAddress || "" : ""}
         />
         <MirosharkPreview title={title} body={body} />
+        {publishedSlug ? null : (
+          <div className="mon-write__delete">
+            {confirmDelete ? (
+              <div className="mon-write__delete-confirm" role="group" aria-label="Confirm delete draft">
+                <p>Delete this draft? This can’t be undone.</p>
+                <div className="mon-write__delete-actions">
+                  <button type="button" className="mon-write__delete-btn" onClick={onDeleteDraft}>
+                    Delete draft
+                  </button>
+                  <button
+                    type="button"
+                    className="mon-write__media-btn"
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Keep draft
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="mon-write__delete-btn"
+                disabled={busy || !hasDraft}
+                onClick={onDeleteDraft}
+              >
+                Delete draft
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <WriteMediaSheet
         open={mediaOpen}
