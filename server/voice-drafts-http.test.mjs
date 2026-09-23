@@ -14,6 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const APP_PORT = 18820;
 const OFF_PORT = 18822;
+const HIDDEN_PORT = 18823;
 const MOCK_PORT = 18821;
 
 const seen = [];
@@ -70,6 +71,7 @@ function spawnApp(port, extraEnv = {}) {
     env: {
       ...process.env,
       PORT: String(port),
+      VOICE_DRAFTS_VISIBLE: "true",
       VOICE_DRAFT_API_KEY: "sk-test-voice",
       VOICE_DRAFT_BASE_URL: `http://127.0.0.1:${MOCK_PORT}/v1`,
       OPENAI_API_KEY: "",
@@ -90,12 +92,15 @@ function spawnApp(port, extraEnv = {}) {
 
 const app = spawnApp(APP_PORT);
 const off = spawnApp(OFF_PORT, { VOICE_DRAFT_API_KEY: "", OPENAI_API_KEY: "", ANTHROPIC_API_KEY: "" });
+const hidden = spawnApp(HIDDEN_PORT, { VOICE_DRAFTS_VISIBLE: "" });
 await once(app.stdout, "data");
 await once(off.stdout, "data");
+await once(hidden.stdout, "data");
 
 after(() => {
   app.kill("SIGTERM");
   off.kill("SIGTERM");
+  hidden.kill("SIGTERM");
   mock.close();
 });
 
@@ -107,6 +112,7 @@ test("GET /api/voice-drafts/status reports enabled without leaking the key", asy
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.enabled, true);
+  assert.equal(body.visible, true);
   assert.equal(body.draftsOnly, true);
   assert.equal(body.autopost, false);
   assert.equal(body.provider, "openai");
@@ -161,6 +167,27 @@ test("POST /api/voice-drafts fail-softs when the LLM errors", async () => {
   assert.equal(body.code, "llm_error");
   assert.match(body.message, /Nothing was posted/);
   mockMode = "ok";
+});
+
+test("hidden voice drafts do not call the model", async () => {
+  const before = seen.length;
+  const status = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts/status`);
+  const statusBody = await status.json();
+  assert.equal(statusBody.visible, false);
+  assert.equal(statusBody.enabled, false);
+  assert.equal(statusBody.provider, null);
+
+  const res = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ samples: ["sample"], title: "Hi" }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "hidden");
+  assert.equal(body.visible, false);
+  assert.equal(seen.length, before);
 });
 
 test("POST /api/voice-drafts without a key is HTTP 200 missing_api_key", async () => {
