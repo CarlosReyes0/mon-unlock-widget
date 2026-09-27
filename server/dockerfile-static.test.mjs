@@ -61,6 +61,17 @@ test("Dockerfile copies write-draft-resume.js so resume banners work in producti
   assert.match(dockerfile, /write-draft-resume\.js/);
 });
 
+test("Dockerfile copies generator-media.js so generator media validation loads", () => {
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  const generator = fs.readFileSync(path.join(ROOT, "generator.html"), "utf8");
+  assert.match(generator, /import\("\/generator-media\.js"\)/);
+  assert.equal(fs.existsSync(path.join(ROOT, "generator-media.js")), true);
+  assert.match(
+    dockerfile,
+    /COPY --from=builder \/app\/generator-media\.js \.\/generator-media\.js/
+  );
+});
+
 test("Dockerfile still excludes Vite-built publisher/checkout source HTML", () => {
   const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
   // Source account.html / write.html must not overwrite dist-publisher output.

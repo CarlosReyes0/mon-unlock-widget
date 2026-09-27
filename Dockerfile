@@ -57,8 +57,11 @@ COPY --from=builder /app/agents.html ./agents.html
 COPY --from=builder /app/connect-demo.html ./connect-demo.html
 COPY --from=builder /app/connect-store.html ./connect-store.html
 COPY --from=builder /app/connect-success.html ./connect-success.html
+# Root scripts loaded by static pages (not Vite output). generator.html 200s
+# while media validation fails if generator-media.js is missing here.
 COPY --from=builder /app/site-nav.js ./site-nav.js
 COPY --from=builder /app/write-draft-resume.js ./write-draft-resume.js
+COPY --from=builder /app/generator-media.js ./generator-media.js
 COPY --from=builder /app/llms.txt ./llms.txt
 COPY --from=builder /app/agents.md ./agents.md
 COPY --from=builder /app/skill.md ./skill.md
