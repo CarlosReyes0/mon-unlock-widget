@@ -85,7 +85,17 @@ test("Miroshark preview is optional and fail-soft", () => {
   assert.match(preview, /\/api\/miroshark\/status/);
   assert.match(preview, /Publish still works/);
   assert.match(preview, /BASE_BUILDER_CODE/);
+  assert.match(preview, /Simulate how this lands with MiroShark/);
   assert.doesNotMatch(preview, /onPublish/);
+  const app = fs.readFileSync(path.join(ROOT, "src/publisher/WriteApp.tsx"), "utf8");
+  const drawer = fs.readFileSync(path.join(ROOT, "src/publisher/WriteDraftsPanel.tsx"), "utf8");
+  assert.match(app, /Simulate how this lands with MiroShark/);
+  assert.match(app, /simRef\.current\.start/);
+  assert.doesNotMatch(app, /scrollIntoView|focusSimulate/);
+  assert.doesNotMatch(drawer, /Simulate how this lands|onSimulate/);
+  const previewAt = app.indexOf("<MirosharkPreview");
+  const voiceAt = app.indexOf("<VoiceDrafts");
+  assert.ok(previewAt >= 0 && voiceAt > previewAt);
 });
 
 test("voice drafts are optional, drafts-only, and never post", () => {

@@ -21,7 +21,7 @@ import { PublisherAuth } from "./PublisherAuth.js";
 import { SiteNav } from "./SiteNav.js";
 import { WriteMediaSheet } from "./WriteMediaSheet.js";
 import { WriteDoc, type WriteDocHandle } from "./WriteDoc.js";
-import { MirosharkPreview } from "./MirosharkPreview.js";
+import { MirosharkPreview, type MirosharkPreviewHandle } from "./MirosharkPreview.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
 import { WriteDraftsPanel } from "./WriteDraftsPanel.js";
@@ -70,8 +70,11 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [publishedSlug, setPublishedSlug] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteNote, setDeleteNote] = useState("");
+  const [simBusy, setSimBusy] = useState(false);
+  const [simNote, setSimNote] = useState("");
   const bodyHandleRef = useRef<WriteDocHandle | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
+  const simRef = useRef<MirosharkPreviewHandle>(null);
   const hasDraft = Boolean(title.trim() || body.trim() || reservedSlug);
   const starters = promptsForDay();
   const empty = !title.trim() && !body.trim();
@@ -314,11 +317,38 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     ? "Start anywhere. Saved on this device."
     : `${writeNudge(words)}${savedAt ? ` · ${formatSavedAt(savedAt, now)}` : ""}`;
 
+  async function onSimulate() {
+    if (!simRef.current || simBusy) return;
+    setSimBusy(true);
+    setSimNote("");
+    try {
+      const json = await simRef.current.start();
+      if (json?.run?.waitUrl || json?.run?.shareUrl) return;
+      if (json && json.ok === false) {
+        setSimNote(
+          json.code === "payment_required"
+            ? "This sim needs $1 USDC on Base. Publish still works."
+            : json.message || "Preview did not run. Publish still works."
+        );
+      }
+    } finally {
+      setSimBusy(false);
+    }
+  }
+
   return (
     <div className="mon-write">
       <header className="mon-write__bar">
         <SiteNav />
         <div className="mon-write__actions">
+          <button
+            type="button"
+            className="mon-write__simulate"
+            disabled={simBusy}
+            onClick={() => void onSimulate()}
+          >
+            {simBusy ? "Starting…" : "Simulate how this lands with MiroShark"}
+          </button>
           <button
             type="button"
             className="mon-write__drafts-btn"
@@ -337,6 +367,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         </div>
       </header>
 
+      {simNote ? <p className="mon-write__sim-note">{simNote}</p> : null}
       <div className="mon-write__page">
         <div className="mon-write__auth">
           {auth === "privy" ? (
@@ -457,13 +488,13 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           docRef={bodyHandleRef}
         />
         <p className="mon-write__draft">{mediaNote || deleteNote || draftNote}</p>
+        <MirosharkPreview ref={simRef} title={title} body={body} />
         <VoiceDrafts
           title={title}
           body={body}
           reservedSlug={reservedSlug}
           writerId={signedIn ? window.__monPublisherAddress || "" : ""}
         />
-        <MirosharkPreview title={title} body={body} />
         {publishedSlug ? null : (
           <div className="mon-write__delete">
             {confirmDelete ? (

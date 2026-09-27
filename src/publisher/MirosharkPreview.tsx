@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 
 type PreviewStatus = {
   enabled?: boolean;
@@ -43,7 +43,12 @@ function formatResult(result: PreviewResult): string {
   return result.message || "Preview did not run. Publish still works.";
 }
 
-export function MirosharkPreview({ title, body }: { title: string; body: string }) {
+export type MirosharkPreviewHandle = {
+  start: () => Promise<PreviewResult | null>;
+};
+
+export const MirosharkPreview = forwardRef<MirosharkPreviewHandle, { title: string; body: string }>(
+  function MirosharkPreview({ title, body }, ref) {
   const [info, setInfo] = useState<PreviewStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<PreviewResult | null>(null);
@@ -86,7 +91,8 @@ export function MirosharkPreview({ title, body }: { title: string; body: string 
     }
   }
 
-  async function onPreview() {
+  async function onPreview(): Promise<PreviewResult | null> {
+    if (busy) return null;
     setBusy(true);
     setNote("Asking MiroShark…");
     setResult(null);
@@ -99,32 +105,41 @@ export function MirosharkPreview({ title, body }: { title: string; body: string 
       const json = (await res.json()) as PreviewResult;
       setResult(json);
       setNote("");
-      if (json?.ok && json.run?.runId) {
-        void pollRun(json.run.runId);
-      }
+      const destination = json?.run?.waitUrl || json?.run?.shareUrl;
+      if (destination) window.location.assign(destination);
+      else if (json?.ok && json.run?.runId) void pollRun(json.run.runId);
+      return json;
     } catch {
-      setResult({
+      const failed: PreviewResult = {
         ok: false,
         code: "preview_failed",
         message: "Preview failed. Publish still works.",
-      });
+      };
+      setResult(failed);
       setNote("");
+      return failed;
     } finally {
       setBusy(false);
     }
   }
+
+  useImperativeHandle(ref, () => ({ start: onPreview }));
 
   const enabled = Boolean(info?.enabled);
   const waitUrl = result?.run?.waitUrl;
   const shareUrl = result?.run?.shareUrl;
 
   return (
-    <section className="mon-write__preview" aria-label="Preview how this might land">
-      <p className="mon-write__preview-kicker">Optional</p>
-      <h2 className="mon-write__preview-title">Preview how this might land</h2>
+    <section
+      id="simulate-miroshark"
+      className="mon-write__preview"
+      aria-label="Simulate how this lands with MiroShark"
+    >
+      <p className="mon-write__preview-kicker">MiroShark</p>
+      <h2 className="mon-write__preview-title">Simulate how this lands with MiroShark</h2>
       <p className="mon-write__preview-copy">
         {enabled
-          ? `A MiroShark sim (~$${info?.amountUsd || "1.00"} USDC on Base) models reader reaction. It does not block Publish.${
+          ? `A 25-agent sim (~$${info?.amountUsd || "1.00"} USDC on Base) models reader reaction. It does not block Publish.${
               info?.serverPayer
                 ? " This server can pay the $1 run."
                 : " If no server payer is set, you get the x402 challenge instead of a live sim."
@@ -135,11 +150,11 @@ export function MirosharkPreview({ title, body }: { title: string; body: string 
       {enabled ? (
         <button
           type="button"
-          className="mon-pub-auth__btn"
+          className="mon-write__simulate"
           disabled={busy}
           onClick={() => void onPreview()}
         >
-          {busy ? "Starting…" : "Preview how this might land"}
+          {busy ? "Starting…" : "Simulate how this lands with MiroShark"}
         </button>
       ) : null}
       {note ? <p className="mon-write__preview-note">{note}</p> : null}
@@ -164,4 +179,4 @@ export function MirosharkPreview({ title, body }: { title: string; body: string 
       ) : null}
     </section>
   );
-}
+});
