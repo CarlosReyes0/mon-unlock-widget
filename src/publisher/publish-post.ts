@@ -14,6 +14,7 @@ import {
 import { buildEmbedSignMessage } from "../core/embed-signature.js";
 import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
 import { monadMainnet } from "../core/chains.js";
+import { publishAuthor } from "../core/publish-author.js";
 import { cleanTitle, nextPublishSlug, splitPost } from "../core/split-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 
@@ -212,7 +213,8 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
   const priceWei = parseUnits(PRICE_USDC, 6);
   const contract = MAINNET_USDC_UNLOCK_CONTRACT as Address;
   const publisher = input.publisher.toLowerCase() as Address;
-  const author = (input.author || "Author").trim() || "Author";
+  const author = publishAuthor(input.author);
+  if (!author) throw new Error("Add your name.");
   const eth = mapWalletSendToEthSend(input.provider);
   const status = input.onStatus;
 

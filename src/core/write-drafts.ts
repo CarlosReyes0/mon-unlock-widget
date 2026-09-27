@@ -15,6 +15,8 @@ export type WriteDraft = {
   title: string;
   body: string;
   reservedSlug: string;
+  /** Byline edited on Write. Empty until the writer or a Privy prefill sets it. */
+  author: string;
   promptId?: string;
   createdAt: number;
   updatedAt: number;
@@ -86,6 +88,7 @@ function normalizeDraft(raw: Partial<WriteDraft> | null | undefined, now = Date.
     title: String(raw.title || ""),
     body: String(raw.body || ""),
     reservedSlug: String(raw.reservedSlug || ""),
+    author: String(raw.author || ""),
     promptId: raw.promptId ? String(raw.promptId) : undefined,
     createdAt: Number(raw.createdAt) || now,
     updatedAt: Number(raw.updatedAt) || now,
@@ -185,6 +188,7 @@ export function migrateLegacyWriteDraft(storage: DraftStorage, now = Date.now())
       title: String(parsed.title || ""),
       body: String(parsed.body || ""),
       reservedSlug: String(parsed.reservedSlug || ""),
+      author: "",
       createdAt: now,
       updatedAt: now,
     };
@@ -238,7 +242,7 @@ function pruneExtraEmpties(drafts: WriteDraft[], keepId?: string): WriteDraft[] 
 
 export function createWriteDraft(
   storage: DraftStorage,
-  patch: Partial<Pick<WriteDraft, "title" | "body" | "reservedSlug" | "promptId">> = {},
+  patch: Partial<Pick<WriteDraft, "title" | "body" | "reservedSlug" | "promptId" | "author">> = {},
   now = Date.now()
 ): WriteDraft {
   const store = readStore(storage);
@@ -247,6 +251,7 @@ export function createWriteDraft(
     title: String(patch.title || ""),
     body: String(patch.body || ""),
     reservedSlug: String(patch.reservedSlug || ""),
+    author: String(patch.author || ""),
     promptId: patch.promptId ? String(patch.promptId) : undefined,
     createdAt: now,
     updatedAt: now,
@@ -259,7 +264,7 @@ export function createWriteDraft(
 export function saveWriteDraft(
   storage: DraftStorage,
   id: string,
-  patch: Partial<Pick<WriteDraft, "title" | "body" | "reservedSlug" | "promptId">>,
+  patch: Partial<Pick<WriteDraft, "title" | "body" | "reservedSlug" | "promptId" | "author">>,
   now = Date.now()
 ): WriteDraft | null {
   const store = readStore(storage);
@@ -271,6 +276,7 @@ export function saveWriteDraft(
     title: patch.title != null ? String(patch.title) : prev.title,
     body: patch.body != null ? String(patch.body) : prev.body,
     reservedSlug: patch.reservedSlug != null ? String(patch.reservedSlug) : prev.reservedSlug,
+    author: patch.author != null ? String(patch.author) : prev.author,
     promptId: patch.promptId != null ? String(patch.promptId) || undefined : prev.promptId,
     updatedAt: now,
   };

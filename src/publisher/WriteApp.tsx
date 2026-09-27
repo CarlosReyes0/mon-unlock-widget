@@ -27,6 +27,7 @@ import { signMirosharkUsdc, type MirosharkClientPayment } from "../core/miroshar
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
 import { WriteDraftsPanel } from "./WriteDraftsPanel.js";
+import { PUBLISH_AUTHOR_MAX, publishAuthor } from "../core/publish-author.js";
 import { publishPost } from "./publish-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import { fetchArticleNftConfig } from "../core/article-nft.js";
@@ -54,6 +55,8 @@ function syncDraftUrl(id: string) {
 
 export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [suggestedAuthor, setSuggestedAuthor] = useState("");
   const [body, setBody] = useState("");
   const [reservedSlug, setReservedSlug] = useState("");
   const [promptId, setPromptId] = useState("");
@@ -79,6 +82,9 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [payError, setPayError] = useState("");
   const [payBusy, setPayBusy] = useState(false);
   const bodyHandleRef = useRef<WriteDocHandle | null>(null);
+  const authorTouched = useRef(new Set<string>());
+  const authorSeeded = useRef(new Map<string, string>());
+  const draftIdRef = useRef("");
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const simRef = useRef<MirosharkPreviewHandle>(null);
   const hasDraft = Boolean(title.trim() || body.trim() || reservedSlug);
@@ -90,6 +96,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const applyDraft = useCallback((draft: WriteDraft) => {
     setDraftId(draft.id);
     setTitle(draft.title);
+    setAuthor(draft.author || "");
     setBody(draft.body);
     setReservedSlug(draft.reservedSlug);
     setPromptId(draft.promptId || "");
@@ -106,7 +113,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   }, []);
 
   const persist = useCallback(
-    (id: string, next: { title: string; body: string; reservedSlug: string; promptId: string }) => {
+    (id: string, next: { title: string; body: string; reservedSlug: string; promptId: string; author: string }) => {
       if (!id) return null;
       try {
         const saved = saveWriteDraft(window.localStorage, id, next);
@@ -145,15 +152,15 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   useEffect(() => {
     if (!draftReady || !draftId || publishedSlug) return;
     const t = window.setTimeout(() => {
-      persist(draftId, { title, body, reservedSlug, promptId });
+      persist(draftId, { title, body, reservedSlug, promptId, author });
     }, 400);
     return () => window.clearTimeout(t);
-  }, [title, body, reservedSlug, promptId, draftId, draftReady, publishedSlug, persist]);
+  }, [title, body, reservedSlug, promptId, author, draftId, draftReady, publishedSlug, persist]);
 
   useEffect(() => {
     if (!draftReady || !draftId || publishedSlug) return;
     const flush = () => {
-      persist(draftId, { title, body, reservedSlug, promptId });
+      persist(draftId, { title, body, reservedSlug, promptId, author });
     };
     const onVis = () => {
       if (document.visibilityState === "hidden") flush();
@@ -164,7 +171,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       window.removeEventListener("pagehide", flush);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [title, body, reservedSlug, promptId, draftId, draftReady, publishedSlug, persist]);
+  }, [title, body, reservedSlug, promptId, author, draftId, draftReady, publishedSlug, persist]);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 15_000);
@@ -175,12 +182,34 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     setSignedIn(ready);
   }, []);
 
+  const onDisplayName = useCallback((name: string) => {
+    setSuggestedAuthor(name);
+  }, []);
+
+  draftIdRef.current = draftId;
+
+  useEffect(() => {
+    if (!draftReady || !draftId) return;
+    if (authorTouched.current.has(draftId)) return;
+    const suggestion = suggestedAuthor.trim().slice(0, PUBLISH_AUTHOR_MAX);
+    if (!suggestion) return;
+    const targetId = draftId;
+    setAuthor((current) => {
+      if (draftIdRef.current !== targetId) return current;
+      const trimmed = current.trim();
+      const seeded = authorSeeded.current.get(targetId);
+      if (trimmed && trimmed !== seeded) return current;
+      authorSeeded.current.set(targetId, suggestion);
+      return suggestion;
+    });
+  }, [draftReady, draftId, suggestedAuthor]);
+
   function onNewDraft() {
     if (publishedSlug) return;
     const storage = window.localStorage;
-    persist(draftId, { title, body, reservedSlug, promptId });
+    persist(draftId, { title, body, reservedSlug, promptId, author });
     const active = getWriteDraft(storage, draftId);
-    const next = active && isDraftEmpty(active) ? active : createWriteDraft(storage);
+    const next = active && isDraftEmpty(active) ? active : createWriteDraft(storage, { author });
     setActiveWriteDraft(storage, next.id);
     applyDraft(next);
     setDrafts(listWriteDrafts(storage));
@@ -196,7 +225,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       return;
     }
     const storage = window.localStorage;
-    persist(draftId, { title, body, reservedSlug, promptId });
+    persist(draftId, { title, body, reservedSlug, promptId, author });
     const next = getWriteDraft(storage, id);
     if (!next) return;
     setActiveWriteDraft(storage, next.id);
@@ -209,7 +238,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   function onDeleteDraft(id: string) {
     if (publishedSlug) return;
     const storage = window.localStorage;
-    if (id === draftId) persist(draftId, { title, body, reservedSlug, promptId });
+    if (id === draftId) persist(draftId, { title, body, reservedSlug, promptId, author });
     let next = deleteWriteDraft(storage, id);
     if (!next) next = createWriteDraft(storage);
     setActiveWriteDraft(storage, next.id);
@@ -232,14 +261,18 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   function onUsePrompt(prompt: WritePrompt) {
     if (publishedSlug) return;
     const storage = window.localStorage;
-    persist(draftId, { title, body, reservedSlug, promptId });
+    persist(draftId, { title, body, reservedSlug, promptId, author });
     const active = getWriteDraft(storage, draftId);
-    const target = !active || isDraftEmpty(active) ? active || createWriteDraft(storage) : createWriteDraft(storage);
+    const target =
+      !active || isDraftEmpty(active)
+        ? active || createWriteDraft(storage, { author })
+        : createWriteDraft(storage, { author });
     const next = saveWriteDraft(storage, target.id, {
       title: prompt.title,
       body: prompt.seed ? `${prompt.seed}\n\n` : "",
       reservedSlug: "",
       promptId: prompt.id,
+      author,
     });
     const applied = next || target;
     setActiveWriteDraft(storage, applied.id);
@@ -345,6 +378,11 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       setError("Add a title and the piece.");
       return;
     }
+    const name = publishAuthor(author);
+    if (!name) {
+      setError("Add your name before publishing.");
+      return;
+    }
     if (!signedIn || !window.__monPublisherAddress || !window.__monPublisherProvider) {
       setError("Sign in to publish.");
       return;
@@ -355,7 +393,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       const { slug } = await publishPost({
         title,
         rawBody: body,
-        author: "Author",
+        author: name,
         publisher: window.__monPublisherAddress as Address,
         provider: window.__monPublisherProvider as Eip1193Provider,
         preferredSlug: reservedSlug,
@@ -424,7 +462,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       <div className="mon-write__page">
         <div className="mon-write__auth">
           {auth === "privy" ? (
-            <PublisherAuth variant="inline" onReadyChange={onReadyChange} />
+            <PublisherAuth variant="inline" onReadyChange={onReadyChange} onDisplayName={onDisplayName} />
           ) : signedIn ? (
             <div className="mon-pub-auth">
               <div className="mon-pub-auth__row">
@@ -489,6 +527,27 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
             el.style.height = `${el.scrollHeight}px`;
           }}
         />
+        <div className="mon-write__byline">
+          <label className="mon-write__byline-label" htmlFor="writeAuthor">
+            Author
+          </label>
+          <input
+            id="writeAuthor"
+            className="mon-write__byline-input"
+            type="text"
+            name="author"
+            autoComplete="name"
+            maxLength={PUBLISH_AUTHOR_MAX}
+            placeholder="Your name"
+            value={author}
+            onChange={(e) => {
+              if (draftId) authorTouched.current.add(draftId);
+              setConfirmDelete(false);
+              setDeleteNote("");
+              setAuthor(e.target.value);
+            }}
+          />
+        </div>
         <label className="mon-write__sr" htmlFor="writeBody">
           Body
         </label>

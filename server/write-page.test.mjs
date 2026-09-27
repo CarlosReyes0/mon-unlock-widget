@@ -123,6 +123,27 @@ test("voice drafts are optional, drafts-only, and never post", () => {
   assert.match(docs, /VOICE_DRAFT_API_KEY/);
 });
 
+test("write publish sends the author field, not a hardcoded Author", () => {
+  const app = fs.readFileSync(path.join(ROOT, "src/publisher/WriteApp.tsx"), "utf8");
+  const post = fs.readFileSync(path.join(ROOT, "src/publisher/publish-post.ts"), "utf8");
+  const auth = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherAuth.tsx"), "utf8");
+  const publishStart = app.indexOf("async function onPublish");
+  const publishEnd = app.indexOf("return (", publishStart);
+  assert.ok(publishStart >= 0 && publishEnd > publishStart);
+  const publishFn = app.slice(publishStart, publishEnd);
+  assert.match(app, /id="writeAuthor"/);
+  assert.match(app, /onDisplayName/);
+  assert.match(app, /displayNameFromPrivyUser|suggestedAuthor/);
+  assert.match(publishFn, /publishAuthor\(author\)/);
+  assert.match(publishFn, /author: name/);
+  assert.doesNotMatch(publishFn, /["']Author["']/);
+  assert.doesNotMatch(post, /["']Author["']/);
+  assert.match(post, /publishAuthor\(/);
+  assert.match(post, /Add your name/);
+  assert.match(auth, /displayNameFromPrivyUser/);
+  assert.match(auth, /onDisplayName/);
+});
+
 test("publishPost lists USDC posts on Open Paywall", () => {
   const src = fs.readFileSync(path.join(ROOT, "src/publisher/publish-post.ts"), "utf8");
   assert.match(src, /listOnOpenPaywall: true/);

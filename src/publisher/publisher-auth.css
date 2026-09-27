@@ -525,8 +525,34 @@
 }
 
 .mon-write__title::placeholder,
-.mon-write__body::placeholder {
+.mon-write__body::placeholder,
+.mon-write__byline-input::placeholder {
   color: #c4c4c4;
+}
+
+.mon-write__byline {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: -0.35rem 0 1.15rem;
+}
+
+.mon-write__byline-label {
+  flex: none;
+  font-size: 0.95rem;
+  color: #6b7280;
+}
+
+.mon-write__byline-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #111827;
+  font: inherit;
+  font-size: 1.05rem;
+  padding: 0;
 }
 
 .mon-write__body-wrap,

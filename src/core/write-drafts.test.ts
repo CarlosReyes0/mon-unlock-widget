@@ -9,6 +9,7 @@ import {
   draftLabel,
   formatSavedAt,
   getActiveDraft,
+  getWriteDraft,
   isDraftEmpty,
   listWriteDrafts,
   memoryDraftStorage,
@@ -68,6 +69,22 @@ describe("write drafts", () => {
     const next = deleteWriteDraft(storage, newer.id);
     assert.equal(next?.id, older.id);
     assert.equal(listWriteDrafts(storage).length, 1);
+  });
+
+  it("keeps an author byline and still loads drafts saved without one", () => {
+    const storage = memoryDraftStorage({
+      [WRITE_DRAFTS_KEY]: JSON.stringify({
+        version: 1,
+        activeId: "d1",
+        drafts: [{ id: "d1", title: "Old", body: "Body", reservedSlug: "", createdAt: 1, updatedAt: 1 }],
+      }),
+    });
+    assert.equal(getWriteDraft(storage, "d1")?.author, "");
+    const created = createWriteDraft(storage, { title: "Named", author: "Ada Lovelace" }, 100);
+    assert.equal(created.author, "Ada Lovelace");
+    saveWriteDraft(storage, created.id, { author: "Carlos Reyes" }, 200);
+    assert.equal(getWriteDraft(storage, created.id)?.author, "Carlos Reyes");
+    assert.equal(isDraftEmpty({ title: "", body: "" }), true);
   });
 
   it("peek ignores empty drafts", () => {
