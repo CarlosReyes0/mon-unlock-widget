@@ -7,12 +7,12 @@
     "contact": {
       "name": "Open Paywall",
       "email": "carlos.a.reyes00@gmail.com",
-      "url": "https://mon-unlock-widget-production.up.railway.app"
+      "url": "https://openpaywall.app"
     }
   },
   "servers": [
     {
-      "url": "https://mon-unlock-widget-production.up.railway.app"
+      "url": "https://openpaywall.app"
     }
   ],
   "x-service-info": {
@@ -24,9 +24,9 @@
       "pay-per-article"
     ],
     "docs": {
-      "homepage": "https://mon-unlock-widget-production.up.railway.app",
-      "llms": "https://mon-unlock-widget-production.up.railway.app/llms.txt",
-      "apiReference": "https://mon-unlock-widget-production.up.railway.app/agents.md"
+      "homepage": "https://openpaywall.app",
+      "llms": "https://openpaywall.app/llms.txt",
+      "apiReference": "https://openpaywall.app/agents.md"
     }
   },
   "note": "Production serves this document dynamically from server/openapi.mjs (includes live MPP_TEMPO_RECIPIENT). Keep this file aligned for local static previews.",

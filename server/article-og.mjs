@@ -70,6 +70,7 @@ function headerFirst(value, fallback = "") {
 function inferProto(req, host) {
   if (req?.socket?.encrypted) return "https";
   const h = String(host || "").toLowerCase();
+  if (h === "openpaywall.app" || h === "www.openpaywall.app") return "https";
   if (h.endsWith(".up.railway.app") || h.endsWith(".railway.app")) return "https";
   const envOrigin = String(process.env.PUBLIC_ORIGIN || "").trim();
   if (envOrigin) {

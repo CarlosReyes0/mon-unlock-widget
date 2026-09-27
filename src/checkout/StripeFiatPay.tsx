@@ -205,7 +205,7 @@ function ExpressPayInner({ sessionId, expressPaymentMethods, onUnlocked, onError
           setMethodsReady(Boolean(availablePaymentMethods));
           if (availablePaymentMethods && !availablePaymentMethods.applePay) {
             console.info(
-              "[mon-unlock] Apple Pay unavailable here. Use Safari on a Mac/iPhone with Wallet set up, and register mon-unlock-widget-production.up.railway.app in Stripe → Payment method domains."
+              "[mon-unlock] Apple Pay unavailable here. Use Safari on a Mac/iPhone with Wallet set up, and register openpaywall.app and www.openpaywall.app in Stripe → Payment method domains."
             );
           }
         }}

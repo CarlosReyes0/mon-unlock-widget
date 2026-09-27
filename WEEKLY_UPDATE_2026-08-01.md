@@ -68,7 +68,7 @@ The agent path does **not** bypass security. It routes the one step only a publi
 4. **`server/register-page.test.mjs`** — guards the script-truncation footgun and finish-URL meta.
 5. **This weekly update** — for DeltaV program reporting.
 
-**Live:** https://mon-unlock-widget-production.up.railway.app  
+**Live:** https://openpaywall.app  
 **Agent guide:** `/agents.md` · `/skill.md` · `/openapi.json`
 
 ---

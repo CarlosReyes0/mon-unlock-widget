@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       plugins: [tailwindcss()],
       define: {
         "import.meta.env.VITE_CHECKOUT_ORIGIN": JSON.stringify(
-          env.VITE_CHECKOUT_ORIGIN || "https://mon-unlock-widget-production.up.railway.app"
+          env.VITE_CHECKOUT_ORIGIN || "https://openpaywall.app"
         ),
       },
       build: {

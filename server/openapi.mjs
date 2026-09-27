@@ -24,7 +24,7 @@ function originFromEnv() {
   return (
     process.env.CDN_BASE ||
     process.env.PUBLIC_ORIGIN ||
-    "https://mon-unlock-widget-production.up.railway.app"
+    "https://openpaywall.app"
   ).replace(/\/$/, "");
 }
 

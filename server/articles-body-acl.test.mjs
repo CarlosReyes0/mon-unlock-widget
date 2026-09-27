@@ -182,7 +182,7 @@ test("anon REST can still read public listing columns (live)", async (t) => {
   assert.ok(typeof row.teaser === "string");
 });
 
-const RAILWAY = "https://mon-unlock-widget-production.up.railway.app";
+const RAILWAY = "https://openpaywall.app";
 
 async function railwayArticleBody(params) {
   const res = await fetch(`${RAILWAY}/api/article-body?${params}`);

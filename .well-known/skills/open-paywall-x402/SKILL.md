@@ -8,7 +8,7 @@ description: >-
 
 # Open Paywall — Bankr / x402
 
-Live: https://mon-unlock-widget-production.up.railway.app
+Live: https://openpaywall.app
 
 ## What this is
 Open Paywall lets agents **publish** a paid article (embed + stored body) and
@@ -49,18 +49,18 @@ Existing reader entitlement (`reader=0x…` already unlocked, or Stripe
 ```bash
 # Inspect challenge (no spend)
 curl -sD - -o /tmp/op-x402-body.json -X POST \
-  https://mon-unlock-widget-production.up.railway.app/api/x402/publish \
+  https://openpaywall.app/api/x402/publish \
   -H 'content-type: application/json' \
   -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0xYourPublisherWallet"}'
 
 # Pay + publish (~$0.05). Confirm the 402 amount first.
-bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/publish \
+bankr x402 call https://openpaywall.app/api/x402/publish \
   -X POST \
   -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0xYourPublisherWallet"}' \
   --max-payment 0.05
 
 # Pay + read a listed slug (default $0.50)
-bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/articles/the-quote-was-a-trap-939i9e \
+bankr x402 call https://openpaywall.app/api/x402/articles/the-quote-was-a-trap-939i9e \
   --max-payment 0.50
 ```
 

@@ -11,7 +11,7 @@
 
 I have built and shipped a functional end-to-end paywall system that allows writers to embed a "pay with MON" widget on any website. Readers connect a wallet, pay native MON, and unlock the full article. The publisher receives 100% of the payment on-chain with no platform fee.
 
-The widget is live on `https://mon-unlock-widget-production.up.railway.app/`. A working demo embed is running on a personal site, and the generator successfully registers articles to the connected wallet on Monad mainnet.
+The widget is live on `https://openpaywall.app/`. A working demo embed is running on a personal site, and the generator successfully registers articles to the connected wallet on Monad mainnet.
 
 **The core problem I am solving:** There is no simple, embeddable way for independent writers to monetize long-form content with native MON on Monad. Existing solutions either require readers to leave the page, use custodial platforms that take 30% cuts, or require complex self-hosting.
 
@@ -109,8 +109,8 @@ USDC can be revisited later if publishers demand dollar-stable pricing.
 3. Embed tampering risk exists until signature verification is wired into the widget.
 
 **Live Artifacts:**
-- Widget: https://mon-unlock-widget-production.up.railway.app/
-- Generator: https://mon-unlock-widget-production.up.railway.app/generator.html
+- Widget: https://openpaywall.app/
+- Generator: https://openpaywall.app/generator.html
 - Example embed on personal site: https://personal-website-production-b90b.up.railway.app/test-6.html
 
 ---
@@ -157,6 +157,6 @@ I am ready to ship.
 **Contact**  
 Carlos Reyes  
 [Your email / Twitter / Farcaster]  
-Live demo: https://mon-unlock-widget-production.up.railway.app/generator.html
+Live demo: https://openpaywall.app/generator.html
 
 *Thank you for the feedback two weeks ago. This proposal attempts to address the request for more detail and decision context.*

@@ -61,11 +61,11 @@ Full article text…
 Optional: `Author:`. `Asset: mon` (default USDC).
 
 ## Discovery surfaces
-- LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`
-- Agent skill: `https://mon-unlock-widget-production.up.railway.app/skill.md`
-- Cursor / skills: `https://mon-unlock-widget-production.up.railway.app/.well-known/skills/mon-unlock/SKILL.md`
-- Bankr / x402 skill: `https://mon-unlock-widget-production.up.railway.app/.well-known/skills/open-paywall-x402/SKILL.md`
-- OpenAPI: `https://mon-unlock-widget-production.up.railway.app/openapi.json`
+- LLM overview: `https://openpaywall.app/llms.txt`
+- Agent skill: `https://openpaywall.app/skill.md`
+- Cursor / skills: `https://openpaywall.app/.well-known/skills/mon-unlock/SKILL.md`
+- Bankr / x402 skill: `https://openpaywall.app/.well-known/skills/open-paywall-x402/SKILL.md`
+- OpenAPI: `https://openpaywall.app/openapi.json`
 - Health: `GET /api/agents/health`
 
 ## What publishing needs
@@ -127,16 +127,16 @@ Aliases: `POST /api/agents/x402/publish`, `GET /api/agents/x402/unlock`.
 
 ```bash
 # Inspect challenge (no spend)
-curl -sD - -o /dev/null -X POST https://mon-unlock-widget-production.up.railway.app/api/x402/publish \
+curl -sD - -o /dev/null -X POST https://openpaywall.app/api/x402/publish \
   -H 'content-type: application/json' \
   -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"…","body":"…","publisher":"0x…"}'
 
 # Bankr pays the 402 and retries
-bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/publish \
+bankr x402 call https://openpaywall.app/api/x402/publish \
   -X POST --max-payment 0.05 \
   -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0x…"}'
 
-bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/articles/the-quote-was-a-trap-939i9e \
+bankr x402 call https://openpaywall.app/api/x402/articles/the-quote-was-a-trap-939i9e \
   --max-payment 0.50
 ```
 
@@ -158,12 +158,12 @@ Without that checklist, a correct agent run ends at the first unpaid 402 with a 
 ### Example
 ```bash
 # Inspect challenge
-curl -sD - -o /dev/null -X POST https://mon-unlock-widget-production.up.railway.app/api/agents/publish \
+curl -sD - -o /dev/null -X POST https://openpaywall.app/api/agents/publish \
   -H 'content-type: application/json' \
   -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"…","body":"…","publisher":"0x…"}'
 
 # Pay + fetch (after mppx account create) — defaults to USDC $0.50
-npx mppx https://mon-unlock-widget-production.up.railway.app/api/agents/publish \
+npx mppx https://openpaywall.app/api/agents/publish \
   --method POST --header 'content-type: application/json' \
   --data '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0x…"}'
 ```
@@ -174,7 +174,7 @@ See `skills/mon-unlock-embed/OPTIONS.md`:
 - **Option A:** config `privateKey` → agent also registers on-chain (gas).
 
 ## Human fallback
-https://mon-unlock-widget-production.up.railway.app/generator.html
+https://openpaywall.app/generator.html
 
 ## Stripe Directory findability checklist
 1. Create a **public** Stripe profile (Settings → Public details). Do **not** enable “Make your profile private”.

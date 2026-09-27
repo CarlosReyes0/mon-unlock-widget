@@ -11,7 +11,7 @@ export const CHECKOUT_MESSAGE_SOURCES = [
 
 export type CheckoutMessageSource = (typeof CHECKOUT_MESSAGE_SOURCES)[number];
 
-export const DEFAULT_CHECKOUT_ORIGIN = "https://mon-unlock-widget-production.up.railway.app";
+export const DEFAULT_CHECKOUT_ORIGIN = "https://openpaywall.app";
 
 /** Query params written onto the article URL after a successful fiat pay (mobile / same-tab). */
 export const FIAT_SESSION_PARAM = "mon_fiat_session";

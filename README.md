@@ -29,7 +29,7 @@ PRs and pushes to `main` run **test** (`npm test`) and **smoke** (`npm run smoke
 ```bash
 npm test
 npm run smoke
-BASE_URL=https://mon-unlock-widget-production.up.railway.app npm run smoke
+BASE_URL=https://openpaywall.app npm run smoke
 ```
 
 Mark **smoke** required so a `/account` 404 cannot merge: GitHub → **Settings → Branches** → add or edit the `main` protection rule → **Require status checks to pass** → search **smoke** (job name `smoke`, sometimes listed as `CI / smoke`). Require **test** as well. You need admin on the repo; the check appears in the search box after it has run once on the default branch or on this PR.
@@ -38,7 +38,7 @@ Optional Railway check (does not block PRs): Actions → **production-smoke** �
 
 ## Live testnet demo
 
-https://mon-unlock-widget-production.up.railway.app
+https://openpaywall.app
 
 Pages:
 - `/` – Public article feed (also `/articles`)
@@ -119,13 +119,13 @@ npm run build
 Upload `dist/mon-unlock.js` and `dist/mon-unlock.css` to your host (or CDN). Then add to every page header:
 
 ```html
-<link rel="stylesheet" href="https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.css" />
-<script type="module" src="https://mon-unlock-widget-production.up.railway.app/dist/mon-unlock.js"></script>
+<link rel="stylesheet" href="https://openpaywall.app/dist/mon-unlock.css" />
+<script type="module" src="https://openpaywall.app/dist/mon-unlock.js"></script>
 ```
 
 Or self-host from your own domain.
 
-**CORS for third-party embeds:** The production CDN at https://mon-unlock-widget-production.up.railway.app serves `/dist/*` (including the main `mon-unlock.js` and its hashed import chunks) with `Access-Control-Allow-Origin: *`. This allows any origin (localhost:* or production consumer sites) to load the ES module scripts cross-origin. No credentials are used, so `*` is safe and simple. If you need an allowlist later, set `EMBED_ALLOWED_ORIGINS` and replace the static server with origin-aware middleware.
+**CORS for third-party embeds:** The production CDN at https://openpaywall.app serves `/dist/*` (including the main `mon-unlock.js` and its hashed import chunks) with `Access-Control-Allow-Origin: *`. This allows any origin (localhost:* or production consumer sites) to load the ES module scripts cross-origin. No credentials are used, so `*` is safe and simple. If you need an allowlist later, set `EMBED_ALLOWED_ORIGINS` and replace the static server with origin-aware middleware.
 
 ### For each paid article
 
@@ -235,7 +235,7 @@ Set `STRIPE_PAYOUT_CRON_SECRET` on Railway. Without Connect onboarding, jobs sta
 ### Privy checkout setup
 
 1. Create an app at [dashboard.privy.io](https://dashboard.privy.io).
-2. Allowlist `https://mon-unlock-widget-production.up.railway.app` (and `http://localhost:5173` for local `vite`).
+2. Allowlist `https://openpaywall.app`, `https://www.openpaywall.app`, and `http://localhost:5173` for local `vite`.
 3. Enable embedded wallets + funding for **MON** and **USDC** on Monad (chain id `143`).
 4. In **Account Funding**, enable **Coinbase** (and optionally MoonPay). Checkout opens **Coinbase Onramp** via a server session token (required since mid-2025) — this is what works in Texas. Ramp remains as a fallback for other regions; MoonPay is unavailable in Texas.
 5. Create a **Secret API Key** in [Coinbase Developer Platform](https://portal.cdp.coinbase.com) (API Keys → Secret API Keys). On Railway, set runtime env:

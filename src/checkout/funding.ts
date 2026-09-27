@@ -103,7 +103,7 @@ export async function openCoinbaseBuy(
 export function buildRampBuyUrl(address: string, outAsset: "MONAD_MON" | "MONAD_USDC" = "MONAD_MON"): string {
   const params = new URLSearchParams({
     hostAppName: "Open Paywall",
-    hostLogoUrl: "https://mon-unlock-widget-production.up.railway.app/favicon.ico",
+    hostLogoUrl: "https://openpaywall.app/favicon.ico",
     defaultFlow: "ONRAMP",
     outAsset,
     userAddress: address,

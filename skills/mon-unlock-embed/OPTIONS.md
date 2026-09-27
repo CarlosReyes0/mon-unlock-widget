@@ -63,7 +63,7 @@ Steps 1 and 2 always happen when you use the agent. Step 3 is where you choose h
 
 **Best if:** you're at a desktop and don't need phone publishing.
 
-1. Open [generator.html](https://mon-unlock-widget-production.up.railway.app/generator.html)
+1. Open [generator.html](https://openpaywall.app/generator.html)
 2. Fill in title, slug, teaser, body
 3. Connect wallet → Copy embed
 4. Paste on your site

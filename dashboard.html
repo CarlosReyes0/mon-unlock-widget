@@ -721,7 +721,7 @@
         if (!article.hasSlug) {
           throw new Error("This row is hash-only. Re-save article metadata in the generator to set a slug.");
         }
-        const CDN_BASE = "https://mon-unlock-widget-production.up.railway.app";
+        const CDN_BASE = "https://openpaywall.app";
         const WIDGET_VERSION = "20240714"; // bump when widget behavior changes
         const displayTitle = article.title && article.title.length > 16
           ? shortHash(article.title)
