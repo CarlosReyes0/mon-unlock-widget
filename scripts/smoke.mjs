@@ -82,6 +82,20 @@ test("GET /write-draft-resume.js is served", async () => {
   assert.match(text, /Your draft is waiting/);
 });
 
+test("GET /generator-media.js is the module generator.html imports", async () => {
+  const page = await fetch(`${origin}/generator.html`);
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /import\("\/generator-media\.js"\)/);
+
+  const res = await fetch(`${origin}/generator-media.js`);
+  assert.equal(res.status, 200, "/generator-media.js");
+  assert.match(res.headers.get("content-type") || "", /javascript/);
+  const text = await res.text();
+  assert.match(text, /export async function validateMediaUrl/);
+  assert.match(text, /export function buildMediaSnippet/);
+});
+
 test("GET /write, /demo, /generator.html are 200 HTML", async () => {
   const pages = [
     ["/write", /Write — Open Paywall/],
