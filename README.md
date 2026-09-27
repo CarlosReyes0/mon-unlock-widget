@@ -43,7 +43,7 @@ https://mon-unlock-widget-production.up.railway.app
 Pages:
 - `/` – Public article feed (also `/articles`)
 - `/demo` – Unlock demo video (former homepage)
-- `/write` – New post (title, write, Publish). Drafts autosave on this device (multiple pieces, starters on a blank page). Optional **Draft posts in your voice** (never auto-posts) and **Preview how this might land** (MiroShark) do not block Publish.
+- `/write` – New post (title, write, Publish). Drafts autosave on this device (multiple pieces, starters on a blank page). Optional **Draft posts in your voice** (never auto-posts) and **Simulate how this lands with MiroShark** do not block Publish.
 - `/articles/{slug}` – Hosted article page (same unlock as embed). After unlock, **Download** is free (HTML of title + body). Locked readers cannot fetch the file.
 - `/generator.html` – Create embed for your own site
 - `/account.html` – Publisher account (email / Google / wallet)
@@ -70,7 +70,7 @@ See **[agents.md](./agents.md)** and **[x402 skill](./.well-known/skills/open-pa
 
 ### MiroShark preview + Base affiliate (optional)
 
-Write can ask [MiroShark](https://www.miroshark.xyz/) “how might this land?” **before** Publish. It is off unless `BASE_BUILDER_CODE` is set. Setup, Railway env, and payout caveats: **[docs/MIROSHARK.md](./docs/MIROSHARK.md)**.
+Write can **simulate how this lands with MiroShark** before Publish. It is off unless `BASE_BUILDER_CODE` is set. Setup, Railway env, and payout caveats: **[docs/MIROSHARK.md](./docs/MIROSHARK.md)**.
 
 The articles homepage already has `<meta name="base:app_id" content="6aab87b69b238d5ecd11e976">` for Base domain verify. That id is **not** a Builder Code.
 

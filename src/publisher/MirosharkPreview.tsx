@@ -119,12 +119,16 @@ export function MirosharkPreview({ title, body }: { title: string; body: string 
   const shareUrl = result?.run?.shareUrl;
 
   return (
-    <section className="mon-write__preview" aria-label="Preview how this might land">
-      <p className="mon-write__preview-kicker">Optional</p>
-      <h2 className="mon-write__preview-title">Preview how this might land</h2>
+    <section
+      id="simulate-miroshark"
+      className="mon-write__preview"
+      aria-label="Simulate how this lands with MiroShark"
+    >
+      <p className="mon-write__preview-kicker">MiroShark</p>
+      <h2 className="mon-write__preview-title">Simulate how this lands with MiroShark</h2>
       <p className="mon-write__preview-copy">
         {enabled
-          ? `A MiroShark sim (~$${info?.amountUsd || "1.00"} USDC on Base) models reader reaction. It does not block Publish.${
+          ? `A 25-agent sim (~$${info?.amountUsd || "1.00"} USDC on Base) models reader reaction. It does not block Publish.${
               info?.serverPayer
                 ? " This server can pay the $1 run."
                 : " If no server payer is set, you get the x402 challenge instead of a live sim."
@@ -135,11 +139,11 @@ export function MirosharkPreview({ title, body }: { title: string; body: string 
       {enabled ? (
         <button
           type="button"
-          className="mon-pub-auth__btn"
+          className="mon-write__simulate"
           disabled={busy}
           onClick={() => void onPreview()}
         >
-          {busy ? "Starting…" : "Preview how this might land"}
+          {busy ? "Starting…" : "Simulate how this lands with MiroShark"}
         </button>
       ) : null}
       {note ? <p className="mon-write__preview-note">{note}</p> : null}

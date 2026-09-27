@@ -302,8 +302,56 @@
 .mon-write__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.5rem;
   flex-shrink: 0;
+}
+
+.mon-write__simulate {
+  appearance: none;
+  border: 1px solid #99f6e4;
+  background: #f0fdfa;
+  color: #0f766e;
+  border-radius: 9999px;
+  padding: 0.45rem 0.9rem;
+  min-height: 2.75rem;
+  max-width: 15rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  font-family: inherit;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+}
+
+.mon-write__simulate:hover:not(:disabled) {
+  background: #ccfbf1;
+}
+
+.mon-write__simulate:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.mon-write__simulate--block {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 0 0 0.75rem;
+}
+
+.mon-write__preview.is-highlight {
+  animation: mon-simulate-flash 1.4s ease;
+}
+
+@keyframes mon-simulate-flash {
+  0% {
+    background: #f0fdfa;
+  }
+  100% {
+    background: transparent;
+  }
 }
 
 .mon-write__drafts-btn {

@@ -314,11 +314,23 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     ? "Start anywhere. Saved on this device."
     : `${writeNudge(words)}${savedAt ? ` · ${formatSavedAt(savedAt, now)}` : ""}`;
 
+  function focusSimulate() {
+    const el = document.getElementById("simulate-miroshark");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("is-highlight");
+    void el.offsetWidth;
+    el.classList.add("is-highlight");
+  }
+
   return (
     <div className="mon-write">
       <header className="mon-write__bar">
         <SiteNav />
         <div className="mon-write__actions">
+          <button type="button" className="mon-write__simulate" onClick={focusSimulate}>
+            Simulate how this lands with MiroShark
+          </button>
           <button
             type="button"
             className="mon-write__drafts-btn"
@@ -457,13 +469,13 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           docRef={bodyHandleRef}
         />
         <p className="mon-write__draft">{mediaNote || deleteNote || draftNote}</p>
+        <MirosharkPreview title={title} body={body} />
         <VoiceDrafts
           title={title}
           body={body}
           reservedSlug={reservedSlug}
           writerId={signedIn ? window.__monPublisherAddress || "" : ""}
         />
-        <MirosharkPreview title={title} body={body} />
         {publishedSlug ? null : (
           <div className="mon-write__delete">
             {confirmDelete ? (
@@ -508,6 +520,10 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         activeId={draftId}
         now={now}
         onClose={() => setDraftsOpen(false)}
+        onSimulate={() => {
+          setDraftsOpen(false);
+          window.setTimeout(focusSimulate, 40);
+        }}
         onNew={onNewDraft}
         onOpen={onOpenDraft}
         onDelete={onDeleteDraft}

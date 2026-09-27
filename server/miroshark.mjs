@@ -1,5 +1,5 @@
 /**
- * Optional MiroShark “how might this land?” preview for Write.
+ * Optional MiroShark “simulate how this lands” helper for Write.
  *
  * Open Paywall is the x402aff **builder/affiliate**: we send `X-Builder-Code`
  * on POST /run so MiroShark’s first-party 0xSplits path can pay the documented
@@ -25,7 +25,7 @@ export const BASE_CAIP2 = "eip155:8453";
 export const BASE_CHAIN_ID = 8453;
 export const RUN_ID_PATTERN = /^run_[0-9a-f]{12}$/;
 export const MISSING_BUILDER_CODE_MESSAGE =
-  "Preview how this might land is off until a Base Builder Code is set. Get one at https://dashboard.base.org (or https://base.dev) → register the app, verify the domain, then Settings → Builder Codes. Set BASE_BUILDER_CODE on Railway. Do not invent a code — the homepage base:app_id meta (6aab87b69b238d5ecd11e976) is only for domain verify.";
+  "Simulate how this lands with MiroShark is off until a Base Builder Code is set. Get one at https://dashboard.base.org (or https://base.dev) → register the app, verify the domain, then Settings → Builder Codes. Set BASE_BUILDER_CODE on Railway. Do not invent a code — the homepage base:app_id meta (6aab87b69b238d5ecd11e976) is only for domain verify.";
 
 const PROMPT_MAX = 4000;
 const BODY_SNIPPET = 1600;
@@ -147,7 +147,7 @@ export function mirosharkPublicStatus() {
     enabled,
     reason: enabled ? null : "missing_builder_code",
     message: enabled
-      ? "Optional MiroShark preview is on. Publish still works without it."
+      ? "Simulate how this lands with MiroShark is on. Publish still works without it."
       : MISSING_BUILDER_CODE_MESSAGE,
     builderCode: builderCode || null,
     serverPayer: Boolean(mirosharkPayerKey()),
