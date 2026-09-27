@@ -93,6 +93,7 @@ import {
   normalizeOnrampAsset,
 } from "./coinbase-onramp.mjs";
 import { createCspNonce, htmlSecurityHeaders, secureHtmlDocument } from "./security-headers.mjs";
+import { ARTICLE_BODY_LIMIT, readLimitedBody as readBody } from "./body-limit.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -192,24 +193,6 @@ function clientIp(req) {
   const real = req.headers["x-real-ip"];
   if (typeof real === "string" && real.trim()) return real.trim();
   return req.socket?.remoteAddress || "127.0.0.1";
-}
-
-function readBody(req, limit = 64_000) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    req.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > limit) {
-        reject(new Error("body_too_large"));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
 }
 
 function isAddress(value) {
@@ -671,7 +654,7 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "POST" && url.pathname === "/api/agents/publish/parse") {
     try {
-      const raw = await readBody(req, 512_000);
+      const raw = await readBody(req, ARTICLE_BODY_LIMIT);
       const parsed = raw ? JSON.parse(raw) : {};
       const result = parsePublishPaste(parsed.paste, { publisher: parsed.publisher });
       if (!result.ok) {
@@ -694,7 +677,7 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "POST" && url.pathname === "/api/agents/publish/validate") {
     try {
-      const raw = await readBody(req, 512_000);
+      const raw = await readBody(req, ARTICLE_BODY_LIMIT);
       const parsed = raw ? JSON.parse(raw) : {};
       const validated = validatePublishInput(parsed);
       if (!validated.ok) {
@@ -727,7 +710,7 @@ const server = http.createServer(async (req, res) => {
     let parsed = {};
     let parseError = null;
     try {
-      const raw = await readBody(req, 512_000);
+      const raw = await readBody(req, ARTICLE_BODY_LIMIT);
       parsed = raw ? JSON.parse(raw) : {};
     } catch (e) {
       if (e?.message === "body_too_large") {
