@@ -7,6 +7,7 @@ import {
   useWallets,
 } from "@privy-io/react-auth";
 import { monadMainnet } from "../core/chains.js";
+import { displayNameFromPrivyUser } from "../core/publish-author.js";
 import {
   mapWalletSendToEthSend,
   newestExternalWalletAddress,
@@ -64,9 +65,11 @@ type Props = {
   /** Compact mount inside generator/dashboard */
   variant?: "inline" | "page";
   onReadyChange?: (ready: boolean) => void;
+  /** Signed-in display name, or "" when signed out. Never a placeholder. */
+  onDisplayName?: (name: string) => void;
 };
 
-export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
+export function PublisherAuth({ variant = "inline", onReadyChange, onDisplayName }: Props) {
   const { ready, authenticated, login, logout, connectWallet, user } = usePrivy();
   const { wallets } = useWallets();
   const { createWallet } = useCreateWallet();
@@ -86,6 +89,7 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     [wallets, preferredWallet]
   );
   const email = user?.email?.address || user?.google?.email || null;
+  const displayName = authenticated ? displayNameFromPrivyUser(user) : "";
   const wantsEmbeddedWallet = Boolean(user?.email?.address || user?.google);
   const signInBusy = busy || modalOpen || walletSetup;
 
@@ -93,6 +97,10 @@ export function PublisherAuth({ variant = "inline", onReadyChange }: Props) {
     setPreferredWallet(addr);
     writePreferredWallet(addr);
   }
+
+  useEffect(() => {
+    onDisplayName?.(displayName);
+  }, [displayName, onDisplayName]);
 
   useEffect(() => {
     const added = newestExternalWalletAddress(seenWalletAddrsRef.current, wallets);
