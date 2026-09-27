@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => {
           for (const key of [
             "SUPABASE_URL",
             "SUPABASE_SERVICE_ROLE_KEY",
+            "MEDIA_DIR",
             "PUBLIC_ORIGIN",
             "BASE_BUILDER_CODE",
             "MIROSHARK_BASE_URL",
@@ -122,6 +123,12 @@ export default defineConfig(({ mode }) => {
               if (await tryHandleVoiceDraftRequest(req, res)) return;
             } catch (e) {
               console.error("[voice-drafts-dev]", e?.message || e);
+            }
+            try {
+              const { tryHandleMediaRequest } = await import("./server/media-host.mjs");
+              if (await tryHandleMediaRequest(req, res)) return;
+            } catch (e) {
+              console.error("[media-dev]", e?.message || e);
             }
             if (req.url === "/publisher-auth.js" || req.url?.startsWith("/publisher-auth.js?")) {
               req.url = "/src/publisher/auth-mount.tsx";

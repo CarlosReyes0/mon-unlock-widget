@@ -812,6 +812,28 @@
   background: #fafaf9;
 }
 
+label.mon-write__media-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.mon-write__media-btn:disabled,
+.mon-write__media-btn.is-busy {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.mon-write__media-btn.is-busy {
+  pointer-events: none;
+}
+
+.mon-write__body-wrap.is-dropping .mon-write__body {
+  outline: 2px dashed #c4b5fd;
+  outline-offset: 8px;
+  border-radius: 8px;
+}
+
 .mon-write__media-hint {
   font-size: 0.8rem;
   color: #a8a29e;

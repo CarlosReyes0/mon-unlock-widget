@@ -40,6 +40,8 @@ Set `RELAYER_PRIVATE_KEY` on Railway to the **contract owner** wallet, funded wi
 
 See **[POSTING.md](./POSTING.md)** (mockups in `docs/posting/`). Live at **/write**: title, piece, Publish. Generator stays the embed tool.
 
+- [x] **Host a photo, video, or audio on /write** — pick or drop a file (8 / 20 / 45 MB). YouTube links still paste. Public file URL; the paywall hides it in the article. Supabase bucket `article-media` when configured.
+
 ## Edit articles without re-pasting HTML
 
 (You liked this direction. Fits posting once Publish exists.)

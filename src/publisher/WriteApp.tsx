@@ -2,6 +2,14 @@ import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, u
 import { locatePaywall } from "../core/split-post.js";
 import { snippetFromPastedText } from "../core/media-url.js";
 import {
+  classifyClientFile,
+  filesFromTransfer,
+  MEDIA_ACCEPT,
+  mediaLimitHint,
+  snippetForHostedFile,
+  uploadHostedMedia,
+} from "../core/media-file.js";
+import {
   createWriteDraft,
   deleteWriteDraft,
   formatSavedAt,
@@ -32,15 +40,6 @@ import type { Address } from "viem";
 
 type WriteAuth = "privy" | "injected";
 
-function clipboardHasBinaryMedia(data: DataTransfer | null): boolean {
-  if (!data) return false;
-  const files = Array.from(data.files || []);
-  if (files.some((f) => /^(image|video|audio)\//.test(f.type))) return true;
-  return Array.from(data.items || []).some(
-    (item) => item.kind === "file" && /^(image|video|audio)\//.test(item.type)
-  );
-}
-
 function draftQuery(): { draft?: string; newDraft: boolean } {
   if (typeof window === "undefined") return { newDraft: false };
   const q = new URLSearchParams(window.location.search);
@@ -68,17 +67,20 @@ const WriteBody = function WriteBody({
   value,
   onChange,
   onMediaNote,
+  onHostFiles,
   bodyRef,
 }: {
   value: string;
   onChange: (next: string) => void;
   onMediaNote: (note: string) => void;
+  onHostFiles: (files: File[]) => void;
   bodyRef: React.RefObject<WriteBodyHandle | null>;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [foldTop, setFoldTop] = useState<number | null>(null);
+  const [dropping, setDropping] = useState(false);
   const source = value.replace(/\r\n/g, "\n");
   const fold = locatePaywall(source);
 
@@ -126,7 +128,8 @@ const WriteBody = function WriteBody({
         onMediaNote(note);
         return;
       }
-      const { next, cursor } = insertAtTextareaCursor(area, value, snippet);
+      const { next, cursor } = insertAtTextareaCursor(area, area.value, snippet);
+      area.value = next;
       onChange(next);
       onMediaNote(note);
       requestAnimationFrame(() => {
@@ -147,9 +150,10 @@ const WriteBody = function WriteBody({
   );
 
   function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    if (clipboardHasBinaryMedia(e.clipboardData)) {
+    const files = filesFromTransfer(e.clipboardData);
+    if (files.length) {
       e.preventDefault();
-      onMediaNote("We don’t host files yet. Paste a public image, audio, or video URL.");
+      onHostFiles(files);
       return;
     }
     const text = e.clipboardData.getData("text/plain");
@@ -160,9 +164,11 @@ const WriteBody = function WriteBody({
   }
 
   function onDrop(e: React.DragEvent<HTMLTextAreaElement>) {
-    if (clipboardHasBinaryMedia(e.dataTransfer)) {
+    setDropping(false);
+    const files = filesFromTransfer(e.dataTransfer);
+    if (files.length) {
       e.preventDefault();
-      onMediaNote("We don’t host files yet. Drop a public URL instead.");
+      onHostFiles(files);
       return;
     }
     const text = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
@@ -173,20 +179,21 @@ const WriteBody = function WriteBody({
   }
 
   return (
-    <div className="mon-write__body-wrap" ref={wrapRef}>
+    <div className={`mon-write__body-wrap${dropping ? " is-dropping" : ""}`} ref={wrapRef}>
       <textarea
         id="writeBody"
         ref={areaRef}
         className="mon-write__body"
-        placeholder="Write, or paste a photo, audio, or video URL…"
+        placeholder="Write, or paste a link. Drop a photo, video, or audio anytime."
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
         onPaste={onPaste}
         onDragOver={(e) => {
-          if (e.dataTransfer?.types.includes("text/uri-list") || e.dataTransfer?.types.includes("Files")) {
-            e.preventDefault();
-          }
+          const types = Array.from(e.dataTransfer?.types || []);
+          if (types.includes("text/uri-list") || types.includes("Files")) e.preventDefault();
+          if (types.includes("Files")) setDropping(true);
         }}
+        onDragLeave={() => setDropping(false)}
         onDrop={onDrop}
       />
       {fold.hasFold ? (
@@ -222,6 +229,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [error, setError] = useState("");
   const [mediaNote, setMediaNote] = useState("");
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [publishedSlug, setPublishedSlug] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteNote, setDeleteNote] = useState("");
@@ -465,6 +473,33 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     }
   }
 
+  async function onHostFiles(list: File[]) {
+    if (uploading) return;
+    const file = list[0];
+    if (!file) return;
+    const check = classifyClientFile(file);
+    if (!check.ok) {
+      setMediaNote(check.message);
+      return;
+    }
+    setUploading(true);
+    const verb = check.kind === "video" ? "video" : check.kind === "audio" ? "audio" : "photo";
+    setMediaNote(`Uploading ${verb}…`);
+    try {
+      const hosted = await uploadHostedMedia(file, check.contentType, file.name);
+      const snippet = snippetForHostedFile(hosted.url, hosted.kind, file.name);
+      const label = hosted.kind === "video" ? "Video" : hosted.kind === "audio" ? "Audio" : "Photo";
+      const more = list.length > 1 ? " Add the others one at a time." : "";
+      const stay = hosted.persistent ? "" : " It may disappear if this server restarts.";
+      bodyHandleRef.current?.insertSnippet(snippet, `${label} added.${stay}${more}`);
+    } catch (err) {
+      const msg = err instanceof Error && err.message ? err.message : "Couldn’t upload that file. Try again.";
+      setMediaNote(msg);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const draftNote = empty
     ? "Start anywhere. Saved on this device."
     : `${writeNudge(words)}${savedAt ? ` · ${formatSavedAt(savedAt, now)}` : ""}`;
@@ -564,15 +599,30 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           Body
         </label>
         <div className="mon-write__media-row">
+          <label className={`mon-write__media-btn${uploading ? " is-busy" : ""}`}>
+            {uploading ? "Uploading…" : "Add a photo, video, or audio"}
+            <input
+              type="file"
+              accept={MEDIA_ACCEPT}
+              className="mon-write__sr"
+              disabled={uploading}
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                e.target.value = "";
+                if (files.length) onHostFiles(files);
+              }}
+            />
+          </label>
           <button
             type="button"
             className="mon-write__media-btn"
+            disabled={uploading}
             onClick={() => setMediaOpen(true)}
           >
-            Add image, audio, or video
+            Paste a link
           </button>
           <span className="mon-write__media-hint">
-            Or paste a public URL. Media above the fold is free.
+            Or drop a file in the draft. {mediaLimitHint()} Above the fold is free.
           </span>
         </div>
         {empty ? (
@@ -600,6 +650,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
             setBody(next);
           }}
           onMediaNote={setMediaNote}
+          onHostFiles={onHostFiles}
           bodyRef={bodyHandleRef}
         />
         <p className="mon-write__draft">{mediaNote || deleteNote || draftNote}</p>

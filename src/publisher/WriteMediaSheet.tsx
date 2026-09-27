@@ -95,7 +95,7 @@ export function WriteMediaSheet({ open, onClose, onInsert }: WriteMediaSheetProp
     >
       <div className="mon-write-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="mon-write-sheet__handle" aria-hidden="true" />
-        <h3 id={titleId}>Add image, audio, or video</h3>
+        <h3 id={titleId}>Paste a link</h3>
         <div className="mon-write-sheet__body">
           <div className="mon-write-sheet__tabs" role="tablist" aria-label="Media type">
             {KINDS.map((k) => (
@@ -145,8 +145,8 @@ export function WriteMediaSheet({ open, onClose, onInsert }: WriteMediaSheetProp
             ) : null}
           </div>
           <p className="mon-write-sheet__hint">
-            Direct file links for photos, MP4, and MP3. YouTube, Vimeo, and Loom for embeds.
-            Media above the fold is free to readers.
+            YouTube, Vimeo, and Loom, or a direct file link. For a photo, video, or audio from
+            your device, use Add a photo, video, or audio. Media above the fold is free.
           </p>
         </div>
         <div className="mon-write-sheet__actions">

@@ -12,10 +12,13 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(html, /Write — Open Paywall/);
   assert.match(app, /Publish/);
   assert.match(app, /Write, or paste/);
-  assert.match(app, /Add image, audio, or video/);
+  assert.match(app, /Add a photo, video, or audio/);
+  assert.match(app, /uploadHostedMedia/);
+  assert.match(app, /type="file"/);
   assert.match(app, /snippetFromPastedText/);
   assert.match(app, /WriteMediaSheet/);
-  assert.match(app, /We don’t host files yet/);
+  assert.match(app, /Paste a link/);
+  assert.doesNotMatch(app, /We don’t host files yet/);
   assert.match(app, /\/articles\/\$\{encodeURIComponent\(slug\)\}/);
   assert.doesNotMatch(app, /articleId/);
   assert.doesNotMatch(app, /paymentAsset/);
@@ -126,9 +129,9 @@ test("publisher auth prefers a connected wallet over the Privy embedded wallet",
   assert.match(auth, /mapWalletSendToEthSend/);
 });
 
-test("write media sheet inserts URL snippets without hosting files", () => {
+test("write media sheet still accepts pasted links, including audio", () => {
   const sheet = fs.readFileSync(path.join(ROOT, "src/publisher/WriteMediaSheet.tsx"), "utf8");
-  assert.match(sheet, /Add image, audio, or video/);
+  assert.match(sheet, /Paste a link/);
   assert.match(sheet, /validateMediaUrl/);
   assert.match(sheet, /id: "audio"/);
   assert.match(sheet, /YouTube, Vimeo, and Loom/);

@@ -35,6 +35,11 @@ describe("media-url", () => {
     assert.equal(snippetFromPastedText("hello https://example.com/a.jpg"), null);
   });
 
+  it("escapes image alt text", () => {
+    const html = buildMediaSnippet("https://example.com/a.jpg", "image", `a "quote" <b>`);
+    assert.match(html, /alt="a &quot;quote&quot; &lt;b&gt;"/);
+  });
+
   it("builds HTML snippets including audio and playsinline video", () => {
     assert.match(buildMediaSnippet("https://example.com/a.jpg", "image"), /<img /);
     assert.match(buildMediaSnippet("https://example.com/a.mp4", "video"), /playsinline/);

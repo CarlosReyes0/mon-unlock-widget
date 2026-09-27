@@ -82,7 +82,15 @@ export function detectMediaKind(url: string): MediaKind {
   return confidentMediaKind(url) || "image";
 }
 
-export function buildMediaSnippet(url: string, kind: MediaKind): string {
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export function buildMediaSnippet(url: string, kind: MediaKind, alt?: string): string {
   const normalized = normalizeUrl(url);
   if (!normalized) return "";
 
@@ -99,7 +107,8 @@ export function buildMediaSnippet(url: string, kind: MediaKind): string {
     return `\n<audio controls preload="metadata" src="${normalized}"></audio>\n`;
   }
 
-  return `\n<img src="${normalized}" alt="Describe image" loading="lazy" />\n`;
+  const safeAlt = escapeAttr(String(alt || "Describe image").trim().slice(0, 140) || "Describe image");
+  return `\n<img src="${normalized}" alt="${safeAlt}" loading="lazy" />\n`;
 }
 
 /**

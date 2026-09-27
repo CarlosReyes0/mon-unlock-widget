@@ -4,7 +4,9 @@ Go to **/write**. Title, the piece, **Publish**. Then it’s live on `/articles/
 
 Drafts autosave **on this device** — no sign-in required. Leave and come back; start a second piece from **Drafts** without losing the first. A blank page offers a few starters (“A walk I keep thinking about”). Account, Articles, and Dashboard show **Continue your draft** when one is waiting. Server-side / cross-device drafts can come later.
 
-Paste a public photo, audio, or video URL (or **Add image, audio, or video**) — Write turns it into HTML. Media above the fold is free; everything below stays paid until unlock.
+Tap **Add a photo, video, or audio**, or drop a file into the draft. Open Paywall hosts it and inserts the player. Photos up to 8 MB, audio up to 20 MB, video up to 45 MB (JPEG, PNG, WebP, GIF, MP4, WebM, MP3, M4A, WAV, OGG). **Paste a link** is still there for YouTube, Vimeo, Loom, or a file you already host. Media above the fold is free; everything below stays paid until unlock.
+
+Hosted files are public URLs — the paywall hides them in the article, the same way a pasted image link does. Anyone who already has the file URL can open it. On Railway this stays up when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set (bucket `article-media`). Without those, files sit on local disk and can disappear on restart.
 
 Optional **Preview how this might land** (MiroShark sim, ~$1 USDC on Base) sits under the draft. It never gates Publish. Needs `BASE_BUILDER_CODE` on Railway — see [docs/MIROSHARK.md](docs/MIROSHARK.md).
 
