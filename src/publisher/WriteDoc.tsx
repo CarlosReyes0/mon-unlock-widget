@@ -17,7 +17,6 @@ import {
   splitTextBlock,
   updateCaption,
   updateText,
-  visibleFoldIndex,
   type PaywallCaret,
   type WriteBlock,
   type WriteMediaBlock,
@@ -167,7 +166,6 @@ export function WriteDoc({
 
   const content = contentBlocks(blocks);
   const explicitAt = explicitFoldIndex(blocks);
-  const implicitAt = explicitAt == null ? visibleFoldIndex(blocks) : null;
   const empty = serializeWriteDoc(blocks) === "";
   const firstTextId = content.find((block) => block.type === "text")?.id;
 
@@ -241,13 +239,6 @@ export function WriteDoc({
           {explicitAt === index ? (
             <PaywallChip
               onRemove={onRemoveFold}
-              onDragKind={(kind) => {
-                dragKindRef.current = kind;
-              }}
-            />
-          ) : null}
-          {implicitAt === index ? (
-            <PaywallRule
               onDragKind={(kind) => {
                 dragKindRef.current = kind;
               }}
@@ -487,27 +478,6 @@ function PendingFigure({ label }: { label: string }) {
   return (
     <div className="mon-write__pending" role="status">
       {label}
-    </div>
-  );
-}
-
-function PaywallRule({ onDragKind }: { onDragKind: (kind: null | "fold") => void }) {
-  return (
-    <div
-      className="mon-write__rule"
-      draggable
-      role="separator"
-      aria-label="Free above, paid below. Drag to move."
-      title="Drag to choose what readers see for free"
-      onDragStart={(event) => {
-        event.dataTransfer.setData(FOLD_DRAG, "1");
-        event.dataTransfer.effectAllowed = "move";
-        onDragKind("fold");
-      }}
-      onDragEnd={() => onDragKind(null)}
-    >
-      <span>Free above · paid below</span>
-      <span className="mon-write__rule-hint">Drag to move</span>
     </div>
   );
 }

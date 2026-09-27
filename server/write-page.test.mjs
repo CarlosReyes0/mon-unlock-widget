@@ -20,7 +20,7 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(doc, /snippetFromPastedText/);
   assert.match(app, /WriteDoc/);
   assert.match(app, /WriteMediaSheet/);
-  assert.match(doc, /Free above · paid below/);
+  assert.match(doc, /Paywall · free above · paid below/);
   assert.match(doc, /Paywall · free above · paid below/);
   assert.match(doc, /Remove paywall/);
   assert.match(doc, /insertPaywall/);
@@ -39,7 +39,7 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /preferredSlug: reservedSlug/);
   assert.match(app, /onSlugReserved: setReservedSlug/);
   assert.match(app, /reservedSlug/);
-  assert.match(doc, /Free above · paid below/);
+  assert.match(doc, /Paywall · free above · paid below/);
   assert.match(app, /Delete draft/);
   assert.match(app, /onDeleteCurrentDraft/);
   assert.match(app, /Keep draft/);
