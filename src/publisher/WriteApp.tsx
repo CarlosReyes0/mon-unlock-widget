@@ -1,14 +1,5 @@
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import { locatePaywall } from "../core/split-post.js";
-import { snippetFromPastedText } from "../core/media-url.js";
-import {
-  classifyClientFile,
-  filesFromTransfer,
-  MEDIA_ACCEPT,
-  mediaLimitHint,
-  snippetForHostedFile,
-  uploadHostedMedia,
-} from "../core/media-file.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MEDIA_ACCEPT, mediaLimitHint } from "../core/media-file.js";
 import {
   createWriteDraft,
   deleteWriteDraft,
@@ -28,7 +19,8 @@ import {
 } from "../core/write-drafts.js";
 import { PublisherAuth } from "./PublisherAuth.js";
 import { SiteNav } from "./SiteNav.js";
-import { insertAtTextareaCursor, WriteMediaSheet } from "./WriteMediaSheet.js";
+import { WriteMediaSheet } from "./WriteMediaSheet.js";
+import { WriteDoc, type WriteDocHandle } from "./WriteDoc.js";
 import { MirosharkPreview } from "./MirosharkPreview.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
@@ -58,160 +50,6 @@ function syncDraftUrl(id: string) {
   window.history.replaceState({}, "", next);
 }
 
-export type WriteBodyHandle = {
-  insertSnippet: (snippet: string, note: string) => void;
-  focus: () => void;
-};
-
-const WriteBody = function WriteBody({
-  value,
-  onChange,
-  onMediaNote,
-  onHostFiles,
-  bodyRef,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  onMediaNote: (note: string) => void;
-  onHostFiles: (files: File[]) => void;
-  bodyRef: React.RefObject<WriteBodyHandle | null>;
-}) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const areaRef = useRef<HTMLTextAreaElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [foldTop, setFoldTop] = useState<number | null>(null);
-  const [dropping, setDropping] = useState(false);
-  const source = value.replace(/\r\n/g, "\n");
-  const fold = locatePaywall(source);
-
-  const layout = useCallback(() => {
-    const area = areaRef.current;
-    if (!area) return;
-    area.style.height = "auto";
-    area.style.height = `${area.scrollHeight}px`;
-
-    const measure = measureRef.current;
-    if (measure) {
-      const cs = window.getComputedStyle(area);
-      measure.style.width = `${area.clientWidth}px`;
-      measure.style.font = cs.font;
-      measure.style.fontSize = cs.fontSize;
-      measure.style.lineHeight = cs.lineHeight;
-      measure.style.letterSpacing = cs.letterSpacing;
-      measure.style.padding = cs.padding;
-    }
-    const anchor = measure?.querySelector("[data-fold-anchor]") as HTMLElement | null;
-    if (!fold.hasFold || !anchor) {
-      setFoldTop(null);
-      return;
-    }
-    setFoldTop(anchor.offsetTop);
-  }, [fold.hasFold, source]);
-
-  useLayoutEffect(() => {
-    layout();
-  }, [layout]);
-
-  useEffect(() => {
-    const wrap = wrapRef.current;
-    if (!wrap || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => layout());
-    ro.observe(wrap);
-    return () => ro.disconnect();
-  }, [layout]);
-
-  const insertSnippet = useCallback(
-    (snippet: string, note: string) => {
-      const area = areaRef.current;
-      if (!area) {
-        onChange(`${value.replace(/\s+$/, "")}\n${snippet.trim()}\n`);
-        onMediaNote(note);
-        return;
-      }
-      const { next, cursor } = insertAtTextareaCursor(area, area.value, snippet);
-      area.value = next;
-      onChange(next);
-      onMediaNote(note);
-      requestAnimationFrame(() => {
-        area.focus();
-        area.setSelectionRange(cursor, cursor);
-      });
-    },
-    [onChange, onMediaNote, value]
-  );
-
-  useImperativeHandle(
-    bodyRef,
-    () => ({
-      insertSnippet,
-      focus: () => areaRef.current?.focus(),
-    }),
-    [insertSnippet, bodyRef]
-  );
-
-  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const files = filesFromTransfer(e.clipboardData);
-    if (files.length) {
-      e.preventDefault();
-      onHostFiles(files);
-      return;
-    }
-    const text = e.clipboardData.getData("text/plain");
-    const snippet = snippetFromPastedText(text);
-    if (!snippet) return;
-    e.preventDefault();
-    insertSnippet(snippet, "Embedded from URL.");
-  }
-
-  function onDrop(e: React.DragEvent<HTMLTextAreaElement>) {
-    setDropping(false);
-    const files = filesFromTransfer(e.dataTransfer);
-    if (files.length) {
-      e.preventDefault();
-      onHostFiles(files);
-      return;
-    }
-    const text = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
-    const snippet = snippetFromPastedText(text);
-    if (!snippet) return;
-    e.preventDefault();
-    insertSnippet(snippet, "Embedded from URL.");
-  }
-
-  return (
-    <div className={`mon-write__body-wrap${dropping ? " is-dropping" : ""}`} ref={wrapRef}>
-      <textarea
-        id="writeBody"
-        ref={areaRef}
-        className="mon-write__body"
-        placeholder="Write, or paste a link. Drop a photo, video, or audio anytime."
-        value={value}
-        onChange={(e) => onChange(e.currentTarget.value)}
-        onPaste={onPaste}
-        onDragOver={(e) => {
-          const types = Array.from(e.dataTransfer?.types || []);
-          if (types.includes("text/uri-list") || types.includes("Files")) e.preventDefault();
-          if (types.includes("Files")) setDropping(true);
-        }}
-        onDragLeave={() => setDropping(false)}
-        onDrop={onDrop}
-      />
-      {fold.hasFold ? (
-        <div className="mon-write__fold-measure" ref={measureRef} aria-hidden="true">
-          {source.slice(0, fold.paidStart)}
-          <span data-fold-anchor="" />
-          {source.slice(fold.paidStart)}
-        </div>
-      ) : null}
-      {fold.hasFold && foldTop != null ? (
-        <div className="mon-write__fold" style={{ top: foldTop }}>
-          <span>Free above · paid below</span>
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
 export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -229,11 +67,10 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [error, setError] = useState("");
   const [mediaNote, setMediaNote] = useState("");
   const [mediaOpen, setMediaOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [publishedSlug, setPublishedSlug] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteNote, setDeleteNote] = useState("");
-  const bodyHandleRef = useRef<WriteBodyHandle | null>(null);
+  const bodyHandleRef = useRef<WriteDocHandle | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const hasDraft = Boolean(title.trim() || body.trim() || reservedSlug);
   const starters = promptsForDay();
@@ -473,33 +310,6 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     }
   }
 
-  async function onHostFiles(list: File[]) {
-    if (uploading) return;
-    const file = list[0];
-    if (!file) return;
-    const check = classifyClientFile(file);
-    if (!check.ok) {
-      setMediaNote(check.message);
-      return;
-    }
-    setUploading(true);
-    const verb = check.kind === "video" ? "video" : check.kind === "audio" ? "audio" : "photo";
-    setMediaNote(`Uploading ${verb}…`);
-    try {
-      const hosted = await uploadHostedMedia(file, check.contentType, file.name);
-      const snippet = snippetForHostedFile(hosted.url, hosted.kind, file.name);
-      const label = hosted.kind === "video" ? "Video" : hosted.kind === "audio" ? "Audio" : "Photo";
-      const more = list.length > 1 ? " Add the others one at a time." : "";
-      const stay = hosted.persistent ? "" : " It may disappear if this server restarts.";
-      bodyHandleRef.current?.insertSnippet(snippet, `${label} added.${stay}${more}`);
-    } catch (err) {
-      const msg = err instanceof Error && err.message ? err.message : "Couldn’t upload that file. Try again.";
-      setMediaNote(msg);
-    } finally {
-      setUploading(false);
-    }
-  }
-
   const draftNote = empty
     ? "Start anywhere. Saved on this device."
     : `${writeNudge(words)}${savedAt ? ` · ${formatSavedAt(savedAt, now)}` : ""}`;
@@ -599,30 +409,24 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           Body
         </label>
         <div className="mon-write__media-row">
-          <label className={`mon-write__media-btn${uploading ? " is-busy" : ""}`}>
-            {uploading ? "Uploading…" : "Add a photo, video, or audio"}
+          <label className="mon-write__media-btn" title={mediaLimitHint()}>
+            Add a photo, video, or audio
             <input
               type="file"
               accept={MEDIA_ACCEPT}
               className="mon-write__sr"
-              disabled={uploading}
               onChange={(e) => {
                 const files = Array.from(e.target.files || []);
                 e.target.value = "";
-                if (files.length) onHostFiles(files);
+                if (files.length) bodyHandleRef.current?.insertFiles(files);
               }}
             />
           </label>
-          <button
-            type="button"
-            className="mon-write__media-btn"
-            disabled={uploading}
-            onClick={() => setMediaOpen(true)}
-          >
+          <button type="button" className="mon-write__media-btn" onClick={() => setMediaOpen(true)}>
             Paste a link
           </button>
           <span className="mon-write__media-hint">
-            Or drop a file in the draft. {mediaLimitHint()} Above the fold is free.
+            It shows up in the piece. Drag the line to choose what’s free.
           </span>
         </div>
         {empty ? (
@@ -642,16 +446,15 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
             </div>
           </div>
         ) : null}
-        <WriteBody
+        <WriteDoc
           value={body}
           onChange={(next) => {
             setConfirmDelete(false);
             setDeleteNote("");
             setBody(next);
           }}
-          onMediaNote={setMediaNote}
-          onHostFiles={onHostFiles}
-          bodyRef={bodyHandleRef}
+          onNote={setMediaNote}
+          docRef={bodyHandleRef}
         />
         <p className="mon-write__draft">{mediaNote || deleteNote || draftNote}</p>
         <VoiceDrafts

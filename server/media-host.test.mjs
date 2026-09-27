@@ -176,9 +176,10 @@ test("server and vite both mount media hosting", () => {
   const index = fs.readFileSync(path.join(ROOT, "server/index.mjs"), "utf8");
   const vite = fs.readFileSync(path.join(ROOT, "vite.config.ts"), "utf8");
   const app = fs.readFileSync(path.join(ROOT, "src/publisher/WriteApp.tsx"), "utf8");
+  const doc = fs.readFileSync(path.join(ROOT, "src/publisher/WriteDoc.tsx"), "utf8");
   assert.match(index, /tryHandleMediaRequest/);
   assert.match(vite, /tryHandleMediaRequest/);
   assert.match(app, /Add a photo, video, or audio/);
-  assert.match(app, /uploadHostedMedia/);
+  assert.match(doc, /uploadHostedMedia/);
   assert.doesNotMatch(app, /We don’t host files yet/);
 });
