@@ -606,6 +606,125 @@ test("POST /api/agents/publish/validate accepts valid payload", async () => {
   assert.ok(body.quote.amount);
 });
 
+const ESSAY_PUBLISHER = "0x1111111111111111111111111111111111111111";
+
+function essayPublishJson(bodyChars) {
+  return JSON.stringify({
+    title: "The long essay",
+    articleId: "long-essay-1",
+    teaser: "A short free preview.",
+    body: "a".repeat(bodyChars),
+    publisher: ESSAY_PUBLISHER,
+    price: "0.50",
+  });
+}
+
+test("article routes accept a ~100KB essay and still reject bodies over 512KB", async () => {
+  const essay = essayPublishJson(100_000);
+  const essayBytes = Buffer.byteLength(essay);
+  assert.ok(essayBytes > 64_000, `essay should exceed the old 64KB cap, was ${essayBytes}`);
+  assert.ok(essayBytes < 512_000, `essay should fit the article cap, was ${essayBytes}`);
+
+  const validate = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: essay,
+  });
+  assert.equal(validate.status, 200);
+  const validated = await validate.json();
+  assert.equal(validated.ok, true);
+  assert.equal(validated.valid, true);
+  assert.ok(validated.quote.amount);
+
+  const parsePaste = [
+    "Title: The long essay",
+    "Teaser: A short free preview.",
+    "Price: 0.50",
+    "---",
+    "a".repeat(100_000),
+  ].join("\n");
+  const parsed = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/parse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paste: parsePaste, publisher: ESSAY_PUBLISHER }),
+  });
+  assert.equal(parsed.status, 200);
+  const parsedBody = await parsed.json();
+  assert.equal(parsedBody.ok, true);
+  assert.equal(parsedBody.input.body.length, 100_000);
+
+  const mpp = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: essay,
+  });
+  assert.equal(mpp.status, 503);
+  assert.equal((await mpp.json()).error, "mpp_not_configured");
+
+  const x402 = await fetch(`http://127.0.0.1:${PORT}/api/x402/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: essay,
+  });
+  assert.equal(x402.status, 503);
+  assert.equal((await x402.json()).error, "x402_not_configured");
+
+  const voice = await fetch(`http://127.0.0.1:${PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "The long essay",
+      teaser: "A short free preview.",
+      body: "a".repeat(100_000),
+    }),
+  });
+  assert.equal(voice.status, 200);
+  const voiceBody = await voice.json();
+  assert.notEqual(voiceBody.error, "body_too_large");
+
+  const preview = await fetch(`http://127.0.0.1:${PORT}/api/miroshark/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "The long essay", body: "a".repeat(100_000) }),
+  });
+  assert.equal(preview.status, 200);
+  const previewBody = await preview.json();
+  assert.notEqual(previewBody.error, "body_too_large");
+  assert.notEqual(previewBody.code, "invalid_json");
+
+  const tooBig = essayPublishJson(520_000);
+  assert.ok(Buffer.byteLength(tooBig) > 512_000);
+  const rejected = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: tooBig,
+  });
+  assert.equal(rejected.status, 413);
+  assert.equal((await rejected.json()).error, "body_too_large");
+
+  const voiceTooBig = await fetch(`http://127.0.0.1:${PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "The long essay", body: "a".repeat(520_000) }),
+  });
+  assert.equal(voiceTooBig.status, 413);
+
+  const previewTooBig = await fetch(`http://127.0.0.1:${PORT}/api/miroshark/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "The long essay", body: "a".repeat(520_000) }),
+  });
+  assert.equal(previewTooBig.status, 413);
+
+  const smallEndpoint = await fetch(`http://127.0.0.1:${PORT}/api/stripe/create-intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "x".repeat(80_000),
+  });
+  assert.ok(smallEndpoint.status >= 400);
+  assert.equal((await smallEndpoint.json()).error, "body_too_large");
+});
+
 test("POST /api/agents/publish returns 503 when MPP is not configured", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish`, {
     method: "POST",

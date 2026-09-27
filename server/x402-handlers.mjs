@@ -18,6 +18,7 @@ import {
   x402PublishAmountUsd,
   usdToUsdcAtomic,
 } from "./x402.mjs";
+import { ARTICLE_BODY_LIMIT, DEFAULT_JSON_BODY_LIMIT } from "./body-limit.mjs";
 
 function decodePathSlug(raw) {
   const s = String(raw || "").trim();
@@ -54,7 +55,7 @@ export async function handleX402Publish(req, res, { readBody, sendJson }) {
   let parsed = {};
   let parseError = null;
   try {
-    const raw = await readBody(req, 512_000);
+    const raw = await readBody(req, ARTICLE_BODY_LIMIT);
     parsed = raw ? JSON.parse(raw) : {};
   } catch (e) {
     if (e?.message === "body_too_large") {
@@ -114,7 +115,7 @@ export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
   let parsed = {};
   if (req.method === "POST") {
     try {
-      const raw = await readBody(req, 64_000);
+      const raw = await readBody(req, DEFAULT_JSON_BODY_LIMIT);
       parsed = raw ? JSON.parse(raw) : {};
     } catch (e) {
       if (e?.message === "body_too_large") {

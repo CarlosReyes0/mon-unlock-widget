@@ -17,6 +17,8 @@
  *
  * Publish / unlock must not call this module.
  */
+import { ARTICLE_BODY_LIMIT, readLimitedBody } from "./body-limit.mjs";
+
 export const MISSING_KEY_MESSAGE =
   "Voice drafts are off until an LLM key is set. Add VOICE_DRAFT_API_KEY on Railway (or OPENAI_API_KEY / ANTHROPIC_API_KEY). Drafts still never auto-post.";
 
@@ -69,22 +71,8 @@ function sendJson(res, status, body) {
   res.end(payload);
 }
 
-function readIncomingBody(req, limit = 64_000) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    req.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > limit) {
-        reject(new Error("body_too_large"));
-        req.destroy();
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
+function readIncomingBody(req, limit = ARTICLE_BODY_LIMIT) {
+  return readLimitedBody(req, limit);
 }
 
 function failSoft(code, message, extra = {}) {
@@ -506,7 +494,7 @@ export async function tryHandleVoiceDraftRequest(req, res) {
   if (method === "POST" && (pathOnly === "/api/voice-drafts" || pathOnly === "/api/voice-drafts/generate")) {
     let parsed = {};
     try {
-      const raw = await readIncomingBody(req);
+      const raw = await readIncomingBody(req, ARTICLE_BODY_LIMIT);
       parsed = raw ? JSON.parse(raw) : {};
     } catch (e) {
       sendJson(res, e?.message === "body_too_large" ? 413 : 400, {
