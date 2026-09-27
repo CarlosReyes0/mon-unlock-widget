@@ -217,8 +217,9 @@ function insertFoldAtContentIndex(blocks: WriteBlock[], contentIndex: number): W
 
 /**
  * Insert one paywall fold. A cursor in the middle of a paragraph splits there.
- * Otherwise the fold sits where the editor already draws the free/paid line,
- * or after the only paragraph. A second call does nothing.
+ * A cursor between paragraphs uses that boundary. Otherwise the fold sits where
+ * the editor already draws the free/paid line, or after the only paragraph.
+ * A second call does nothing.
  */
 export function insertPaywallFold(
   blocks: WriteBlock[],
@@ -239,6 +240,7 @@ export function insertPaywallFold(
     if (block?.type === "text") {
       const cursor = Math.max(0, Math.min(caret.cursor, block.text.length));
       const contentIndex = content.findIndex((item) => item.id === block.id);
+      // A caret in the middle of a paragraph is an explicit "fold goes here".
       if (cursor > 0 && cursor < block.text.length) {
         const split = splitTextBlock(blocks, block.id, cursor);
         const at = split.blocks.findIndex((item) => item.id === split.focusId);
@@ -246,9 +248,17 @@ export function insertPaywallFold(
         next.splice(at, 0, { id: newWriteBlockId(), type: "fold" });
         return { blocks: withTextAroundFold(next), focusId: split.focusId, cursor: 0 };
       }
-      if (contentIndex >= 0 && !(cursor === 0 && contentIndex === 0)) {
-        const insertAt = cursor === 0 ? contentIndex : contentIndex + 1;
-        const next = insertFoldAtContentIndex(blocks, insertAt);
+      // Caret on a boundary between blocks (start of a later paragraph, or end of one that
+      // still has writing after it). The end of the last paragraph is not a placement:
+      // that is just where typing stopped, so the free/paid line below wins.
+      const betweenBlocks =
+        contentIndex > 0 && cursor === 0
+          ? contentIndex
+          : contentIndex >= 0 && cursor === block.text.length && contentIndex < content.length - 1
+            ? contentIndex + 1
+            : null;
+      if (betweenBlocks != null) {
+        const next = insertFoldAtContentIndex(blocks, betweenBlocks);
         const foldAt = next.findIndex((item) => item.type === "fold");
         const focus = next.slice(foldAt + 1).find((item) => item.type === "text");
         return { blocks: next, focusId: focus?.id ?? null, cursor: 0 };

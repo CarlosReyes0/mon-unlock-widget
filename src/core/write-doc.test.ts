@@ -93,6 +93,17 @@ describe("write-doc", () => {
     assert.equal(splitPost(saved).body, "Two.");
   });
 
+  it("puts the fold back between paragraphs when the caret is only at the end", () => {
+    const blocks = parseWriteDoc("Readers see this teaser.\n\nReaders pay for this part.");
+    const last = blocks.filter((block) => block.type === "text").at(-1);
+    assert.ok(last && last.type === "text");
+    const inserted = insertPaywallFold(blocks, { id: last.id, cursor: last.text.length });
+    const saved = serializeWriteDoc(inserted.blocks);
+    assert.equal(splitPost(saved).teaser, "Readers see this teaser.");
+    assert.equal(splitPost(saved).body, "Readers pay for this part.");
+    assert.equal(saved.match(/^---$/gm)?.length, 1);
+  });
+
   it("removes the fold so it can be added again", () => {
     const blocks = parseWriteDoc("One.\n---\nTwo.");
     const removed = removeFold(blocks);
