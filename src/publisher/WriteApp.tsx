@@ -22,6 +22,8 @@ import { SiteNav } from "./SiteNav.js";
 import { WriteMediaSheet } from "./WriteMediaSheet.js";
 import { WriteDoc, type WriteDocHandle } from "./WriteDoc.js";
 import { MirosharkPreview, type MirosharkPreviewHandle } from "./MirosharkPreview.js";
+import { MirosharkPaySheet } from "./MirosharkPaySheet.js";
+import { signMirosharkUsdc, type MirosharkClientPayment } from "../core/miroshark-pay.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
 import { WriteDraftsPanel } from "./WriteDraftsPanel.js";
@@ -72,6 +74,10 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [deleteNote, setDeleteNote] = useState("");
   const [simBusy, setSimBusy] = useState(false);
   const [simNote, setSimNote] = useState("");
+  const [paySheet, setPaySheet] = useState<MirosharkClientPayment | null>(null);
+  const [payFrom, setPayFrom] = useState("");
+  const [payError, setPayError] = useState("");
+  const [payBusy, setPayBusy] = useState(false);
   const bodyHandleRef = useRef<WriteDocHandle | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const simRef = useRef<MirosharkPreviewHandle>(null);
@@ -267,6 +273,72 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     }
   }
 
+  function onSimResult(json: {
+    ok?: boolean;
+    code?: string;
+    message?: string;
+    clientPayment?: MirosharkClientPayment | null;
+    run?: { waitUrl?: string | null; shareUrl?: string | null };
+  } | null) {
+    if (!json || json.run?.waitUrl || json.run?.shareUrl) return;
+    if (json.code === "payment_required" && json.clientPayment) {
+      setPaySheet(json.clientPayment);
+      setPayFrom(window.__monPublisherAddress || "");
+      setPayError("");
+      setSimNote("");
+      return;
+    }
+    if (json.ok === false) {
+      setSimNote(json.message || "Preview did not run. Publish still works.");
+    }
+  }
+
+  async function onApproveSim() {
+    if (!paySheet || payBusy) return;
+    const from = window.__monPublisherAddress;
+    const provider = window.__monPublisherProvider as Eip1193Provider | undefined;
+    if (!from || !provider) {
+      setPayError("Sign in, then approve $1 USDC on Base.");
+      return;
+    }
+    setPayBusy(true);
+    setPayError("");
+    try {
+      const payment = await signMirosharkUsdc(provider, from, paySheet);
+      const res = await fetch("/api/miroshark/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body, payment }),
+      });
+      const json = (await res.json()) as {
+        message?: string;
+        run?: { waitUrl?: string | null; shareUrl?: string | null };
+      };
+      const destination = json?.run?.waitUrl || json?.run?.shareUrl;
+      if (destination) {
+        window.location.assign(destination);
+        return;
+      }
+      setPayError(json?.message || "The simulation did not start. Publish still works.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not approve the payment.";
+      setPayError(/reject|denied|cancel/i.test(msg) ? "Approval cancelled. Publish still works." : msg);
+    } finally {
+      setPayBusy(false);
+    }
+  }
+
+  async function onSimulate() {
+    if (!simRef.current || simBusy || payBusy) return;
+    setSimBusy(true);
+    setSimNote("");
+    try {
+      await simRef.current.start();
+    } finally {
+      setSimBusy(false);
+    }
+  }
+
   async function onPublish() {
     setError("");
     if (!title.trim() || !body.trim()) {
@@ -317,25 +389,6 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     ? "Start anywhere. Saved on this device."
     : `${writeNudge(words)}${savedAt ? ` · ${formatSavedAt(savedAt, now)}` : ""}`;
 
-  async function onSimulate() {
-    if (!simRef.current || simBusy) return;
-    setSimBusy(true);
-    setSimNote("");
-    try {
-      const json = await simRef.current.start();
-      if (json?.run?.waitUrl || json?.run?.shareUrl) return;
-      if (json && json.ok === false) {
-        setSimNote(
-          json.code === "payment_required"
-            ? "This sim needs $1 USDC on Base. Publish still works."
-            : json.message || "Preview did not run. Publish still works."
-        );
-      }
-    } finally {
-      setSimBusy(false);
-    }
-  }
-
   return (
     <div className="mon-write">
       <header className="mon-write__bar">
@@ -344,7 +397,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           <button
             type="button"
             className="mon-write__simulate"
-            disabled={simBusy}
+            disabled={simBusy || payBusy}
             onClick={() => void onSimulate()}
           >
             {simBusy ? "Starting…" : "Simulate how this lands with MiroShark"}
@@ -488,7 +541,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           docRef={bodyHandleRef}
         />
         <p className="mon-write__draft">{mediaNote || deleteNote || draftNote}</p>
-        <MirosharkPreview ref={simRef} title={title} body={body} />
+        <MirosharkPreview ref={simRef} title={title} body={body} onResult={onSimResult} />
         <VoiceDrafts
           title={title}
           body={body}
@@ -543,6 +596,20 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         onOpen={onOpenDraft}
         onDelete={onDeleteDraft}
       />
+      {paySheet ? (
+        <MirosharkPaySheet
+          payment={paySheet}
+          from={payFrom}
+          busy={payBusy}
+          error={payError}
+          onApprove={() => void onApproveSim()}
+          onClose={() => {
+            if (payBusy) return;
+            setPaySheet(null);
+            setPayError("");
+          }}
+        />
+      ) : null}
     </div>
   );
 }
