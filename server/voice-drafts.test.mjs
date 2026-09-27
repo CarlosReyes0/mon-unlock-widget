@@ -13,6 +13,7 @@ import {
   resolveVoiceDraftConfig,
   splitDraft,
   voiceDraftPublicStatus,
+  voiceDraftsVisible,
 } from "./voice-drafts.mjs";
 
 const KEYS = [
@@ -124,18 +125,49 @@ test("chat URL helpers do not double the path", () => {
 });
 
 test("status never leaks a key and flags drafts-only", () => {
-  const off = voiceDraftPublicStatus({});
+  const hidden = voiceDraftPublicStatus({ VOICE_DRAFT_API_KEY: "sk-secret-value-do-not-leak" });
+  assert.equal(hidden.visible, false);
+  assert.equal(hidden.enabled, false);
+  assert.equal(hidden.reason, "hidden");
+  assert.equal(JSON.stringify(hidden).includes("sk-secret-value-do-not-leak"), false);
+  assert.equal(voiceDraftsVisible({}), false);
+  assert.equal(voiceDraftsVisible({ VOICE_DRAFTS_VISIBLE: "true" }), true);
+
+  const off = voiceDraftPublicStatus({ VOICE_DRAFTS_VISIBLE: "true" });
   assert.equal(off.enabled, false);
+  assert.equal(off.visible, true);
   assert.equal(off.autopost, false);
   assert.equal(off.draftsOnly, true);
   assert.match(off.message, /VOICE_DRAFT_API_KEY/);
   assert.equal(off.provider, null);
 
-  const on = voiceDraftPublicStatus({ VOICE_DRAFT_API_KEY: "sk-secret-value-do-not-leak" });
+  const on = voiceDraftPublicStatus({
+    VOICE_DRAFTS_VISIBLE: "true",
+    VOICE_DRAFT_API_KEY: "sk-secret-value-do-not-leak",
+  });
   assert.equal(on.enabled, true);
+  assert.equal(on.visible, true);
   assert.equal(JSON.stringify(on).includes("sk-secret-value-do-not-leak"), false);
   assert.equal(on.autopost, false);
   assert.match(on.message, /Drafts only/i);
+});
+
+test("hidden drafts never call the model, even with a key", async () => {
+  let called = 0;
+  const out = await generateVoiceDrafts({
+    samples: ["A sample post."],
+    title: "Hello",
+    env: { VOICE_DRAFT_API_KEY: "sk-test" },
+    fetchImpl: async () => {
+      called += 1;
+      throw new Error("should not fetch");
+    },
+  });
+  assert.equal(called, 0);
+  assert.equal(out.ok, false);
+  assert.equal(out.code, "hidden");
+  assert.equal(out.visible, false);
+  assert.equal(out.autopost, false);
 });
 
 test("missing key fails soft without calling the LLM", async () => {
@@ -143,7 +175,7 @@ test("missing key fails soft without calling the LLM", async () => {
   const out = await generateVoiceDrafts({
     samples: ["A sample post."],
     title: "Hello",
-    env: {},
+    env: { VOICE_DRAFTS_VISIBLE: "true" },
     fetchImpl: async () => {
       called += 1;
       throw new Error("should not fetch");
@@ -166,6 +198,7 @@ test("mocked OpenAI returns 2–3 editable drafts and never posts", async () => 
     body: "Walking home in the rain.\n---\nPaid rest.",
     articleUrl: "https://example.com/articles/july-rain-walk",
     env: {
+      VOICE_DRAFTS_VISIBLE: "true",
       VOICE_DRAFT_API_KEY: "sk-test",
       VOICE_DRAFT_BASE_URL: "http://llm.test/v1",
     },
@@ -211,6 +244,7 @@ test("mocked Anthropic path extracts text blocks", async () => {
     samples: ["one liner"],
     title: "Hi",
     env: {
+      VOICE_DRAFTS_VISIBLE: "true",
       ANTHROPIC_API_KEY: "sk-ant-test",
       VOICE_DRAFT_BASE_URL: "http://llm.test",
     },
@@ -236,7 +270,11 @@ test("LLM 500 fails soft and does not look like a post", async () => {
   const out = await generateVoiceDrafts({
     samples: ["sample"],
     title: "Hi",
-    env: { VOICE_DRAFT_API_KEY: "sk-test", VOICE_DRAFT_BASE_URL: "http://llm.test/v1" },
+    env: {
+      VOICE_DRAFTS_VISIBLE: "true",
+      VOICE_DRAFT_API_KEY: "sk-test",
+      VOICE_DRAFT_BASE_URL: "http://llm.test/v1",
+    },
     fetchImpl: async () => ({
       ok: false,
       status: 500,

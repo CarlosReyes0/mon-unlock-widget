@@ -12,6 +12,8 @@
  *   VOICE_DRAFT_PROVIDER    — openai | anthropic (optional; auto-detected)
  *   VOICE_DRAFT_MODEL       — optional override
  *   VOICE_DRAFT_BASE_URL    — optional API origin (tests inject a mock here)
+ *   VOICE_DRAFTS_VISIBLE    — set to true to show the /write panel. Unset hides it
+ *                             and never calls the model.
  *
  * Publish / unlock must not call this module.
  */
@@ -20,6 +22,16 @@ export const MISSING_KEY_MESSAGE =
 
 export const DRAFTS_ONLY_MESSAGE =
   "Drafts only. Nothing posts from this page. Copy a card and send it yourself. Autopost is out of scope.";
+
+export const HIDDEN_MESSAGE = "Voice drafts are hidden. Nothing posts from this page.";
+
+/** Hidden unless explicitly turned on. A shared model key must not be reachable by default. */
+export function voiceDraftsVisible(env = process.env) {
+  const raw = String(env.VOICE_DRAFTS_VISIBLE || "")
+    .trim()
+    .toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
 
 export const SYSTEM_PROMPT = `You draft social posts in the writer's voice for Open Paywall (@openpaywall).
 
@@ -290,10 +302,26 @@ export function anthropicMessagesUrl(baseUrl) {
 }
 
 export function voiceDraftPublicStatus(env = process.env) {
+  const visible = voiceDraftsVisible(env);
   const cfg = resolveVoiceDraftConfig(env);
+  if (!visible) {
+    return {
+      ok: true,
+      enabled: false,
+      visible: false,
+      draftsOnly: true,
+      autopost: false,
+      reason: "hidden",
+      message: HIDDEN_MESSAGE,
+      provider: null,
+      model: null,
+      docs: "/VOICE_DRAFTS.md",
+    };
+  }
   return {
     ok: true,
     enabled: cfg.enabled,
+    visible: true,
     draftsOnly: true,
     autopost: false,
     reason: cfg.enabled ? null : "missing_api_key",
@@ -386,9 +414,13 @@ export async function generateVoiceDrafts({
   fetchImpl = fetch,
   env = process.env,
 } = {}) {
+  if (!voiceDraftsVisible(env)) {
+    return failSoft("hidden", HIDDEN_MESSAGE, { visible: false });
+  }
+
   const cfg = resolveVoiceDraftConfig(env);
   if (!cfg.apiKey) {
-    return failSoft("missing_api_key", MISSING_KEY_MESSAGE);
+    return failSoft("missing_api_key", MISSING_KEY_MESSAGE, { visible: true });
   }
 
   const split = splitDraft(body);

@@ -4,6 +4,7 @@ const STORAGE_BASE = "openpaywall-voice-samples";
 
 type VoiceStatus = {
   enabled?: boolean;
+  visible?: boolean;
   message?: string;
   draftsOnly?: boolean;
   autopost?: boolean;
@@ -207,6 +208,8 @@ export function VoiceDrafts({
     setReplySeed(text);
     await onCopy(text, "Reply seed copied. Paste it yourself — this page never posts.");
   }
+
+  if (info?.visible !== true) return null;
 
   return (
     <section className="mon-write__preview mon-write__voice" aria-label="Voice drafts">

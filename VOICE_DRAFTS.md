@@ -1,5 +1,7 @@
 # Voice drafts (optional)
 
+**Hidden by default.** The /write panel stays off, and `POST /api/voice-drafts` does not call a model, unless `VOICE_DRAFTS_VISIBLE=true` on the web service.
+
 Writer helper on **/write**: paste a few of your posts (or a short voice note), and Open Paywall drafts **2–3 X posts** in that voice for the current article.
 
 **Drafts only.** The human always copies and sends. This build does **not** post, schedule, or call the X write API. Gated autopost is future work, not this PR.
@@ -23,6 +25,7 @@ The repo has no built-in LLM. Set **one** key on the Railway **web** service (sa
 | `VOICE_DRAFT_PROVIDER` | No | `openai` (default) or `anthropic`. |
 | `VOICE_DRAFT_MODEL` | No | Default `gpt-4o-mini` or `claude-3-5-haiku-latest`. |
 | `VOICE_DRAFT_BASE_URL` | No | Override API origin (tests use a mock). OpenAI default `https://api.openai.com/v1`. |
+| `VOICE_DRAFTS_VISIBLE` | No | `true` shows the panel and allows drafting. Unset or anything else hides it and spends nothing. |
 
 If no key is set, the panel still renders with “drafts only” copy and generate fail-softs. CI never spends: tests mock the LLM.
 

@@ -53,6 +53,7 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     VOICE_DRAFT_API_KEY: "",
     OPENAI_API_KEY: "",
     ANTHROPIC_API_KEY: "",
+    VOICE_DRAFTS_VISIBLE: "",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -539,9 +540,11 @@ test("GET /api/voice-drafts/status is disabled without an LLM key", async () => 
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.enabled, false);
+  assert.equal(body.visible, false);
+  assert.equal(body.reason, "hidden");
   assert.equal(body.draftsOnly, true);
   assert.equal(body.autopost, false);
-  assert.match(body.message, /VOICE_DRAFT_API_KEY/);
+  assert.doesNotMatch(JSON.stringify(body), /sk-/);
 });
 
 test("GET /.well-known/skills/open-paywall-x402/SKILL.md is served", async () => {
