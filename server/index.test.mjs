@@ -43,6 +43,7 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     STRIPE_WEBHOOK_SECRET: "",
     SUPABASE_URL: "",
     SUPABASE_SERVICE_ROLE_KEY: "",
+    MEDIA_DIR: path.join(os.tmpdir(), "op-media-index-test"),
     MPP_SECRET_KEY: "",
     MPP_TEMPO_RECIPIENT: "",
     MPP_DEV_BYPASS: "",
@@ -630,4 +631,28 @@ test("POST /api/agents/publish empty probe still hits MPP gate (not 400)", async
   assert.equal(res.status, 503);
   const body = await res.json();
   assert.equal(body.error, "mpp_not_configured");
+});
+
+test("GET /api/media/status hosts files on disk when Supabase is unset", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/media/status`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.hosting, true);
+  assert.equal(body.persistent, false);
+  assert.equal(body.limits.image, 8 * 1024 * 1024);
+});
+
+test("GET /server/data is not served as a static file", async () => {
+  const dir = path.join(ROOT, "server/data");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "not-public.txt");
+  fs.writeFileSync(file, "secret-token");
+  try {
+    const res = await fetch(`http://127.0.0.1:${PORT}/server/data/not-public.txt`);
+    assert.equal(res.status, 404);
+    const text = await res.text();
+    assert.doesNotMatch(text, /secret-token/);
+  } finally {
+    fs.unlinkSync(file);
+  }
 });

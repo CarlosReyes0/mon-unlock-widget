@@ -11,11 +11,19 @@ test("write page is title + body + Publish, not an embed form", () => {
   const html = fs.readFileSync(path.join(ROOT, "write.html"), "utf8");
   assert.match(html, /Write — Open Paywall/);
   assert.match(app, /Publish/);
-  assert.match(app, /Write, or paste/);
-  assert.match(app, /Add image, audio, or video/);
-  assert.match(app, /snippetFromPastedText/);
+  const doc = fs.readFileSync(path.join(ROOT, "src/publisher/WriteDoc.tsx"), "utf8");
+  const model = fs.readFileSync(path.join(ROOT, "src/core/write-doc.ts"), "utf8");
+  assert.match(doc, /Write, or paste/);
+  assert.match(app, /Add a photo, video, or audio/);
+  assert.match(doc, /uploadHostedMedia/);
+  assert.match(app, /type="file"/);
+  assert.match(doc, /snippetFromPastedText/);
+  assert.match(app, /WriteDoc/);
   assert.match(app, /WriteMediaSheet/);
-  assert.match(app, /We don’t host files yet/);
+  assert.match(doc, /Free above · paid below/);
+  assert.match(model, /visibleFoldIndex/);
+  assert.match(app, /Paste a link/);
+  assert.doesNotMatch(app, /We don’t host files yet/);
   assert.match(app, /\/articles\/\$\{encodeURIComponent\(slug\)\}/);
   assert.doesNotMatch(app, /articleId/);
   assert.doesNotMatch(app, /paymentAsset/);
@@ -24,12 +32,12 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /preferredSlug: reservedSlug/);
   assert.match(app, /onSlugReserved: setReservedSlug/);
   assert.match(app, /reservedSlug/);
-  assert.match(app, /Free above · paid below/);
+  assert.match(doc, /Free above · paid below/);
   assert.match(app, /Delete draft/);
   assert.match(app, /onDeleteCurrentDraft/);
   assert.match(app, /Keep draft/);
   assert.doesNotMatch(app, /DRAFT_KEY/);
-  assert.match(app, /locatePaywall/);
+  assert.match(model, /type: "fold"/);
   assert.match(app, /MirosharkPreview/);
   assert.match(app, /VoiceDrafts/);
   assert.match(app, /ArticleNftMint/);
@@ -126,9 +134,9 @@ test("publisher auth prefers a connected wallet over the Privy embedded wallet",
   assert.match(auth, /mapWalletSendToEthSend/);
 });
 
-test("write media sheet inserts URL snippets without hosting files", () => {
+test("write media sheet still accepts pasted links, including audio", () => {
   const sheet = fs.readFileSync(path.join(ROOT, "src/publisher/WriteMediaSheet.tsx"), "utf8");
-  assert.match(sheet, /Add image, audio, or video/);
+  assert.match(sheet, /Paste a link/);
   assert.match(sheet, /validateMediaUrl/);
   assert.match(sheet, /id: "audio"/);
   assert.match(sheet, /YouTube, Vimeo, and Loom/);

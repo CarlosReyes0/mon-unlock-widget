@@ -53,6 +53,7 @@ import { x402Status } from "./x402.mjs";
 import { handleX402Publish, handleX402Unlock } from "./x402-handlers.mjs";
 import { mirosharkPublicStatus, tryHandleMirosharkRequest } from "./miroshark.mjs";
 import { tryHandleVoiceDraftRequest, voiceDraftPublicStatus } from "./voice-drafts.mjs";
+import { tryHandleMediaRequest, mediaStatus } from "./media-host.mjs";
 import { buildOpenApiDocument } from "./openapi.mjs";
 import {
   listPublicArticles,
@@ -148,7 +149,7 @@ function cors(res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept, X-PAYMENT, PAYMENT-SIGNATURE"
+    "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept, X-PAYMENT, PAYMENT-SIGNATURE, X-Media-Name"
   );
   res.setHeader(
     "Access-Control-Expose-Headers",
@@ -368,7 +369,23 @@ function serveOgJpeg(res, buf, method) {
   return res.end(body);
 }
 
+function isPrivateRuntimePath(urlPath) {
+  let decoded = String(urlPath || "").split("?")[0];
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    return true;
+  }
+  const cleaned = path.posix.normalize(decoded.startsWith("/") ? decoded : `/${decoded}`);
+  return cleaned === "/server" || cleaned.startsWith("/server/");
+}
+
 function serveStatic(req, res, urlPath) {
+  if (isPrivateRuntimePath(urlPath)) {
+    cors(res);
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("Not found");
+  }
   let filePath = safeJoin(ROOT, urlPath === "/" ? "/index.html" : urlPath);
   if (!filePath) {
     cors(res);
@@ -450,6 +467,7 @@ const server = http.createServer(async (req, res) => {
 
   if (await tryHandleMirosharkRequest(req, res)) return;
   if (await tryHandleVoiceDraftRequest(req, res)) return;
+  if (await tryHandleMediaRequest(req, res)) return;
 
   if (method === "POST" && url.pathname === "/api/coinbase/session-token") {
     return handleSessionToken(req, res);
@@ -1315,6 +1333,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} x402=${x402Status().configured} miroshark=${mirosharkPublicStatus().enabled} voiceDrafts=${voiceDraftPublicStatus().enabled} relayer=${relayerConfigured()})`
+    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} x402=${x402Status().configured} miroshark=${mirosharkPublicStatus().enabled} voiceDrafts=${voiceDraftPublicStatus().enabled} relayer=${relayerConfigured()} media=${mediaStatus().persistent ? "supabase" : "disk"})`
   );
 });

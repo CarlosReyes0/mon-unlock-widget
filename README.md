@@ -171,7 +171,7 @@ Output: `dist/mon-unlock.js` and `dist/mon-unlock.css`.
 
 ## Media cookbook (pictures, audio, videos)
 
-On **/write**, paste a public image, MP3, MP4, or YouTube/Vimeo/Loom URL — or use **Add image, audio, or video**. The sanitizer still accepts the same HTML if you type it:
+On **/write**, tap **Add a photo, video, or audio** or drop a file into the draft. Open Paywall hosts it (JPEG, PNG, WebP, GIF, MP4, WebM, MP3, M4A, WAV, OGG — photos 8 MB, audio 20 MB, video 45 MB) and inserts the player. **Paste a link** still works for YouTube, Vimeo, Loom, or a file URL. The sanitizer accepts the same HTML if you type it:
 
 ### Image
 
