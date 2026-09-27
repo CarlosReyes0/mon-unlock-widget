@@ -1,6 +1,6 @@
 # MiroShark preview + x402aff affiliate (spike)
 
-Optional Write helper: **Simulate how this lands with MiroShark** runs a [MiroShark](https://www.miroshark.xyz/) 25-agent social sim on the draft. The control is in the write bar, in the Drafts list, and under the piece. **Publish does not wait on it** and does not fail if the sim errors.
+Optional Write helper: **Simulate how this lands with MiroShark** runs a [MiroShark](https://www.miroshark.xyz/) 25-agent social sim on the draft. The control is in the write bar and under the piece. The bar button starts the sim and opens it when MiroShark returns a run link. **Publish does not wait on it** and does not fail if the sim errors.
 
 Open Paywall is the **affiliate / builder**. When we (or a client wallet) pay MiroShark’s x402 `POST /run` (~$1 USDC), we attach Carlos’s **Base Builder Code** so MiroShark’s first-party [x402aff](https://github.com/MiroShark/x402aff) / 0xSplits path can pay the documented cut (default **~10% of the $1 run**, about **$0.10 USDC**) to the registered builder payout wallet.
 

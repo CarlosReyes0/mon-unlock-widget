@@ -8,7 +8,7 @@ The draft is a document. Type, and press Enter for a new paragraph. **Add a phot
 
 Hosted files are public URLs — the paywall hides them in the article, the same way a pasted image link does. Anyone who already has the file URL can open it. On Railway this stays up when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set (bucket `article-media`). Without those, files sit on local disk and can disappear on restart.
 
-**Simulate how this lands with MiroShark** (~$1 USDC on Base) is in the write bar, in the Drafts list, and under the piece. It never gates Publish. Needs `BASE_BUILDER_CODE` on Railway — see [docs/MIROSHARK.md](docs/MIROSHARK.md).
+**Simulate how this lands with MiroShark** (~$1 USDC on Base) is in the write bar and under the piece. The bar button starts the sim. It never gates Publish. Needs `BASE_BUILDER_CODE` on Railway — see [docs/MIROSHARK.md](docs/MIROSHARK.md).
 
 Share that URL on X or iMessage: the page ships Open Graph / Twitter Card tags so the preview shows the title, teaser, and a photo. Articles do not have a cover-image field yet, so every post uses the default Open Paywall card (`/assets/og-default.jpg`) until that lands.
 

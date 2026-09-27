@@ -7,7 +7,6 @@ export function WriteDraftsPanel({
   activeId,
   now,
   onClose,
-  onSimulate,
   onNew,
   onOpen,
   onDelete,
@@ -17,7 +16,6 @@ export function WriteDraftsPanel({
   activeId: string;
   now: number;
   onClose: () => void;
-  onSimulate: () => void;
   onNew: () => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -43,9 +41,6 @@ export function WriteDraftsPanel({
         <p className="mon-write__preview-copy">
           Saved in this browser. Sign-in is only for Publish. Start a second piece without losing the first.
         </p>
-        <button type="button" className="mon-write__simulate mon-write__simulate--block" onClick={onSimulate}>
-          Simulate how this lands with MiroShark
-        </button>
         <button type="button" className="mon-write__media-btn" onClick={onNew}>
           New draft
         </button>

@@ -334,30 +334,6 @@
   cursor: wait;
 }
 
-.mon-write__simulate--block {
-  display: block;
-  width: 100%;
-  max-width: none;
-  margin: 0 0 0.75rem;
-}
-
-#simulate-miroshark {
-  scroll-margin-top: 1.5rem;
-}
-
-.mon-write__preview.is-highlight {
-  animation: mon-simulate-flash 1.4s ease;
-}
-
-@keyframes mon-simulate-flash {
-  0% {
-    background: #f0fdfa;
-  }
-  100% {
-    background: transparent;
-  }
-}
-
 .mon-write__drafts-btn {
   appearance: none;
   border: 1px solid #e7e5e4;
@@ -378,6 +354,15 @@
 
 .mon-write__publish {
   flex-shrink: 0;
+}
+
+.mon-write__sim-note {
+  margin: 0;
+  padding: 0.65rem 1.5rem;
+  background: #f0fdfa;
+  color: #115e59;
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 
 .mon-write__page {
