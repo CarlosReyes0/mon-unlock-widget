@@ -48,9 +48,12 @@ test("register.html exposes Copy signed embed UI", async () => {
   assert.match(html, /tryRelayRegister/);
   assert.match(html, /\/api\/relay\/register/);
   // Literal </script> inside the inline module would truncate the page script in browsers.
-  const moduleStart = html.indexOf('<script type="module">');
+  // The server may stamp a CSP nonce onto the tag: <script nonce="…" type="module">.
+  const open = html.match(/<script\b(?![^>]*\bsrc\s*=)[^>]*type="module"[^>]*>/);
+  assert.ok(open, "inline module script");
+  const moduleStart = open.index;
   assert.ok(moduleStart > 0);
-  const afterModule = html.slice(moduleStart + '<script type="module">'.length);
+  const afterModule = html.slice(moduleStart + open[0].length);
   const firstClose = afterModule.indexOf("</script>");
   const moduleBody = afterModule.slice(0, firstClose);
   assert.match(moduleBody, /scriptClose/);
