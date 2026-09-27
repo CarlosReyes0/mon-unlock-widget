@@ -341,6 +341,10 @@
   margin: 0 0 0.75rem;
 }
 
+#simulate-miroshark {
+  scroll-margin-top: 1.5rem;
+}
+
 .mon-write__preview.is-highlight {
   animation: mon-simulate-flash 1.4s ease;
 }

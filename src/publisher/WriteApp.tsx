@@ -317,7 +317,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   function focusSimulate() {
     const el = document.getElementById("simulate-miroshark");
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.classList.remove("is-highlight");
     void el.offsetWidth;
     el.classList.add("is-highlight");
