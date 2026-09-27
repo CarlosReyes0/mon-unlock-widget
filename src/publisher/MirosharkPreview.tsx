@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import type { MirosharkClientPayment } from "../core/miroshark-pay.js";
 
 type PreviewStatus = {
   enabled?: boolean;
@@ -14,6 +15,7 @@ type PreviewResult = {
   message?: string;
   summary?: string;
   paid?: boolean;
+  clientPayment?: MirosharkClientPayment | null;
   run?: {
     runId?: string | null;
     status?: string | null;
@@ -47,8 +49,10 @@ export type MirosharkPreviewHandle = {
   start: () => Promise<PreviewResult | null>;
 };
 
-export const MirosharkPreview = forwardRef<MirosharkPreviewHandle, { title: string; body: string }>(
-  function MirosharkPreview({ title, body }, ref) {
+export const MirosharkPreview = forwardRef<
+  MirosharkPreviewHandle,
+  { title: string; body: string; onResult?: (result: PreviewResult | null) => void }
+>(function MirosharkPreview({ title, body, onResult }, ref) {
   const [info, setInfo] = useState<PreviewStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<PreviewResult | null>(null);
@@ -103,11 +107,16 @@ export const MirosharkPreview = forwardRef<MirosharkPreviewHandle, { title: stri
         body: JSON.stringify({ title, body }),
       });
       const json = (await res.json()) as PreviewResult;
-      setResult(json);
       setNote("");
       const destination = json?.run?.waitUrl || json?.run?.shareUrl;
-      if (destination) window.location.assign(destination);
-      else if (json?.ok && json.run?.runId) void pollRun(json.run.runId);
+      if (json?.code === "payment_required") {
+        setResult(null);
+      } else {
+        setResult(json);
+        if (destination) window.location.assign(destination);
+        else if (json?.ok && json.run?.runId) void pollRun(json.run.runId);
+      }
+      onResult?.(json);
       return json;
     } catch {
       const failed: PreviewResult = {
@@ -117,6 +126,7 @@ export const MirosharkPreview = forwardRef<MirosharkPreviewHandle, { title: stri
       };
       setResult(failed);
       setNote("");
+      onResult?.(failed);
       return failed;
     } finally {
       setBusy(false);
@@ -139,10 +149,10 @@ export const MirosharkPreview = forwardRef<MirosharkPreviewHandle, { title: stri
       <h2 className="mon-write__preview-title">Simulate how this lands with MiroShark</h2>
       <p className="mon-write__preview-copy">
         {enabled
-          ? `A 25-agent sim (~$${info?.amountUsd || "1.00"} USDC on Base) models reader reaction. It does not block Publish.${
+          ? `A 25-agent sim ($${info?.amountUsd || "1.00"} USDC on Base) models reader reaction. It does not block Publish.${
               info?.serverPayer
-                ? " This server can pay the $1 run."
-                : " If no server payer is set, you get the x402 challenge instead of a live sim."
+                ? " This server pays the $1 run."
+                : " Your wallet approves the $1, then the simulation page opens."
             }`
           : info?.message ||
             "Set BASE_BUILDER_CODE on Railway to enable this. Get a code at dashboard.base.org → Settings → Builder Codes. Do not invent a code."}

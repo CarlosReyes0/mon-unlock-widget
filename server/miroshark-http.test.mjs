@@ -10,6 +10,7 @@ import { test, after } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodeJsonB64OrJson } from "./x402.mjs";
+import { privateKeyToAccount } from "viem/accounts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -195,6 +196,59 @@ test("POST /api/miroshark/preview returns 402 challenge and sends X-Builder-Code
   assert.equal(body.builderCodeAttached, true);
   assert.ok(seen.some((r) => r.path === "/run" && r.builder === BUILDER && !r.payment));
   assert.match(JSON.stringify(body.paymentRequired.accepts), /eip155:8453/);
+});
+
+test("POST /api/miroshark/preview with a writer signature opens the sim", async () => {
+  seen.length = 0;
+  mockMode = "402";
+  const account = privateKeyToAccount(PAYER_KEY);
+  const first = await fetch(`${origin}/api/miroshark/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "July rain walk",
+      body: "Walking home in the rain.\n\nThe paid rest of the piece.",
+    }),
+  });
+  const challenge = await first.json();
+  assert.equal(challenge.code, "payment_required");
+  const pay = challenge.clientPayment;
+  const signature = await account.signTypedData({
+    domain: pay.domain,
+    types: pay.types,
+    primaryType: pay.primaryType,
+    message: {
+      from: account.address,
+      to: pay.message.to,
+      value: BigInt(pay.message.value),
+      validAfter: BigInt(pay.message.validAfter),
+      validBefore: BigInt(pay.message.validBefore),
+      nonce: pay.message.nonce,
+    },
+  });
+  const res = await fetch(`${origin}/api/miroshark/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "July rain walk",
+      body: "Walking home in the rain.\n\nThe paid rest of the piece.",
+      payment: {
+        signature,
+        authorization: { from: account.address, ...pay.message },
+      },
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.paid, true);
+  assert.match(body.run.waitUrl, /\/wait\/run_bbbbbbbbbbbb$/);
+  const paid = seen.find((r) => r.path === "/run" && r.payment);
+  assert.ok(paid);
+  assert.equal(paid.builder, BUILDER);
+  const decoded = decodeJsonB64OrJson(paid.payment);
+  assert.equal(decoded.payload.authorization.from.toLowerCase(), account.address.toLowerCase());
+  assert.deepEqual(decoded.extensions["builder-code"].info.s, [BUILDER, "x402aff"]);
 });
 
 test("POST /api/miroshark/preview with server payer pays Base and stamps x402aff s", async () => {

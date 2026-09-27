@@ -9,11 +9,16 @@
  * Env:
  *   BASE_BUILDER_CODE              — required to enable (never invented)
  *   MIROSHARK_BASE_URL             — default https://x402.miroshark.xyz
- *   MIROSHARK_X402_PRIVATE_KEY     — optional server-side $1 USDC payer (spike)
+ *   MIROSHARK_X402_PRIVATE_KEY     — optional server-side $1 USDC payer
+ *
+ * With no server payer, Write asks the signed-in wallet to approve the $1
+ * USDC authorization on Base, then this module retries POST /run and the
+ * browser opens MiroShark’s simulation page.
  *
  * Publish must not call this module.
  */
 import { randomBytes } from "node:crypto";
+import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { decodeJsonB64OrJson, encodeJsonB64 } from "./x402.mjs";
 
@@ -309,6 +314,167 @@ export async function signBaseExactPayment({ accept, challenge, builderCode, pri
   return { envelope, header: encodeJsonB64(envelope), from: account.address };
 }
 
+function amountUsdFromBaseUnits(amount) {
+  try {
+    const raw = BigInt(amount);
+    const whole = raw / 1_000_000n;
+    const frac = (raw % 1_000_000n).toString().padStart(6, "0").slice(0, 2);
+    return `${whole}.${frac}`;
+  } catch {
+    return "1.00";
+  }
+}
+
+function isAddress(value) {
+  return /^0x[a-fA-F0-9]{40}$/.test(String(value || ""));
+}
+
+/**
+ * Signable $1 (or whatever the 402 charges) for the writer’s wallet.
+ * `from` is filled in by the browser before eth_signTypedData_v4.
+ */
+export function buildClientPayment(accept, nowMs = Date.now()) {
+  if (!accept || typeof accept !== "object") return null;
+  const payTo = String(accept.payTo || "");
+  const amount = String(accept.amount || accept.maxAmountRequired || "");
+  const asset = String(accept.asset || "");
+  if (!isAddress(payTo) || !/^\d+$/.test(amount) || amount === "0" || !isAddress(asset)) return null;
+  const extra = accept.extra && typeof accept.extra === "object" ? accept.extra : {};
+  const timeout = Number(accept.maxTimeoutSeconds);
+  const windowSec = Number.isFinite(timeout) && timeout > 0 ? Math.min(timeout, 86_400) : 300;
+  const validBefore = String(Math.floor(Number(nowMs) / 1000) + windowSec);
+  const nonce = `0x${randomBytes(32).toString("hex")}`;
+  return {
+    chainId: BASE_CHAIN_ID,
+    amountUsd: amountUsdFromBaseUnits(amount),
+    asset,
+    payTo,
+    amount,
+    domain: {
+      name: String(extra.name || "USD Coin"),
+      version: String(extra.version || "2"),
+      chainId: BASE_CHAIN_ID,
+      verifyingContract: asset,
+    },
+    types: eip3009Types(),
+    primaryType: "TransferWithAuthorization",
+    message: {
+      to: payTo,
+      value: amount,
+      validAfter: "0",
+      validBefore,
+      nonce,
+    },
+  };
+}
+
+function authorizationMatchesAccept(accept, authorization) {
+  if (!authorization || typeof authorization !== "object") return false;
+  const payTo = String(accept?.payTo || "").toLowerCase();
+  const amount = String(accept?.amount || accept?.maxAmountRequired || "");
+  const to = String(authorization.to || "").toLowerCase();
+  if (!isAddress(payTo) || !isAddress(authorization.from) || !isAddress(to)) return false;
+  if (to !== payTo) return false;
+  try {
+    if (BigInt(authorization.value) !== BigInt(amount)) return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+function authorizationDeadlineOk(authorization, nowMs) {
+  let validAfter;
+  let validBefore;
+  try {
+    validAfter = BigInt(authorization.validAfter);
+    validBefore = BigInt(authorization.validBefore);
+  } catch {
+    return false;
+  }
+  const now = BigInt(Math.floor(Number(nowMs) / 1000));
+  if (validAfter < 0n || validAfter > now + 120n) return false;
+  if (validBefore <= now) return false;
+  if (validBefore > now + 86_400n) return false;
+  return /^0x[a-fA-F0-9]{64}$/.test(String(authorization.nonce || ""));
+}
+
+/**
+ * Rebuild the x402 v2 envelope from a writer’s wallet signature.
+ * The signed `to` and `value` must match this 402’s Base accept.
+ */
+export async function envelopeFromClientPayment({ accept, challenge, builderCode, payment, nowMs }) {
+  const authorization = payment?.authorization;
+  const signature = String(payment?.signature || "");
+  if (!/^0x[a-fA-F0-9]{130}$/.test(signature)) {
+    return { ok: false, code: "payment_invalid", message: "Could not read the wallet approval. Publish still works." };
+  }
+  if (!authorizationMatchesAccept(accept, authorization)) {
+    return {
+      ok: false,
+      code: "payment_invalid",
+      message: "That approval was not for this $1 USDC charge. Publish still works.",
+    };
+  }
+  if (!authorizationDeadlineOk(authorization, nowMs || Date.now())) {
+    return {
+      ok: false,
+      code: "payment_invalid",
+      message: "That approval expired. Tap Simulate again. Publish still works.",
+    };
+  }
+  const extra = accept.extra && typeof accept.extra === "object" ? accept.extra : {};
+  let recovered;
+  try {
+    recovered = await recoverTypedDataAddress({
+      domain: {
+        name: String(extra.name || "USD Coin"),
+        version: String(extra.version || "2"),
+        chainId: BASE_CHAIN_ID,
+        verifyingContract: accept.asset,
+      },
+      types: eip3009Types(),
+      primaryType: "TransferWithAuthorization",
+      message: {
+        from: authorization.from,
+        to: authorization.to,
+        value: BigInt(authorization.value),
+        validAfter: BigInt(authorization.validAfter),
+        validBefore: BigInt(authorization.validBefore),
+        nonce: authorization.nonce,
+      },
+      signature,
+    });
+  } catch {
+    return { ok: false, code: "payment_invalid", message: "Could not verify the wallet approval. Publish still works." };
+  }
+  if (recovered.toLowerCase() !== String(authorization.from).toLowerCase()) {
+    return {
+      ok: false,
+      code: "payment_invalid",
+      message: "The approval did not come from the signed-in wallet. Publish still works.",
+    };
+  }
+  const envelope = {
+    x402Version: 2,
+    accepted: accept,
+    payload: {
+      signature,
+      authorization: {
+        from: authorization.from,
+        to: authorization.to,
+        value: String(authorization.value),
+        validAfter: String(authorization.validAfter),
+        validBefore: String(authorization.validBefore),
+        nonce: authorization.nonce,
+      },
+    },
+    extensions: builderCodePaymentExtensions(builderCode, challenge),
+  };
+  if (challenge?.resource) envelope.resource = challenge.resource;
+  return { ok: true, envelope, header: encodeJsonB64(envelope), from: recovered };
+}
+
 function publicRun(data) {
   const row = data && typeof data === "object" ? data : {};
   const nested = row.data && typeof row.data === "object" ? row.data : row;
@@ -364,9 +530,62 @@ function failSoft(code, message, extra = {}) {
   };
 }
 
+async function submitPaidRun({
+  fetchImpl,
+  runUrl,
+  headers,
+  payload,
+  paymentHeader,
+  from,
+  builderCode,
+  challenge,
+  rejectedMessage,
+}) {
+  let second;
+  try {
+    second = await fetchJson(fetchImpl, runUrl, {
+      method: "POST",
+      headers: {
+        ...headers,
+        "PAYMENT-SIGNATURE": paymentHeader,
+      },
+      body: payload,
+    });
+  } catch (e) {
+    return failSoft(
+      "miroshark_unreachable",
+      "MiroShark did not accept the payment. Publish still works without a preview.",
+      { error: e?.message || "fetch_failed", affiliate: affiliateMeta(builderCode) }
+    );
+  }
+
+  if (second.res.status === 202 || second.res.status === 200) {
+    return {
+      ok: true,
+      run: publicRun(second.json),
+      affiliate: affiliateMeta(builderCode),
+      paid: true,
+      payer: from,
+      paymentNetwork: BASE_CAIP2,
+    };
+  }
+
+  return failSoft(
+    "payment_rejected",
+    rejectedMessage ||
+      "MiroShark did not accept the $1 USDC payment. This wallet needs $1 USDC on Base. Publish still works.",
+    {
+      status: second.res.status,
+      affiliate: affiliateMeta(builderCode),
+      paymentRequired: parsePaymentRequired(second.res, second.text) || challenge,
+    }
+  );
+}
+
 export async function requestMirosharkPreview({
   title,
   body,
+  payment,
   fetchImpl = fetch,
   nowMs = Date.now(),
 } = {}) {
@@ -436,19 +655,57 @@ export async function requestMirosharkPreview({
 
   const challenge = parsePaymentRequired(first.res, first.text);
   const accept = pickBaseAccept(challenge?.accepts);
+  const clientPayment = buildClientPayment(accept, nowMs);
   const paymentRequired = {
     ok: false,
     code: "payment_required",
-    message:
-      "MiroShark needs $1 USDC on Base to run the sim. No server payer is configured — set MIROSHARK_X402_PRIVATE_KEY only if this process should pay. Otherwise return this 402 to a client wallet. Publish is unchanged.",
-    amountUsd: "1.00",
+    message: clientPayment
+      ? "Approve $1 USDC on Base to open the simulation. Publish still works."
+      : "MiroShark’s $1 charge had no Base USDC option. Publish still works.",
+    amountUsd: clientPayment?.amountUsd || "1.00",
     network: BASE_CAIP2,
     asset: "USDC",
     builderCodeAttached: true,
     affiliate: affiliateMeta(builderCode),
     paymentRequired: challenge,
+    clientPayment,
     miroshark: { method: "POST", url: runUrl },
   };
+
+  if (payment?.signature || payment?.authorization) {
+    if (!accept) {
+      return failSoft(
+        "base_accept_missing",
+        "MiroShark’s 402 had no Base (eip155:8453) accept, so the wallet payment cannot be sent. Publish still works.",
+        { affiliate: affiliateMeta(builderCode), paymentRequired: challenge }
+      );
+    }
+    const built = await envelopeFromClientPayment({
+      accept,
+      challenge,
+      builderCode,
+      payment,
+      nowMs,
+    });
+    if (!built.ok) {
+      return failSoft(built.code, built.message, {
+        affiliate: affiliateMeta(builderCode),
+        clientPayment,
+      });
+    }
+    return submitPaidRun({
+      fetchImpl,
+      runUrl,
+      headers,
+      payload,
+      paymentHeader: built.header,
+      from: built.from,
+      builderCode,
+      challenge,
+      rejectedMessage:
+        "MiroShark did not accept the $1 USDC payment. This wallet needs $1 USDC on Base. Publish still works.",
+    });
+  }
 
   const payerKey = mirosharkPayerKey();
   if (!payerKey) return paymentRequired;
@@ -477,44 +734,18 @@ export async function requestMirosharkPreview({
     );
   }
 
-  let second;
-  try {
-    second = await fetchJson(fetchImpl, runUrl, {
-      method: "POST",
-      headers: {
-        ...headers,
-        "PAYMENT-SIGNATURE": signed.header,
-      },
-      body: payload,
-    });
-  } catch (e) {
-    return failSoft(
-      "miroshark_unreachable",
-      "MiroShark did not accept the paid retry. Publish still works without a preview.",
-      { error: e?.message || "fetch_failed", affiliate: affiliateMeta(builderCode) }
-    );
-  }
-
-  if (second.res.status === 202 || second.res.status === 200) {
-    return {
-      ok: true,
-      run: publicRun(second.json),
-      affiliate: affiliateMeta(builderCode),
-      paid: true,
-      payer: signed.from,
-      paymentNetwork: BASE_CAIP2,
-    };
-  }
-
-  return failSoft(
-    "payment_rejected",
-    "MiroShark rejected the server-side $1 payment. The 402 is included for a client wallet. Publish still works.",
-    {
-      status: second.res.status,
-      affiliate: affiliateMeta(builderCode),
-      paymentRequired: parsePaymentRequired(second.res, second.text) || challenge,
-    }
-  );
+  return submitPaidRun({
+    fetchImpl,
+    runUrl,
+    headers,
+    payload,
+    paymentHeader: signed.header,
+    from: signed.from,
+    builderCode,
+    challenge,
+    rejectedMessage:
+      "MiroShark rejected the server-side $1 payment. Publish still works.",
+  });
 }
 
 export async function fetchMirosharkRun(runId, { fetchImpl = fetch } = {}) {
@@ -603,6 +834,7 @@ export async function tryHandleMirosharkRequest(req, res) {
       const result = await requestMirosharkPreview({
         title: parsed.title,
         body: parsed.body,
+        payment: parsed.payment,
       });
       sendJson(res, 200, result);
     } catch (e) {

@@ -29,7 +29,7 @@ Do **not** invent a code. Do **not** reuse the homepage `base:app_id` meta (`6aa
 | --- | --- | --- |
 | `BASE_BUILDER_CODE` | **Yes** to enable the panel | Sent as `X-Builder-Code` on every MiroShark `/run` request (unpaid **and** paid). If missing or malformed, Write shows disabled copy and the API returns `missing_builder_code`. |
 | `MIROSHARK_BASE_URL` | No | Default `https://x402.miroshark.xyz`. |
-| `MIROSHARK_X402_PRIVATE_KEY` | No | Optional **server-side** Base wallet that pays the $1 USDC x402 v2 challenge (`PAYMENT-SIGNATURE`). Spike / documented-dev path only. Production can omit this and return the 402 to a client wallet instead. |
+| `MIROSHARK_X402_PRIVATE_KEY` | No | Optional **server-side** Base wallet that pays the $1 USDC x402 v2 challenge (`PAYMENT-SIGNATURE`). When it is unset, Write asks the signed-in wallet to approve that $1 on Base, then opens MiroShark’s simulation page. |
 
 Set them on the Railway **web** service (same service as `npm start`), then redeploy. Never commit the payer key. Never put it in `VITE_*`.
 

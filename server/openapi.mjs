@@ -357,7 +357,7 @@ export function buildOpenApiDocument() {
           operationId: "mirosharkPreview",
           summary: "Optional MiroShark sim from a Write draft (fail-soft)",
           description:
-            "Seeds POST https://x402.miroshark.xyz/run with title + teaser + body snippet. Always attaches X-Builder-Code. If MiroShark returns 402 and MIROSHARK_X402_PRIVATE_KEY is unset, returns the challenge for a client wallet (HTTP 200, ok:false). Sim errors never block publish.",
+            "Seeds POST https://x402.miroshark.xyz/run with title + teaser + body snippet. Always attaches X-Builder-Code. If MiroShark returns 402 and MIROSHARK_X402_PRIVATE_KEY is unset, the response includes clientPayment for the signed-in wallet to approve $1 USDC on Base. Retry the same POST with payment: { signature, authorization }. A paid run returns the simulation URL. Sim errors never block publish.",
           security: [],
           requestBody: {
             required: true,
@@ -368,6 +368,10 @@ export function buildOpenApiDocument() {
                   properties: {
                     title: { type: "string" },
                     body: { type: "string" },
+                    payment: {
+                      type: "object",
+                      description: "Writer wallet EIP-3009 approval for the Base USDC charge.",
+                    },
                   },
                 },
               },

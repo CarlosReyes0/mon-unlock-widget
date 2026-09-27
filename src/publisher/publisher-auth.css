@@ -365,6 +365,105 @@
   line-height: 1.4;
 }
 
+.mon-sim-pay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(17, 24, 39, 0.28);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.mon-sim-pay__sheet {
+  width: min(28rem, 100%);
+  background: #fff;
+  border-radius: 22px 22px 0 0;
+  padding: 0.6rem 1.25rem 1.5rem;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.mon-sim-pay__handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 99px;
+  background: #e7e5e4;
+  margin: 0.2rem auto 0.85rem;
+}
+
+.mon-sim-pay__kicker {
+  margin: 0;
+  color: #0f766e;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mon-sim-pay__sheet h2 {
+  margin: 0.25rem 0 0.4rem;
+  font-size: 1.55rem;
+  letter-spacing: -0.03em;
+}
+
+.mon-sim-pay__copy {
+  margin: 0 0 1rem;
+  color: #44403c;
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+
+.mon-sim-pay__price {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border: 1px solid #e7e5e4;
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+}
+
+.mon-sim-pay__price b {
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+}
+
+.mon-sim-pay__price span,
+.mon-sim-pay__row span {
+  color: #78716c;
+}
+
+.mon-sim-pay__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.15rem 0.2rem;
+  font-size: 0.95rem;
+}
+
+.mon-sim-pay__error {
+  margin: 0.75rem 0 0;
+  color: #9f1239;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.mon-sim-pay__approve,
+.mon-sim-pay__later {
+  width: 100%;
+  margin-top: 0.7rem;
+}
+
+@media (min-width: 720px) {
+  .mon-sim-pay {
+    align-items: center;
+  }
+
+  .mon-sim-pay__sheet {
+    border-radius: 22px;
+    margin: 1rem;
+  }
+}
+
 .mon-write__page {
   width: min(40rem, calc(100% - 2.5rem));
   margin: 0 auto;

@@ -17,10 +17,12 @@ import {
   pickBaseAccept,
   requestMirosharkPreview,
   signBaseExactPayment,
+  buildClientPayment,
   splitDraft,
   summarizeReportMarkdown,
 } from "./miroshark.mjs";
 import { decodeJsonB64OrJson } from "./x402.mjs";
+import { privateKeyToAccount } from "viem/accounts";
 
 const PREV_CODE = process.env.BASE_BUILDER_CODE;
 const PREV_KEY = process.env.MIROSHARK_X402_PRIVATE_KEY;
@@ -144,6 +146,12 @@ test("402 without a payer returns the challenge and still sent X-Builder-Code", 
   assert.equal(seen[0].hasSig, false);
   assert.equal(out.affiliate.builderCode, "bc_testcode");
   assert.match(out.affiliate.expectedCut, /10%/);
+  assert.equal(out.clientPayment.payTo, "0x1111111111111111111111111111111111111111");
+  assert.equal(out.clientPayment.amount, "1000000");
+  assert.equal(out.clientPayment.amountUsd, "1.00");
+  assert.equal(out.clientPayment.message.to, out.clientPayment.payTo);
+  assert.equal(out.clientPayment.message.value, "1000000");
+  assert.equal(out.clientPayment.domain.chainId, 8453);
 });
 
 test("optional server payer retries with PAYMENT-SIGNATURE, Base accept, and x402aff s", async () => {
@@ -221,6 +229,130 @@ test("optional server payer retries with PAYMENT-SIGNATURE, Base accept, and x40
     "x402aff",
   ]);
   assert.equal(decoded.extensions["builder-code"].info.a, "bc_r3g1wwdh");
+});
+
+test("a writer wallet signature pays the Base accept and opens a run", async () => {
+  process.env.BASE_BUILDER_CODE = "bc_testcode";
+  delete process.env.MIROSHARK_X402_PRIVATE_KEY;
+  const account = privateKeyToAccount(
+    "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  );
+  const seen = [];
+  const accept = {
+    scheme: "exact",
+    network: "eip155:8453",
+    asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    amount: "1000000",
+    payTo: "0x2222222222222222222222222222222222222222",
+    maxTimeoutSeconds: 300,
+    extra: { name: "USD Coin", version: "2" },
+  };
+  const challenge = {
+    x402Version: 2,
+    accepts: [accept],
+    extensions: { "builder-code": { info: { a: "bc_r3g1wwdh" } } },
+  };
+  const clientPayment = buildClientPayment(accept, 1_700_000_000_000);
+  const signature = await account.signTypedData({
+    domain: clientPayment.domain,
+    types: clientPayment.types,
+    primaryType: clientPayment.primaryType,
+    message: {
+      from: account.address,
+      to: clientPayment.message.to,
+      value: BigInt(clientPayment.message.value),
+      validAfter: BigInt(clientPayment.message.validAfter),
+      validBefore: BigInt(clientPayment.message.validBefore),
+      nonce: clientPayment.message.nonce,
+    },
+  });
+  const out = await requestMirosharkPreview({
+    title: "Hello",
+    body: "Enough body text for a preview seed.",
+    nowMs: 1_700_000_000_000,
+    payment: {
+      signature,
+      authorization: { from: account.address, ...clientPayment.message },
+    },
+    fetchImpl: async (_url, init) => {
+      const sig = init.headers["PAYMENT-SIGNATURE"] || "";
+      seen.push(sig);
+      if (!sig) {
+        return {
+          status: 402,
+          ok: false,
+          headers: {},
+          text: async () => JSON.stringify(challenge),
+        };
+      }
+      return {
+        status: 202,
+        ok: true,
+        headers: {},
+        text: async () =>
+          JSON.stringify({
+            success: true,
+            data: {
+              run_id: "run_cccccccccccc",
+              status: "queued",
+              wait_url: "https://x402.example/wait/run_cccccccccccc",
+            },
+          }),
+      };
+    },
+  });
+  assert.equal(out.ok, true);
+  assert.equal(out.paid, true);
+  assert.equal(out.run.waitUrl, "https://x402.example/wait/run_cccccccccccc");
+  assert.equal(out.payer.toLowerCase(), account.address.toLowerCase());
+  const decoded = decodeJsonB64OrJson(seen[1]);
+  assert.equal(decoded.accepted.payTo, accept.payTo);
+  assert.deepEqual(decoded.extensions["builder-code"].info.s, ["bc_testcode", "x402aff"]);
+});
+
+test("a mismatched wallet approval is not forwarded to MiroShark", async () => {
+  process.env.BASE_BUILDER_CODE = "bc_testcode";
+  delete process.env.MIROSHARK_X402_PRIVATE_KEY;
+  const seen = [];
+  const out = await requestMirosharkPreview({
+    title: "Hello",
+    body: "Enough body text for a preview seed.",
+    nowMs: 1_700_000_000_000,
+    payment: {
+      signature: `0x${"ab".repeat(65)}`,
+      authorization: {
+        from: "0x1111111111111111111111111111111111111111",
+        to: "0x9999999999999999999999999999999999999999",
+        value: "1000000",
+        validAfter: "0",
+        validBefore: "1700000300",
+        nonce: `0x${"11".repeat(32)}`,
+      },
+    },
+    fetchImpl: async (_url, init) => {
+      seen.push(Boolean(init.headers["PAYMENT-SIGNATURE"]));
+      return {
+        status: 402,
+        ok: false,
+        headers: {},
+        text: async () =>
+          JSON.stringify({
+            accepts: [
+              {
+                network: "eip155:8453",
+                asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                amount: "1000000",
+                payTo: "0x2222222222222222222222222222222222222222",
+                extra: { name: "USD Coin", version: "2" },
+              },
+            ],
+          }),
+      };
+    },
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.code, "payment_invalid");
+  assert.deepEqual(seen, [false]);
 });
 
 test("sim errors fail soft and never throw", async () => {
