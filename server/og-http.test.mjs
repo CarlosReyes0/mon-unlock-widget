@@ -57,13 +57,13 @@ test("tryHandleOgRequest injects OG tags for /articles/{slug}", async () => {
   assert.match(html, /http:\/\/127\.0\.0\.1:5173\/og\.jpg/);
 });
 
-test("tryHandleOgRequest uses https og:image on Railway when proto is omitted", async () => {
+test("tryHandleOgRequest uses https og:image on openpaywall.app when proto is omitted", async () => {
   const res = mockRes();
   const handled = await tryHandleOgRequest(
     {
       method: "GET",
       url: "/articles/demo-slug",
-      headers: { host: "mon-unlock-widget-production.up.railway.app" },
+      headers: { host: "openpaywall.app" },
     },
     res
   );
@@ -71,7 +71,7 @@ test("tryHandleOgRequest uses https og:image on Railway when proto is omitted", 
   const html = res.body.toString("utf8");
   assert.match(
     html,
-    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\.jpg"/
+    /property="og:image" content="https:\/\/openpaywall\.app\/og\.jpg"/
   );
 });
 

@@ -44,21 +44,21 @@ test("feedShareMeta is a website card with the default photo", () => {
 test("renderFeedPage injects crawler-visible tags into articles.html", () => {
   const html = renderFeedPage({
     html: FEED_HTML,
-    origin: "https://mon-unlock-widget-production.up.railway.app",
+    origin: "https://openpaywall.app",
   });
   assert.match(html, /<title>Articles — Open Paywall<\/title>/);
   assert.match(html, /property="og:title" content="Open Paywall"/);
   assert.match(
     html,
-    /property="og:url" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/"/
+    /property="og:url" content="https:\/\/openpaywall\.app\/"/
   );
   assert.match(
     html,
-    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\.jpg"/
+    /property="og:image" content="https:\/\/openpaywall\.app\/og\.jpg"/
   );
   assert.match(
     html,
-    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\.jpg"/
+    /name="twitter:image" content="https:\/\/openpaywall\.app\/og\.jpg"/
   );
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
   assert.match(html, /name="twitter:site" content="@openpaywall"/);
@@ -200,7 +200,7 @@ test("renderArticlePage injects crawler-visible tags into article.html", async (
   const html = await renderArticlePage({
     html: ARTICLE_HTML,
     slug: "the-quote-was-a-trap",
-    origin: "https://mon-unlock-widget-production.up.railway.app",
+    origin: "https://openpaywall.app",
     loadArticle: async () => ({
       title: "The Quote Was a Trap",
       teaser: "A short free preview everyone can read.",
@@ -212,17 +212,17 @@ test("renderArticlePage injects crawler-visible tags into article.html", async (
   assert.match(html, /property="og:description" content="A short free preview everyone can read\."/);
   assert.match(
     html,
-    /property="og:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg\?v=[a-f0-9]{16}"/
+    /property="og:image" content="https:\/\/openpaywall\.app\/og\/the-quote-was-a-trap\.jpg\?v=[a-f0-9]{16}"/
   );
   assert.match(
     html,
-    /name="twitter:image" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/og\/the-quote-was-a-trap\.jpg"/
+    /name="twitter:image" content="https:\/\/openpaywall\.app\/og\/the-quote-was-a-trap\.jpg"/
   );
   assert.doesNotMatch(html, /name="twitter:image" content="[^"]+\?v=/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
   assert.match(
     html,
-    /property="og:url" content="https:\/\/mon-unlock-widget-production\.up\.railway\.app\/articles\/the-quote-was-a-trap"/
+    /property="og:url" content="https:\/\/openpaywall\.app\/articles\/the-quote-was-a-trap"/
   );
   assert.match(html, /Loading article/);
   assert.equal((html.match(/property="og:title"/g) || []).length, 1);
@@ -285,12 +285,24 @@ test("publicOrigin prefers forwarded proto", () => {
   );
 });
 
-test("publicOrigin infers https on Railway when proto is omitted", () => {
+test("publicOrigin infers https for openpaywall.app and Railway hosts when proto is omitted", () => {
   assert.equal(
     publicOrigin({
-      headers: { host: "mon-unlock-widget-production.up.railway.app" },
+      headers: { host: "openpaywall.app" },
     }),
-    "https://mon-unlock-widget-production.up.railway.app"
+    "https://openpaywall.app"
+  );
+  assert.equal(
+    publicOrigin({
+      headers: { host: "www.openpaywall.app" },
+    }),
+    "https://www.openpaywall.app"
+  );
+  assert.equal(
+    publicOrigin({
+      headers: { host: "preview.up.railway.app" },
+    }),
+    "https://preview.up.railway.app"
   );
   assert.equal(
     publicOrigin({ headers: { host: "127.0.0.1:8080" } }),

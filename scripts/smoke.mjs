@@ -6,7 +6,7 @@
  * Dashboard secrets.
  *
  *   npm run smoke
- *   BASE_URL=https://mon-unlock-widget-production.up.railway.app npm run smoke
+ *   BASE_URL=https://openpaywall.app npm run smoke
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";

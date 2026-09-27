@@ -8,7 +8,7 @@ on:
       base_url:
         description: Origin to smoke (no trailing slash)
         required: true
-        default: https://mon-unlock-widget-production.up.railway.app
+        default: https://openpaywall.app
 
 permissions:
   contents: read

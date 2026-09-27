@@ -23,7 +23,7 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     MPP_DEV_BYPASS: "",
     MPP_SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789ABCD",
     MPP_TEMPO_RECIPIENT: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
-    MPP_REALM: "mon-unlock-widget-production.up.railway.app",
+    MPP_REALM: "openpaywall.app",
     RAILWAY_PUBLIC_DOMAIN: "",
   },
   stdio: ["ignore", "pipe", "pipe"],
@@ -47,7 +47,7 @@ test("empty POST /api/agents/publish returns 402 with WWW-Authenticate", async (
   assert.match(www, /method="tempo"/i);
   assert.match(
     www,
-    /realm="mon-unlock-widget-production\.up\.railway\.app"/i
+    /realm="openpaywall\.app"/i
   );
   // Both tempo + stripe challenges must include recipient (mppscan warning).
   const requests = [...www.matchAll(/request="([^"]+)"/g)].map((m) => {

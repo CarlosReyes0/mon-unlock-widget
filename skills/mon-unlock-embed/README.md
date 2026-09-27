@@ -11,8 +11,8 @@ Publish paid articles from your phone via chat.
 | Option | Setup | On-chain registration |
 |--------|-------|----------------------|
 | **A — Full automation** | `privateKey` in config | Agent does it (costs gas) |
-| **B — Recommended** | `publisher` address only | You do it once via [generator + wallet](https://mon-unlock-widget-production.up.railway.app/generator.html) |
-| **C — No agent** | None | [Web generator](https://mon-unlock-widget-production.up.railway.app/generator.html) only |
+| **B — Recommended** | `publisher` address only | You do it once via [generator + wallet](https://openpaywall.app/generator.html) |
+| **C — No agent** | None | [Web generator](https://openpaywall.app/generator.html) only |
 
 Most people should start with **Option B**.
 
@@ -84,7 +84,7 @@ Agent:
 ✓ Body + teaser saved to Supabase
 
 ⚠ One step left — open this link:
-https://mon-unlock-widget-production.up.railway.app/register.html?slug=july-3-11pm&price=1
+https://openpaywall.app/register.html?slug=july-3-11pm&price=1
 
 Connect MetaMask → Register on Monad → done.
 (No need to re-enter title, teaser, or body.)
@@ -99,8 +99,8 @@ Paste this embed into your site:
 
 OpenClaw still needs a local install. For agents that should discover MON Unlock without cloning this repo, use the hosted HTTP/MPP API instead:
 
-- https://mon-unlock-widget-production.up.railway.app/llms.txt
-- https://mon-unlock-widget-production.up.railway.app/agents.md
+- https://openpaywall.app/llms.txt
+- https://openpaywall.app/agents.md
 - `POST /api/agents/publish` (HTTP 402 / MPP)
 
 Paste `AGENT.md` so OpenClaw knows to call the tool and explain the options.

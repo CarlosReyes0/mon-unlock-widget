@@ -9,15 +9,19 @@
  *   MPP_TEMPO_RECIPIENT     — 0x address that receives Tempo pathUSD charges
  *   MPP_PUBLISH_AMOUNT      — charge amount in pathUSD (default 0.05)
  *   MPP_TEMPO_CURRENCY      — TIP-20 token (default pathUSD)
- *   MPP_REALM               — challenge realm; must match the public host
- *                             (default: RAILWAY_PUBLIC_DOMAIN, else PUBLIC_URL host)
+ *   MPP_REALM               — challenge realm; must match the public host.
+ *                             Order: MPP_REALM, RAILWAY_PUBLIC_DOMAIN, then
+ *                             PUBLIC_URL / VITE_CHECKOUT_ORIGIN host, else
+ *                             openpaywall.app. Production should set
+ *                             MPP_REALM=openpaywall.app because Railway's
+ *                             public domain overrides this fallback.
  *   MPP_DEV_BYPASS=1        — skip payment (local tests only)
  *   STRIPE_SECRET_KEY       — optional: also offer Stripe SPT card charges
  */
 import { Mppx, tempo, stripe } from "mppx/server";
 
 const PATH_USD = "0x20c0000000000000000000000000000000000000";
-const DEFAULT_PUBLIC_HOST = "mon-unlock-widget-production.up.railway.app";
+const DEFAULT_PUBLIC_HOST = "openpaywall.app";
 
 export function mppConfigured() {
   const secret = (process.env.MPP_SECRET_KEY || "").trim();
@@ -41,7 +45,7 @@ export function publishCurrency() {
 /**
  * mppscan / mpp.dev require Payment realm === origin host so on-chain stats
  * attribute to this service. Prefer an explicit override, then Railway's
- * public domain, then PUBLIC_URL / checkout origin host.
+ * public domain, then PUBLIC_URL / checkout origin host, else openpaywall.app.
  */
 export function resolveRealm() {
   const explicit = (process.env.MPP_REALM || "").trim();

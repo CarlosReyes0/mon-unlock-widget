@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { keccak256, toBytes, parseEther, parseUnits } from "viem";
 
 export const CDN_BASE =
-  process.env.CDN_BASE || "https://mon-unlock-widget-production.up.railway.app";
+  process.env.CDN_BASE || "https://openpaywall.app";
 /** Legacy native-MON unlock contract (kept live — path A). */
 export const MAINNET_MON_CONTRACT =
   process.env.UNLOCK_CONTRACT || "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";

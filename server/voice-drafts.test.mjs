@@ -60,7 +60,7 @@ test("assembleVoiceDraftPrompt includes samples, notes, article, and drafts-only
     title: "July rain walk",
     teaser: "Walking home in the rain.",
     body: "The rest of the piece continues after the fold.",
-    articleUrl: "https://mon-unlock-widget-production.up.railway.app/articles/july-rain-walk",
+    articleUrl: "https://openpaywall.app/articles/july-rain-walk",
   });
   assert.match(prompt.system, /DRAFTS ONLY/i);
   assert.match(prompt.system, /Never claim a post was published/i);

@@ -65,7 +65,7 @@ cd contracts
 export PRIVATE_KEY=...
 export MONAD_RPC_URL=https://rpc.monad.xyz
 # defaults: mainnet ArticleUnlock + ArticleUnlockUsdc
-export NFT_BASE_URI=https://mon-unlock-widget-production.up.railway.app/api/article-nfts/metadata/
+export NFT_BASE_URI=https://openpaywall.app/api/article-nfts/metadata/
 
 forge script script/DeployArticleNft.s.sol \
   --rpc-url monad_mainnet \
@@ -73,7 +73,7 @@ forge script script/DeployArticleNft.s.sol \
   -vvvv
 ```
 
-Live: [`0xFe467952918F744606e70876b2af0C083D269f92`](https://monadvision.com/address/0xFe467952918F744606e70876b2af0C083D269f92) (see `deployments/monad-mainnet-article-nft.json`).
+Live: [`0xFe467952918F744606e70876b2af0C083D269f92`](https://monadvision.com/address/0xFe467952918F744606e70876b2af0C083D269f92) (see `deployments/monad-mainnet-article-nft.json`). If `baseURI()` still uses the old Railway host, the owner calls `setBaseURI("https://openpaywall.app/api/article-nfts/metadata/")`. This repo does not send that transaction.
 
 Then:
 

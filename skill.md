@@ -6,12 +6,12 @@ Read this before creating a paywall with Open Paywall from an AI assistant, codi
 Open Paywall creates an **embeddable paywall** for long-form articles. You get paste-ready HTML (`<open-paywall>`; legacy `<mon-unlock>` still works). Readers pay per article with **MON on Monad** or **card / Apple Pay / Google Pay**.
 
 ## Quick setup
-- LLM overview: `https://mon-unlock-widget-production.up.railway.app/llms.txt`
-- Agent guide: `https://mon-unlock-widget-production.up.railway.app/agents.md`
-- OpenAPI: `https://mon-unlock-widget-production.up.railway.app/openapi.json`
-- Cursor skill: `https://mon-unlock-widget-production.up.railway.app/.well-known/skills/mon-unlock/SKILL.md`
-- Bankr / x402 skill: `https://mon-unlock-widget-production.up.railway.app/.well-known/skills/open-paywall-x402/SKILL.md`
-- Human generator: `https://mon-unlock-widget-production.up.railway.app/generator.html`
+- LLM overview: `https://openpaywall.app/llms.txt`
+- Agent guide: `https://openpaywall.app/agents.md`
+- OpenAPI: `https://openpaywall.app/openapi.json`
+- Cursor skill: `https://openpaywall.app/.well-known/skills/mon-unlock/SKILL.md`
+- Bankr / x402 skill: `https://openpaywall.app/.well-known/skills/open-paywall-x402/SKILL.md`
+- Human generator: `https://openpaywall.app/generator.html`
 - OpenClaw plugin: install from `skills/mon-unlock-embed` in the GitHub repo
 
 ## Preferred agent path (HTTP / MPP or x402)
@@ -26,11 +26,11 @@ Bankr wallets pay **USDC on Base**, not Monad. Use these routes (MPP PathUSD sti
 4. Unlock/read: `GET /api/x402/articles/{slug}` — unpaid → 402 at the listing price (default **$0.50** USDC on Base). Paid retry returns the body. Existing `reader` / `fiat_session` entitlement skips the charge.
 
 ```bash
-bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/publish \
+bankr x402 call https://openpaywall.app/api/x402/publish \
   -X POST -d '{"title":"Demo","articleId":"agent-demo-1","teaser":"preview","body":"full text","publisher":"0x…"}' \
   --max-payment 0.05
 
-bankr x402 call https://mon-unlock-widget-production.up.railway.app/api/x402/articles/SLUG \
+bankr x402 call https://openpaywall.app/api/x402/articles/SLUG \
   --max-payment 0.50
 ```
 

@@ -14,7 +14,7 @@ Do **not** invent a code. Do **not** reuse the homepage `base:app_id` meta (`6aa
 
 1. Open [dashboard.base.org](https://dashboard.base.org) or [base.dev](https://base.dev) and sign in.
 2. Register the Open Paywall app if it is not already registered.
-3. Add and verify the production domain `mon-unlock-widget-production.up.railway.app`. The articles homepage already ships:
+3. Add and verify the production domain `openpaywall.app`. The articles homepage already ships:
 
    ```html
    <meta name="base:app_id" content="6aab87b69b238d5ecd11e976" />

@@ -14,4 +14,4 @@ Allow: /api/agents/
 User-agent: Twitterbot
 Allow: /
 
-Sitemap: https://mon-unlock-widget-production.up.railway.app/llms.txt
+Sitemap: https://openpaywall.app/llms.txt

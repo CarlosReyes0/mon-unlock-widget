@@ -2,7 +2,7 @@
 
 **Project:** Open Paywall (MON Unlock Widget)  
 **Period:** August 22 – August 29, 2026  
-**Live:** https://mon-unlock-widget-production.up.railway.app
+**Live:** https://openpaywall.app
 
 Let's go 👇
 

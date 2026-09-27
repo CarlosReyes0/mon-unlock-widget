@@ -67,7 +67,7 @@ test("createArticleDownload entitled reader gets HTML with paid body", async () 
     {
       articleId: "secret-post",
       reader: "0x1111111111111111111111111111111111111111",
-      origin: "https://mon-unlock-widget-production.up.railway.app",
+      origin: "https://openpaywall.app",
     },
     {
       resolveArticleAccess: async ({ includeBody }) => {

@@ -12,7 +12,7 @@ description: >-
 ## Product
 Open Paywall turns an article into a paste-ready `<open-paywall>` HTML block
 (legacy `<mon-unlock>` remains supported). Readers unlock with MON on Monad or
-card / Apple Pay / Google Pay. Live site: https://mon-unlock-widget-production.up.railway.app
+card / Apple Pay / Google Pay. Live site: https://openpaywall.app
 
 ## When to use
 - User asks to create a paywall, paid article embed, or monetize writing.
