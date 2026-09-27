@@ -4,6 +4,7 @@
  */
 import { trustedEmbedSrc } from "./body-content.js";
 import { buildMediaSnippet, normalizeUrl, type MediaKind } from "./media-url.js";
+import { findPaywallFolds } from "./split-post.js";
 
 export type WriteTextBlock = { id: string; type: "text"; text: string };
 export type WriteMediaBlock = {
@@ -93,12 +94,12 @@ export function parseWriteDoc(raw: string): WriteBlock[] {
       raw: match[0],
     });
   }
-  for (const match of text.matchAll(/^---[ \t]*$/gm)) {
+  for (const match of findPaywallFolds(text)) {
     marks.push({
-      index: match.index ?? 0,
-      length: match[0].length,
+      index: match.index,
+      length: match.length,
       fold: true,
-      raw: match[0],
+      raw: text.slice(match.index, match.index + match.length),
     });
   }
   marks.sort((a, b) => a.index - b.index || a.length - b.length);
@@ -123,7 +124,13 @@ export function parseWriteDoc(raw: string): WriteBlock[] {
     cursor = mark.index + mark.length;
   }
   pushText(blocks, text.slice(cursor), nextId);
-  if (!blocks.some((block) => block.type === "text")) {
+  const foldAt = blocks.findIndex((block) => block.type === "fold");
+  if (foldAt >= 0) {
+    const hasTextBefore = blocks.slice(0, foldAt).some((block) => block.type === "text");
+    const hasTextAfter = blocks.slice(foldAt + 1).some((block) => block.type === "text");
+    if (!hasTextBefore) blocks.splice(foldAt, 0, { id: nextId(), type: "text", text: "" });
+    if (!hasTextAfter) blocks.push({ id: nextId(), type: "text", text: "" });
+  } else if (!blocks.some((block) => block.type === "text")) {
     blocks.push({ id: nextId(), type: "text", text: "" });
   }
   return blocks;
@@ -181,6 +188,116 @@ export function serializeWriteDoc(blocks: WriteBlock[]): string {
     if (snippet) parts.push(snippet);
   }
   return parts.join("\n\n");
+}
+
+export type PaywallCaret = { id: string; cursor: number };
+
+function withTextAroundFold(blocks: WriteBlock[]): WriteBlock[] {
+  const next = blocks.slice();
+  const foldAt = next.findIndex((block) => block.type === "fold");
+  if (foldAt < 0) return next;
+  if (!next.slice(0, foldAt).some((block) => block.type === "text")) {
+    next.splice(foldAt, 0, { id: newWriteBlockId(), type: "text", text: "" });
+  }
+  const at = next.findIndex((block) => block.type === "fold");
+  if (!next.slice(at + 1).some((block) => block.type === "text")) {
+    next.push({ id: newWriteBlockId(), type: "text", text: "" });
+  }
+  return next;
+}
+
+/** Put one `---` at a content index, including the ends, and keep a text block on each side. */
+function insertFoldAtContentIndex(blocks: WriteBlock[], contentIndex: number): WriteBlock[] {
+  const content = contentBlocks(blocks);
+  const index = Math.max(0, Math.min(contentIndex, content.length));
+  const next = content.slice();
+  next.splice(index, 0, { id: newWriteBlockId(), type: "fold" });
+  return withTextAroundFold(next);
+}
+
+/**
+ * Insert one paywall fold. A cursor in the middle of a paragraph splits there.
+ * A cursor between paragraphs uses that boundary. Otherwise the fold sits where
+ * the editor already draws the free/paid line, or after the only paragraph.
+ * A second call does nothing.
+ */
+export function insertPaywallFold(
+  blocks: WriteBlock[],
+  caret: PaywallCaret | null
+): { blocks: WriteBlock[]; focusId: string | null; cursor: number } {
+  if (blocks.some((block) => block.type === "fold")) {
+    return { blocks, focusId: null, cursor: 0 };
+  }
+  const content = contentBlocks(blocks);
+  if (!content.some(isFilled)) {
+    const next = parseWriteDoc("---");
+    const first = next.find((block) => block.type === "text");
+    return { blocks: next, focusId: first?.id ?? null, cursor: 0 };
+  }
+
+  if (caret) {
+    const block = blocks.find((item) => item.id === caret.id);
+    if (block?.type === "text") {
+      const cursor = Math.max(0, Math.min(caret.cursor, block.text.length));
+      const contentIndex = content.findIndex((item) => item.id === block.id);
+      // A caret in the middle of a paragraph is an explicit "fold goes here".
+      if (cursor > 0 && cursor < block.text.length) {
+        const split = splitTextBlock(blocks, block.id, cursor);
+        const at = split.blocks.findIndex((item) => item.id === split.focusId);
+        const next = split.blocks.slice();
+        next.splice(at, 0, { id: newWriteBlockId(), type: "fold" });
+        return { blocks: withTextAroundFold(next), focusId: split.focusId, cursor: 0 };
+      }
+      // Caret on a boundary between blocks (start of a later paragraph, or end of one that
+      // still has writing after it). The end of the last paragraph is not a placement:
+      // that is just where typing stopped, so the free/paid line below wins.
+      const betweenBlocks =
+        contentIndex > 0 && cursor === 0
+          ? contentIndex
+          : contentIndex >= 0 && cursor === block.text.length && contentIndex < content.length - 1
+            ? contentIndex + 1
+            : null;
+      if (betweenBlocks != null) {
+        const next = insertFoldAtContentIndex(blocks, betweenBlocks);
+        const foldAt = next.findIndex((item) => item.type === "fold");
+        const focus = next.slice(foldAt + 1).find((item) => item.type === "text");
+        return { blocks: next, focusId: focus?.id ?? null, cursor: 0 };
+      }
+    }
+  }
+
+  const auto = visibleFoldIndex(blocks);
+  if (auto != null) {
+    const placed = placeFold(blocks, auto);
+    if (placed.some((block) => block.type === "fold")) {
+      const foldAt = placed.findIndex((item) => item.type === "fold");
+      const focus = placed.slice(foldAt + 1).find((item) => item.type === "text");
+      return { blocks: withTextAroundFold(placed), focusId: focus?.id ?? null, cursor: 0 };
+    }
+  }
+
+  const next = insertFoldAtContentIndex(blocks, content.length);
+  const foldAt = next.findIndex((item) => item.type === "fold");
+  const focus = next.slice(foldAt + 1).find((item) => item.type === "text");
+  return { blocks: next, focusId: focus?.id ?? null, cursor: 0 };
+}
+
+export function removeFold(blocks: WriteBlock[]): WriteBlock[] {
+  const next: WriteBlock[] = [];
+  for (const block of blocks) {
+    if (block.type === "fold") continue;
+    next.push(block);
+  }
+  while (next.length > 1 && next[0].type === "text" && !next[0].text.trim()) next.shift();
+  while (next.length > 1) {
+    const last = next[next.length - 1];
+    if (last.type !== "text" || last.text.trim()) break;
+    next.pop();
+  }
+  if (!next.some((block) => block.type === "text")) {
+    next.push({ id: newWriteBlockId(), type: "text", text: "" });
+  }
+  return next;
 }
 
 export function placeFold(blocks: WriteBlock[], contentIndex: number): WriteBlock[] {

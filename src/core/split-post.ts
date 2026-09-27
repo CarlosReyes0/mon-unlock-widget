@@ -115,12 +115,62 @@ export type PaywallLocation = {
   hasFold: boolean;
 };
 
+/**
+ * A line that is only `---` (trailing whitespace ignored).
+ * `--` and `----` are not a fold — same rule splitPost uses to cut free vs paid.
+ */
+export function findPaywallFolds(raw: string): { index: number; length: number }[] {
+  const text = String(raw ?? "").replace(/\r\n/g, "\n");
+  return [...text.matchAll(/^---\s*$/gm)].map((match) => ({
+    index: match.index ?? 0,
+    length: match[0].length,
+  }));
+}
+
+/** Index of the first paywall fold, or -1 when the body has no `---` line. */
+export function paywallFoldAt(raw: string): number {
+  return findPaywallFolds(raw)[0]?.index ?? -1;
+}
+
+export function hasPaywallFold(raw: string): boolean {
+  return paywallFoldAt(raw) >= 0;
+}
+
+/** No writer prose — empty, or only a `---` line. */
+export function isPaywallOnlyBody(raw: string): boolean {
+  return !String(raw ?? "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .some((line) => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 && !/^---\s*$/.test(trimmed);
+    });
+}
+
+/**
+ * New and empty Write sessions start with one fold.
+ * Drafts that already have writing are left alone so the free/paid cut does not move.
+ */
+export function seedPaywallFold(raw: string): string {
+  const text = String(raw ?? "");
+  if (hasPaywallFold(text) || text.trim()) return text;
+  return "---";
+}
+
+/** Insert one `---` when missing. Existing folds are kept as-is. */
+export function ensurePaywallFold(raw: string): string {
+  const text = String(raw ?? "").replace(/\r\n/g, "\n");
+  if (hasPaywallFold(text)) return text;
+  if (!text.trim()) return "---";
+  return `${text.replace(/\n+$/, "")}\n\n---\n`;
+}
+
 /** Where the Write editor should draw the paywall line — same rules as splitPost. */
 export function locatePaywall(raw: string): PaywallLocation {
   const text = String(raw ?? "").replace(/\r\n/g, "\n");
   if (!text.trim()) return { freeEnd: 0, paidStart: 0, hasFold: false };
 
-  const sep = text.search(/^---\s*$/m);
+  const sep = paywallFoldAt(text);
   if (sep >= 0) {
     const nl = text.indexOf("\n", sep);
     const after = nl < 0 ? text.length : nl + 1;
@@ -162,7 +212,7 @@ export function splitPost(raw: string): { teaser: string; body: string } {
     .trim();
   if (!text) return { teaser: "", body: "" };
 
-  const sep = text.search(/^---\s*$/m);
+  const sep = paywallFoldAt(text);
   if (sep >= 0) {
     const teaser = text.slice(0, sep).trim();
     const body = text

@@ -711,6 +711,61 @@
   color: #c4c4c4 !important;
 }
 
+.mon-write__paywall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  margin: -0.2rem 0 0.85rem;
+  user-select: none;
+}
+
+.mon-write__paywall-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.85rem;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 12px;
+  background: #f3f4f6;
+  color: #1f2937;
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.011em;
+  line-height: 1.2;
+  cursor: grab;
+}
+
+.mon-write__paywall-chip:active {
+  cursor: grabbing;
+}
+
+.mon-write__paywall-chip svg {
+  flex: none;
+  display: block;
+}
+
+.mon-write__paywall-remove {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #a8a29e;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.1rem 0.25rem;
+}
+
+.mon-write__paywall-remove:hover {
+  color: #44403c;
+}
+
 .mon-write__doc-end {
   min-height: 4rem;
 }

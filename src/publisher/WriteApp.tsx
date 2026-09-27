@@ -28,6 +28,7 @@ import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
 import { WriteDraftsPanel } from "./WriteDraftsPanel.js";
 import { PUBLISH_AUTHOR_MAX, publishAuthor } from "../core/publish-author.js";
+import { ensurePaywallFold, hasPaywallFold, seedPaywallFold } from "../core/split-post.js";
 import { publishPost } from "./publish-post.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 import { fetchArticleNftConfig } from "../core/article-nft.js";
@@ -87,9 +88,9 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const draftIdRef = useRef("");
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const simRef = useRef<MirosharkPreviewHandle>(null);
-  const hasDraft = Boolean(title.trim() || body.trim() || reservedSlug);
+  const hasDraft = !isDraftEmpty({ title, body }) || Boolean(reservedSlug);
   const starters = promptsForDay();
-  const empty = !title.trim() && !body.trim();
+  const empty = isDraftEmpty({ title, body });
   const words = wordCount(body);
   const filledDrafts = drafts.filter((d) => !isDraftEmpty(d) || d.id === draftId).length;
 
@@ -141,6 +142,10 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       current = getWriteDraft(storage, q.draft) || getActiveDraft(storage) || createWriteDraft(storage);
     } else {
       current = getActiveDraft(storage) || createWriteDraft(storage);
+    }
+    const seededBody = seedPaywallFold(current.body);
+    if (seededBody !== current.body) {
+      current = saveWriteDraft(storage, current.id, { body: seededBody }) || { ...current, body: seededBody };
     }
     setActiveWriteDraft(storage, current.id);
     applyDraft(current);
@@ -269,7 +274,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         : createWriteDraft(storage, { author });
     const next = saveWriteDraft(storage, target.id, {
       title: prompt.title,
-      body: prompt.seed ? `${prompt.seed}\n\n` : "",
+      body: ensurePaywallFold(prompt.seed ? `${prompt.seed}\n\n` : ""),
       reservedSlug: "",
       promptId: prompt.id,
       author,
@@ -568,8 +573,13 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
           <button type="button" className="mon-write__media-btn" onClick={() => setMediaOpen(true)}>
             Paste a link
           </button>
+          {hasPaywallFold(body) ? null : (
+            <button type="button" className="mon-write__media-btn" onClick={() => bodyHandleRef.current?.insertPaywall()}>
+              Add paywall
+            </button>
+          )}
           <span className="mon-write__media-hint">
-            It shows up in the piece. Drag the line to choose what’s free.
+            It shows up in the piece. Drag the paywall to choose what’s free.
           </span>
         </div>
         {empty ? (

@@ -85,6 +85,11 @@ describe("write drafts", () => {
     saveWriteDraft(storage, created.id, { author: "Carlos Reyes" }, 200);
     assert.equal(getWriteDraft(storage, created.id)?.author, "Carlos Reyes");
     assert.equal(isDraftEmpty({ title: "", body: "" }), true);
+    assert.equal(isDraftEmpty({ title: "", body: "---" }), true);
+    assert.equal(isDraftEmpty({ title: "", body: "Hello\n---\nthere" }), false);
+    const fresh = createWriteDraft(memoryDraftStorage(), {}, 500);
+    assert.equal(fresh.body, "---");
+    assert.equal(isDraftEmpty(fresh), true);
   });
 
   it("peek ignores empty drafts", () => {

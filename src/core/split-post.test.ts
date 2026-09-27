@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   cleanTitle,
+  ensurePaywallFold,
+  hasPaywallFold,
   locatePaywall,
   nextPublishSlug,
+  seedPaywallFold,
   slugFromTitle,
   splitPost,
   uniqueSlugFromTitle,
@@ -14,6 +17,22 @@ describe("splitPost", () => {
     const r = splitPost("Walking home in the rain.\n---\nI kept my hands in my pockets.");
     assert.equal(r.teaser, "Walking home in the rain.");
     assert.equal(r.body, "I kept my hands in my pockets.");
+  });
+
+  it("requires a line of exactly three dashes", () => {
+    assert.equal(hasPaywallFold("nope\n--\nnope"), false);
+    assert.equal(hasPaywallFold("nope\n----\nnope"), false);
+    assert.equal(hasPaywallFold("Walking home.\n---\nPaid."), true);
+    const dashed = splitPost("Keep -- inside.\n\n----\n\nStill the second paragraph.");
+    assert.equal(dashed.teaser, "Keep -- inside.");
+    assert.equal(dashed.body, "----\n\nStill the second paragraph.");
+    assert.equal(seedPaywallFold(""), "---");
+    assert.equal(seedPaywallFold("   "), "---");
+    assert.equal(seedPaywallFold("Already\n---\nhere"), "Already\n---\nhere");
+    assert.equal(seedPaywallFold("Leave this draft"), "Leave this draft");
+    assert.equal(ensurePaywallFold("Leave this draft"), "Leave this draft\n\n---\n");
+    assert.equal(ensurePaywallFold("Leave this draft\n---\npaid"), "Leave this draft\n---\npaid");
+    assert.equal(ensurePaywallFold(""), "---");
   });
 
   it("uses the first paragraph as the free preview", () => {
