@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { splitPost } from "./split-post.js";
+import { hasPaywallFold, splitPost } from "./split-post.js";
 import {
+  insertPaywallFold,
   parseWriteDoc,
   placeFold,
+  removeFold,
   serializeWriteDoc,
   splitTextBlock,
   visibleFoldIndex,
@@ -58,6 +60,48 @@ describe("write-doc", () => {
     const saved = serializeWriteDoc(moved);
     assert.equal(splitPost(saved).teaser, "One.\n\nTwo.");
     assert.equal(splitPost(saved).body, "Three.");
+  });
+
+  it("round-trips a bare --- fold with room to write on both sides", () => {
+    const blocks = parseWriteDoc("---");
+    assert.equal(blocks.filter((block) => block.type === "fold").length, 1);
+    assert.equal(serializeWriteDoc(blocks), "---");
+    const saved = serializeWriteDoc(parseWriteDoc("Free preview.\n\n---\n\nPaid section."));
+    assert.equal(splitPost(saved).teaser, "Free preview.");
+    assert.equal(splitPost(saved).body, "Paid section.");
+    assert.equal(hasPaywallFold(saved), true);
+  });
+
+  it("inserts one paywall fold at the cursor and does not duplicate it", () => {
+    const blocks = parseWriteDoc("Hello world");
+    const id = blocks[0].id;
+    const inserted = insertPaywallFold(blocks, { id, cursor: 5 });
+    assert.equal(inserted.blocks.filter((block) => block.type === "fold").length, 1);
+    const saved = serializeWriteDoc(inserted.blocks);
+    assert.equal(splitPost(saved).teaser, "Hello");
+    assert.equal(splitPost(saved).body, "world");
+    const again = insertPaywallFold(inserted.blocks, { id, cursor: 5 });
+    assert.equal(again.blocks, inserted.blocks);
+  });
+
+  it("inserts the fold where the free preview already ends", () => {
+    const blocks = parseWriteDoc("One.\n\nTwo.");
+    const inserted = insertPaywallFold(blocks, null);
+    const saved = serializeWriteDoc(inserted.blocks);
+    assert.match(saved, /^One\.\n\n---\n\nTwo\.$/);
+    assert.equal(splitPost(saved).teaser, "One.");
+    assert.equal(splitPost(saved).body, "Two.");
+  });
+
+  it("removes the fold so it can be added again", () => {
+    const blocks = parseWriteDoc("One.\n---\nTwo.");
+    const removed = removeFold(blocks);
+    assert.equal(removed.some((block) => block.type === "fold"), false);
+    const saved = serializeWriteDoc(removed);
+    assert.equal(hasPaywallFold(saved), false);
+    const again = insertPaywallFold(removed, null);
+    assert.equal(splitPost(serializeWriteDoc(again.blocks)).teaser, "One.");
+    assert.equal(splitPost(serializeWriteDoc(again.blocks)).body, "Two.");
   });
 
   it("splits a paragraph at the cursor", () => {

@@ -1,4 +1,5 @@
 /** Local write drafts. No account required — Publish is what needs a wallet. */
+import { isPaywallOnlyBody, seedPaywallFold } from "./split-post.js";
 
 export const WRITE_DRAFTS_KEY = "openpaywall-write-drafts";
 export const WRITE_DRAFT_LEGACY_KEY = "openpaywall-write-draft";
@@ -96,12 +97,15 @@ function normalizeDraft(raw: Partial<WriteDraft> | null | undefined, now = Date.
 }
 
 export function isDraftEmpty(draft: Pick<WriteDraft, "title" | "body">): boolean {
-  return !String(draft.title || "").trim() && !String(draft.body || "").trim();
+  return !String(draft.title || "").trim() && isPaywallOnlyBody(draft.body);
 }
 
 export function wordCount(text: string): number {
   const plain = String(text || "")
     .replace(/<[^>]+>/g, " ")
+    .split("\n")
+    .filter((line) => !/^---\s*$/.test(line.trim()))
+    .join(" ")
     .replace(/\s+/g, " ")
     .trim();
   if (!plain) return 0;
@@ -113,9 +117,9 @@ export function draftLabel(draft: Pick<WriteDraft, "title" | "body">): string {
   if (title) return title;
   const first = String(draft.body || "")
     .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(/\n/)[0];
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .find((line) => line && !/^---\s*$/.test(line));
   if (!first) return "Untitled";
   return first.length > 48 ? `${first.slice(0, 47)}…` : first;
 }
@@ -249,7 +253,7 @@ export function createWriteDraft(
   const draft: WriteDraft = {
     id: newDraftId(now),
     title: String(patch.title || ""),
-    body: String(patch.body || ""),
+    body: seedPaywallFold(patch.body != null ? String(patch.body) : ""),
     reservedSlug: String(patch.reservedSlug || ""),
     author: String(patch.author || ""),
     promptId: patch.promptId ? String(patch.promptId) : undefined,

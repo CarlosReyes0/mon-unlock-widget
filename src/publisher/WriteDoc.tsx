@@ -5,17 +5,20 @@ import {
   contentBlocks,
   explicitFoldIndex,
   insertBlockBefore,
+  insertPaywallFold,
   mergeBackward,
   moveBlockBefore,
   newWriteBlockId,
   parseWriteDoc,
   placeFold,
   removeBlock,
+  removeFold,
   serializeWriteDoc,
   splitTextBlock,
   updateCaption,
   updateText,
   visibleFoldIndex,
+  type PaywallCaret,
   type WriteBlock,
   type WriteMediaBlock,
 } from "../core/write-doc.js";
@@ -26,6 +29,7 @@ const MEDIA_DRAG = "application/x-openpaywall-media";
 export type WriteDocHandle = {
   insertSnippet: (snippet: string, note: string) => void;
   insertFiles: (files: File[]) => void;
+  insertPaywall: () => void;
   focus: () => void;
 };
 
@@ -50,6 +54,7 @@ export function WriteDoc({
   const areasRef = useRef(new Map<string, HTMLTextAreaElement>());
   const focusRef = useRef<FocusRequest | null>(null);
   const anchorRef = useRef<string | null>(null);
+  const caretRef = useRef<PaywallCaret | null>(null);
   const dragKindRef = useRef<null | "fold" | "media">(null);
   const dragMediaIdRef = useRef("");
   const [focusTick, setFocusTick] = useState(0);
@@ -151,15 +156,29 @@ export function WriteDoc({
         focusRef.current = { id: first.id, cursor: null };
         setFocusTick((n) => n + 1);
       },
+      insertPaywall: () => {
+        const inserted = insertPaywallFold(blocksRef.current, caretRef.current);
+        if (inserted.blocks === blocksRef.current) return;
+        commit(inserted.blocks, inserted.focusId ? { id: inserted.focusId, cursor: inserted.cursor } : undefined);
+      },
     }),
     [pending]
   );
 
   const content = contentBlocks(blocks);
-  const foldAt = visibleFoldIndex(blocks);
-  const explicit = explicitFoldIndex(blocks) != null;
+  const explicitAt = explicitFoldIndex(blocks);
+  const implicitAt = explicitAt == null ? visibleFoldIndex(blocks) : null;
   const empty = serializeWriteDoc(blocks) === "";
   const firstTextId = content.find((block) => block.type === "text")?.id;
+
+  function rememberCaret(id: string, cursor: number) {
+    caretRef.current = { id, cursor };
+    anchorRef.current = nextBlockId(blocksRef.current, id);
+  }
+
+  function onRemoveFold() {
+    commit(removeFold(blocksRef.current));
+  }
 
   function onDocDrop(event: React.DragEvent<HTMLDivElement>) {
     setDropping(false);
@@ -219,9 +238,16 @@ export function WriteDoc({
     >
       {content.map((block, index) => (
         <div key={block.id} data-before={block.id}>
-          {foldAt === index ? (
+          {explicitAt === index ? (
+            <PaywallChip
+              onRemove={onRemoveFold}
+              onDragKind={(kind) => {
+                dragKindRef.current = kind;
+              }}
+            />
+          ) : null}
+          {implicitAt === index ? (
             <PaywallRule
-              explicit={explicit}
               onDragKind={(kind) => {
                 dragKindRef.current = kind;
               }}
@@ -232,7 +258,8 @@ export function WriteDoc({
             <Paragraph
               block={block}
               isBodyField={block.id === firstTextId}
-              placeholder={empty && block.id === firstTextId ? "Write, or paste a link" : ""}
+              placeholder={placeholderFor(index, explicitAt, empty, block.id === firstTextId)}
+              onCaret={(cursor) => rememberCaret(block.id, cursor)}
               areasRef={areasRef}
               onChange={(text) => commit(updateText(blocksRef.current, block.id, text))}
               onEnter={(at) => {
@@ -247,9 +274,7 @@ export function WriteDoc({
               onPasteFiles={(files) => {
                 void insertFiles(files, nextBlockId(blocksRef.current, block.id));
               }}
-              onRemember={() => {
-                anchorRef.current = nextBlockId(blocksRef.current, block.id);
-              }}
+              onRemember={() => rememberCaret(block.id, caretRef.current?.id === block.id ? caretRef.current.cursor : block.text.length)}
               onPasteSnippet={(snippet) => {
                 const parsed = parseWriteDoc(snippet).find((item) => item.type === "media");
                 if (!parsed || parsed.type !== "media") return;
@@ -274,9 +299,23 @@ export function WriteDoc({
         </div>
       ))}
       {pending && pending.beforeId == null ? <PendingFigure label={pending.label} /> : null}
+      {explicitAt != null && explicitAt >= content.length ? (
+        <PaywallChip
+          onRemove={onRemoveFold}
+          onDragKind={(kind) => {
+            dragKindRef.current = kind;
+          }}
+        />
+      ) : null}
       <div className="mon-write__doc-end" data-before="" />
     </div>
   );
+}
+
+function placeholderFor(index: number, explicitAt: number | null, empty: boolean, isFirst: boolean): string {
+  if (explicitAt == null) return empty && isFirst ? "Write, or paste a link" : "";
+  if (index < explicitAt) return "Free preview. Readers see this.";
+  return "Paid. Readers unlock this.";
 }
 
 function nextBlockId(blocks: WriteBlock[], id: string): string | null {
@@ -312,6 +351,7 @@ function Paragraph({
   onEnter,
   onMerge,
   onRemember,
+  onCaret,
   onPasteFiles,
   onPasteSnippet,
 }: {
@@ -323,9 +363,14 @@ function Paragraph({
   onEnter: (at: number) => void;
   onMerge: () => void;
   onRemember: () => void;
+  onCaret: (cursor: number) => void;
   onPasteFiles: (files: File[]) => void;
   onPasteSnippet: (snippet: string) => void;
 }) {
+  function markCaret(event: React.SyntheticEvent<HTMLTextAreaElement>) {
+    onCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length);
+  }
+
   return (
     <textarea
         id={isBodyField ? "writeBody" : undefined}
@@ -341,9 +386,15 @@ function Paragraph({
       onChange={(event) => {
         grow(event.currentTarget);
         onChange(event.currentTarget.value);
+        onCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length);
       }}
-      onFocus={onRemember}
-      onSelect={onRemember}
+      onFocus={(event) => {
+        onRemember();
+        markCaret(event);
+      }}
+      onSelect={markCaret}
+      onKeyUp={markCaret}
+      onBlur={markCaret}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return;
         if (event.key === "Enter" && !event.shiftKey) {
@@ -440,13 +491,7 @@ function PendingFigure({ label }: { label: string }) {
   );
 }
 
-function PaywallRule({
-  explicit,
-  onDragKind,
-}: {
-  explicit: boolean;
-  onDragKind: (kind: null | "fold") => void;
-}) {
+function PaywallRule({ onDragKind }: { onDragKind: (kind: null | "fold") => void }) {
   return (
     <div
       className="mon-write__rule"
@@ -462,7 +507,49 @@ function PaywallRule({
       onDragEnd={() => onDragKind(null)}
     >
       <span>Free above · paid below</span>
-      {explicit ? null : <span className="mon-write__rule-hint">Drag to move</span>}
+      <span className="mon-write__rule-hint">Drag to move</span>
     </div>
+  );
+}
+
+function PaywallChip({
+  onRemove,
+  onDragKind,
+}: {
+  onRemove: () => void;
+  onDragKind: (kind: null | "fold") => void;
+}) {
+  return (
+    <div className="mon-write__paywall">
+      <div
+        className="mon-write__paywall-chip"
+        draggable
+        role="separator"
+        data-paywall="fold"
+        aria-label="Paywall. Free above, paid below. Drag to move."
+        title="Drag to choose what readers see for free"
+        onDragStart={(event) => {
+          event.dataTransfer.setData(FOLD_DRAG, "1");
+          event.dataTransfer.effectAllowed = "move";
+          onDragKind("fold");
+        }}
+        onDragEnd={() => onDragKind(null)}
+      >
+        <LockIcon />
+        <span>Paywall · free above · paid below</span>
+      </div>
+      <button type="button" className="mon-write__paywall-remove" onClick={onRemove}>
+        Remove paywall
+      </button>
+    </div>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }

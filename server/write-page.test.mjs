@@ -21,7 +21,14 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /WriteDoc/);
   assert.match(app, /WriteMediaSheet/);
   assert.match(doc, /Free above · paid below/);
+  assert.match(doc, /Paywall · free above · paid below/);
+  assert.match(doc, /Remove paywall/);
+  assert.match(doc, /insertPaywall/);
+  assert.match(app, /Add paywall/);
+  assert.match(app, /seedPaywallFold/);
+  assert.match(app, /hasPaywallFold/);
   assert.match(model, /visibleFoldIndex/);
+  assert.match(model, /insertPaywallFold/);
   assert.match(app, /Paste a link/);
   assert.doesNotMatch(app, /We don’t host files yet/);
   assert.match(app, /\/articles\/\$\{encodeURIComponent\(slug\)\}/);
