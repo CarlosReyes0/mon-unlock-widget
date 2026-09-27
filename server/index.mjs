@@ -92,6 +92,7 @@ import {
   buildPayUrl,
   normalizeOnrampAsset,
 } from "./coinbase-onramp.mjs";
+import { createCspNonce, htmlSecurityHeaders, secureHtmlDocument } from "./security-headers.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -155,6 +156,21 @@ function cors(res) {
     "Access-Control-Expose-Headers",
     "WWW-Authenticate, Payment-Receipt, PAYMENT-REQUIRED, X-PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE, Content-Disposition"
   );
+}
+
+/** HTML documents only. API and widget script responses keep their existing headers. */
+function sendSecuredHtml(req, res, status, html, extraHeaders = {}) {
+  const secured = secureHtmlDocument(html);
+  const payload = Buffer.from(secured.body, "utf8");
+  cors(res);
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    ...extraHeaders,
+    ...secured.headers,
+    "Content-Length": payload.length,
+  });
+  if ((req.method || "GET") === "HEAD") return res.end();
+  return res.end(payload);
 }
 
 function sendJson(res, status, body) {
@@ -326,14 +342,9 @@ function safeJoin(root, urlPath) {
 async function serveArticleHtml(req, res, slug) {
   try {
     const buf = await articleHtmlForSlug(req, slug);
-    cors(res);
-    res.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8",
+    return sendSecuredHtml(req, res, 200, buf.toString("utf8"), {
       "Cache-Control": "public, max-age=60",
-      "Content-Length": buf.length,
     });
-    if ((req.method || "GET") === "HEAD") return res.end();
-    return res.end(buf);
   } catch (e) {
     console.error("[article-og] inject failed:", e?.message || e);
     return serveStatic(req, res, "/article.html");
@@ -343,14 +354,9 @@ async function serveArticleHtml(req, res, slug) {
 function serveFeedHtml(req, res) {
   try {
     const buf = feedHtmlForReq(req);
-    cors(res);
-    res.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8",
+    return sendSecuredHtml(req, res, 200, buf.toString("utf8"), {
       "Cache-Control": "public, max-age=60",
-      "Content-Length": buf.length,
     });
-    if ((req.method || "GET") === "HEAD") return res.end();
-    return res.end(buf);
   } catch (e) {
     console.error("[article-og] feed inject failed:", e?.message || e);
     return serveStatic(req, res, "/articles.html");
@@ -405,6 +411,20 @@ function serveStatic(req, res, urlPath) {
 
       const ext = path.extname(targetPath).toLowerCase();
       const contentType = MIME[ext] || "application/octet-stream";
+      if (ext === ".html") {
+        fs.readFile(targetPath, (readErr, fileBuf) => {
+          if (readErr) {
+            cors(res);
+            res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+            return res.end("Not found");
+          }
+          // Full document so the CSP nonce matches the body. Ranges would split that.
+          return sendSecuredHtml(req, res, 200, fileBuf.toString("utf8"), {
+            "Cache-Control": "no-cache",
+          });
+        });
+        return;
+      }
       const size = fileStat.size;
       const range = parseByteRange(req.headers.range, size);
       const headers = {
@@ -969,12 +989,14 @@ const server = http.createServer(async (req, res) => {
       });
       cors(res);
       const payload = Buffer.from(file.html, "utf8");
+      // Headers only — do not nonce scripts inside the entitled article body.
       res.writeHead(200, {
         "Content-Type": file.contentType,
         "Content-Disposition": file.contentDisposition,
         "Cache-Control": "private, no-store",
         "X-Robots-Tag": "noindex, nofollow",
         "Content-Length": payload.length,
+        ...htmlSecurityHeaders(createCspNonce()),
       });
       if (method === "HEAD") return res.end();
       return res.end(payload);

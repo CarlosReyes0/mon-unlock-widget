@@ -645,6 +645,56 @@ test("GET /api/media/status hosts files on disk when Supabase is unset", async (
   assert.equal(body.limits.image, 8 * 1024 * 1024);
 });
 
+test("HTML documents send an enforcing Privy CSP and X-Frame-Options", async () => {
+  const write = await fetch(`http://127.0.0.1:${PORT}/write`, { method: "HEAD" });
+  assert.equal(write.status, 200);
+  const csp = write.headers.get("content-security-policy") || "";
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /frame-src[^;]*https:\/\/auth\.privy\.io/);
+  assert.match(csp, /connect-src[^;]*https:\/\/auth\.privy\.io/);
+  assert.match(csp, /connect-src[^;]*wss:\/\/relay\.walletconnect\.com/);
+  assert.match(csp, /connect-src[^;]*https:\/\/\*\.rpc\.privy\.systems/);
+  assert.match(csp, /https:\/\/js\.stripe\.com/);
+  assert.match(csp, /https:\/\/rpc\.monad\.xyz/);
+  assert.match(csp, /https:\/\/mainnet\.base\.org/);
+  assert.equal(write.headers.get("x-frame-options"), "DENY");
+  assert.equal(write.headers.get("content-security-policy-report-only"), null);
+
+  const demo = await fetch(`http://127.0.0.1:${PORT}/demo`);
+  const demoCsp = demo.headers.get("content-security-policy") || "";
+  const nonce = demoCsp.match(/'nonce-([^']+)'/)?.[1];
+  assert.ok(nonce);
+  const demoHtml = await demo.text();
+  assert.match(demoHtml, new RegExp(`<script nonce="${nonce}"`));
+  assert.equal(demo.headers.get("x-frame-options"), "DENY");
+
+  const feed = await fetch(`http://127.0.0.1:${PORT}/`, { method: "HEAD" });
+  assert.match(feed.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
+  assert.equal(feed.headers.get("x-frame-options"), "DENY");
+});
+
+test("API and widget script responses do not get document CSP headers", async () => {
+  const api = await fetch(`http://127.0.0.1:${PORT}/api/coinbase/health`);
+  assert.equal(api.status, 200);
+  assert.equal(api.headers.get("access-control-allow-origin"), "*");
+  assert.equal(api.headers.get("access-control-allow-methods"), "GET,HEAD,POST,OPTIONS");
+  assert.equal(api.headers.get("content-security-policy"), null);
+  assert.equal(api.headers.get("x-frame-options"), null);
+
+  const preflight = await fetch(`http://127.0.0.1:${PORT}/api/x402/publish`, {
+    method: "OPTIONS",
+    headers: { Origin: "https://publisher.example", "Access-Control-Request-Method": "POST" },
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
+  assert.equal(preflight.headers.get("content-security-policy"), null);
+
+  const js = await fetch(`http://127.0.0.1:${PORT}/site-nav.js`, { method: "HEAD" });
+  assert.equal(js.status, 200);
+  assert.equal(js.headers.get("content-security-policy"), null);
+  assert.equal(js.headers.get("x-frame-options"), null);
+});
+
 test("GET /server/data is not served as a static file", async () => {
   const dir = path.join(ROOT, "server/data");
   fs.mkdirSync(dir, { recursive: true });
