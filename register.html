@@ -156,18 +156,51 @@
         }
       }
 
+      const publishSigCache = new Map();
+
+      async function signPlainMessage(eth, account, message) {
+        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const walletClient = createWalletClient({
+          account,
+          chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+          transport: custom(eth),
+        });
+        return walletClient.signMessage({ account, message });
+      }
+
       async function reserveArticleId({ slug, articleIdHash, priceWei, publisher, teaser, confirmRegistered }) {
         try {
+          const { buildPublishAuthMessage, supabaseFunctionHeaders } = await import(
+            "/dist/core/publish-auth.js"
+          );
+          const fields = {
+            slug,
+            articleIdHash,
+            priceWei: priceWei.toString(),
+            publisher,
+            teaser: teaser || "",
+            paymentAsset,
+          };
+          const message = await buildPublishAuthMessage(fields);
+          let publishSig = publishSigCache.get(message);
+          if (!publishSig) {
+            const eth = window.ethereum;
+            if (!eth || !wallet) return { ok: false, error: "publish_signature_required" };
+            publishSig = await signPlainMessage(eth, wallet, message);
+            publishSigCache.set(message, publishSig);
+          }
           const res = await fetch(SUPABASE_REGISTER_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: supabaseFunctionHeaders(),
             body: JSON.stringify({
               slug,
               articleIdHash,
               priceWei: priceWei.toString(),
               publisher,
               teaser: teaser || null,
+              paymentAsset,
               confirmRegistered: Boolean(confirmRegistered),
+              publishSig,
             }),
           });
           if (res.ok) return { ok: true };
@@ -381,7 +414,7 @@ ${teaserBlock}
           });
 
           // Reserve-on-create (or confirm ownership) before the chain tx.
-          setStatus("Reserving article id…", true);
+          setStatus("Approve the publish signature, then we reserve the article id…", true);
           const reserved = await reserveArticleId({
             slug,
             articleIdHash: articleIdBytes,

@@ -1,8 +1,15 @@
 // Edge Function: update-listing
+// Requires LISTING_ADMIN_SECRET (x-listing-admin-secret) or a publisher wallet
+// signature over "Open Paywall listing v1" (listingSig).
 // Publisher updates listing_status / external_url / title / author / embed_sig
 // for an article they own. Auto-list when listOnOpenPaywall=true; hide is admin-only.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyMessage } from 'https://esm.sh/viem@2';
+import {
+  buildListingAuthMessage,
+  requestHasSecret,
+} from '../../../src/core/publish-auth.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -30,7 +37,8 @@ Deno.serve(async (req) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers':
+      'Content-Type, Authorization, apikey, x-listing-admin-secret',
     'Content-Type': 'application/json',
   };
 
@@ -61,6 +69,36 @@ Deno.serve(async (req) => {
     const publisherNorm = String(publisher).trim().toLowerCase();
     if (!/^0x[a-f0-9]{40}$/.test(publisherNorm)) {
       return new Response(JSON.stringify({ error: 'invalid_publisher' }), { status: 400, headers });
+    }
+
+    const adminSecret = Deno.env.get('LISTING_ADMIN_SECRET') || '';
+    const adminOk = requestHasSecret(req.headers, adminSecret, 'x-listing-admin-secret');
+    if (!adminOk) {
+      const listingSig = typeof body.listingSig === 'string' ? body.listingSig.trim() : '';
+      let sigOk = false;
+      if (listingSig) {
+        try {
+          const message = buildListingAuthMessage({
+            slug,
+            publisher,
+            listOnOpenPaywall,
+            externalUrl,
+            title,
+            author,
+            embedSig,
+          });
+          sigOk = await verifyMessage({
+            address: publisherNorm as `0x${string}`,
+            message,
+            signature: listingSig as `0x${string}`,
+          });
+        } catch {
+          sigOk = false;
+        }
+      }
+      if (!sigOk) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers });
+      }
     }
 
     const slugNorm = String(slug).trim();

@@ -12,6 +12,7 @@ import {
   type Hash,
 } from "viem";
 import { buildEmbedSignMessage } from "../core/embed-signature.js";
+import { buildPublishAuthMessage, supabaseFunctionHeaders } from "../core/publish-auth.js";
 import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
 import { monadMainnet } from "../core/chains.js";
 import { publishAuthor } from "../core/publish-author.js";
@@ -146,7 +147,7 @@ async function sendRegisterArticle(
 async function syncMetadata(payload: Record<string, unknown>): Promise<ReserveResult> {
   const res = await fetch(REGISTER_ARTICLE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: supabaseFunctionHeaders(),
     body: JSON.stringify(payload),
   });
   if (res.ok) return { ok: true };
@@ -231,8 +232,12 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       attempt,
     });
     const articleIdHash = keccak256(toBytes(slug));
-    status?.("Reserving…");
-    const reserved = await syncMetadata({
+    const walletClient = createWalletClient({
+      account: publisher,
+      chain: monadMainnet,
+      transport: custom(eth),
+    });
+    const publishFields = {
       slug,
       articleIdHash,
       priceWei: priceWei.toString(),
@@ -241,7 +246,21 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       body,
       title,
       author,
-      paymentAsset: "usdc",
+      paymentAsset: "usdc" as const,
+      listOnOpenPaywall: true as const,
+      externalUrl: null,
+    };
+    status?.("Approving publish…");
+    const publishMessage = await buildPublishAuthMessage(publishFields);
+    const publishSig = await walletClient.signMessage({
+      account: publisher,
+      message: publishMessage,
+    });
+
+    status?.("Reserving…");
+    const reserved = await syncMetadata({
+      ...publishFields,
+      publishSig,
     });
     if (!reserved.ok && reserved.taken) {
       lastTaken = slug;
@@ -278,11 +297,6 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       contract,
       articleId: slug,
       priceWei,
-    });
-    const walletClient = createWalletClient({
-      account: publisher,
-      chain: monadMainnet,
-      transport: custom(eth),
     });
     const embedSig = await walletClient.signMessage({ account: publisher, message });
 
@@ -331,16 +345,8 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
 
     status?.("Saving…");
     const saved = await syncMetadata({
-      slug,
-      articleIdHash,
-      priceWei: priceWei.toString(),
-      publisher,
-      teaser,
-      body,
-      title,
-      author,
-      paymentAsset: "usdc",
-      listOnOpenPaywall: true,
+      ...publishFields,
+      publishSig,
       confirmRegistered: true,
       embedSig,
     });

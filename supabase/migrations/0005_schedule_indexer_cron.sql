@@ -1,4 +1,9 @@
 -- Schedule the indexer Edge Function via pg_cron + pg_net.
+--
+-- Auth headers in THIS file are the public anon JWT only.
+-- 20260928143000_indexer_cron_secret.sql replaces the job so it also sends
+-- x-indexer-secret from Vault (`indexer_secret`). Re-applying this file
+-- drops that header — re-apply the later migration afterward.
 -- Requires pg_cron and pg_net enabled (Supabase Dashboard → Database → Extensions).
 --
 -- Apply: Supabase Dashboard → SQL Editor → run this file,

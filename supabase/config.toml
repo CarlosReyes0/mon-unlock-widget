@@ -19,13 +19,25 @@ port = 54323
 enabled = true
 
 [functions]
+# verify_jwt only checks that Authorization is a JWT this project signed.
+# The anon key embedded in the widget is such a JWT and is public, so it is
+# NOT sufficient. Each handler below enforces its own secret or wallet signature.
+# Callers still send Authorization: Bearer <anon JWT> so the gateway check passes.
+# Shared secrets go in a dedicated header (x-indexer-secret, x-publish-secret,
+# x-listing-admin-secret). Do not put the secret in Authorization while
+# verify_jwt is true — the gateway rejects a non-JWT bearer before the function runs.
+
 [functions.indexer]
-verify_jwt = false # Triggered by pg_cron (see migrations/0005_schedule_indexer_cron.sql)
+verify_jwt = true # anon JWT at the gateway; INDEXER_SECRET via x-indexer-secret in the handler
 
 [functions.article-body]
-verify_jwt = false # Called by the public widget with anon key
+verify_jwt = true # public widget sends the anon JWT; paid body requires an unlock proof
+
 [functions.register-article]
-verify_jwt = false # Called by the public generator (no user session)
+verify_jwt = true # anon JWT at the gateway; handler requires publishSig or REGISTER_PUBLISH_SECRET
+
+[functions.update-listing]
+verify_jwt = true # anon JWT at the gateway; handler requires listingSig or LISTING_ADMIN_SECRET
 
 # backfill-unlock was removed from this tree. It inserted unlock rows with the
 # service role while verify_jwt was false, so anyone who could call the deployed
