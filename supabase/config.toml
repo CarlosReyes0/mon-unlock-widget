@@ -27,5 +27,10 @@ verify_jwt = false # Called by the public widget with anon key
 [functions.register-article]
 verify_jwt = false # Called by the public generator (no user session)
 
-[functions.backfill-unlock]
-verify_jwt = false # Admin / one-off utility
+# backfill-unlock was removed from this tree. It inserted unlock rows with the
+# service role while verify_jwt was false, so anyone who could call the deployed
+# function could grant themselves article access. Do not restore it as a public
+# unauthenticated endpoint, and do not deploy it with --no-verify-jwt. If a
+# one-off backfill is ever required, keep it out of the public tree or require
+# verify_jwt = true plus a shared-secret header, and refuse requests that lack
+# that secret. Undeploy any live copy in the Supabase dashboard.

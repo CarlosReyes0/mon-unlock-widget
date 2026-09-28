@@ -292,4 +292,4 @@ The widget’s silent `eth_accounts` check only works after the reader has appro
 
 ## License
 
-MIT
+[MIT](./LICENSE)
