@@ -4,6 +4,10 @@ dist-checkout/
 dist-publisher/
 .env
 .env.local
+# Covers .env.production, .env.development, and other env dumps.
+# .env and .env.local stay ignored above. Keep the example tracked.
+.env.*
+!.env.example
 .DS_Store
 
 # Connect sample local seller map
@@ -15,3 +19,20 @@ out/
 broadcast/
 lib/
 dist-publisher/
+
+# Supabase CLI link state (project ref, pooler host). Never commit.
+supabase/.temp/
+supabase/.branches/
+
+# Credential dumps and private key material
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.keystore
+credentials.json
+client_secret*.json
+*service-account*.json
+.env.keys
