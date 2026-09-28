@@ -271,7 +271,7 @@ document.querySelector("mon-unlock").addEventListener("mon:unlocked", (e) => {
 Production indexes `ArticleRegistered` / `ArticleUnlocked` via the Supabase Edge Function `indexer`:
 
 1. **Primary:** Supabase `pg_cron` every 2 minutes. The job sends `x-indexer-secret` from Vault name `indexer_secret` (`supabase/migrations/20260928143000_indexer_cron_secret.sql`).
-2. **Fallback:** Railway cron service in `cron/` — set that service’s config path to **`/cron/railway.toml`** (not the root `railway.toml`, which forces Dockerfile builds) and set `INDEXER_SECRET` to the same value.
+2. **Fallback:** Railway cron service in `cron/` — set that service’s config path to **`/cron/railway.toml`** (not the root `railway.toml`, which forces Dockerfile builds) and set `INDEXER_SECRET` to the same value. Railpack uses the `startCommand` in that file (`deno run --allow-net --allow-env=INDEXER_SECRET indexer.ts`). A dashboard start command without `--allow-env=INDEXER_SECRET` overrides the Dockerfile and crashes with `NotCapable`.
 3. The dashboard does not trigger the indexer. The edge function rejects calls that omit the secret.
 
 The Writer Dashboard reads `articles` + `unlocks` from Supabase after wallet connect.

@@ -6,4 +6,4 @@ COPY . .
 # Pre-cache the script for faster cold starts
 RUN deno cache indexer.ts
 
-CMD ["deno", "run", "--allow-net", "--allow-env", "indexer.ts"]
+CMD ["deno", "run", "--allow-net", "--allow-env=INDEXER_SECRET", "indexer.ts"]
