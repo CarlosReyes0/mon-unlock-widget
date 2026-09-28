@@ -1,2 +1,5 @@
+# Railpack runs startCommand and ignores cron/Dockerfile CMD.
+# Without --allow-env, Deno throws NotCapable on INDEXER_SECRET and the cron exits.
 [deploy]
+startCommand = "deno run --allow-net --allow-env=INDEXER_SECRET indexer.ts"
 cronSchedule = "*/5 * * * *"
