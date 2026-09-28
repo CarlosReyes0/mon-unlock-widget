@@ -5,17 +5,21 @@
 // Unlock verification order:
 // 1. Fiat session (Stripe) via fiat_unlocks
 // 2. Supabase unlocks table (indexer backfill / dashboard)
-// 3. On-chain hasUnlocked() — instant after payment, no indexer wait
+// 3. On-chain hasUnlocked() on the MON or USDC unlock contract only.
+//    A caller-supplied unlock_contract is ignored unless it is one of those.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createPublicClient, http, keccak256, toBytes } from 'https://esm.sh/viem@2';
+import {
+  allowedUnlockContracts,
+  isAllowedUnlockContract,
+} from '../../../src/core/publish-auth.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-const DEFAULT_CONTRACT = '0x27cA0c23835328e2Ab1424b66330be86fe177FA6';
 const DEFAULT_RPC = 'https://rpc.monad.xyz';
 
 const headers = {
@@ -97,16 +101,30 @@ Deno.serve(async (req) => {
     const articleIdHashParam = url.searchParams.get('article_id_hash');
     const reader = url.searchParams.get('reader')?.toLowerCase();
     const fiatSession = url.searchParams.get('fiat_session')?.trim();
-    const unlockContract =
-      (url.searchParams.get('unlock_contract') ||
-        Deno.env.get('CONTRACT_ADDRESS') ||
-        DEFAULT_CONTRACT) as `0x${string}`;
+    const extraContracts = [
+      Deno.env.get('CONTRACT_ADDRESS'),
+      Deno.env.get('USDC_CONTRACT_ADDRESS'),
+    ];
+    const requestedContract = url.searchParams.get('unlock_contract');
+    // A caller-supplied contract is used only when it is one of ours.
+    // Anything else is ignored and both official contracts are checked,
+    // so a fake hasUnlocked() cannot unlock the paid body.
+    const contractsToCheck = (
+      requestedContract && isAllowedUnlockContract(requestedContract, extraContracts)
+        ? [requestedContract]
+        : allowedUnlockContracts(extraContracts)
+    ) as `0x${string}`[];
 
     if (!reader && !fiatSession) {
       return new Response(
         JSON.stringify({ error: 'reader (wallet) or fiat_session is required' }),
         { status: 400, headers }
       );
+    }
+
+    const readerIsAddress = Boolean(reader && /^0x[a-f0-9]{40}$/.test(reader));
+    if (reader && !readerIsAddress && !fiatSession) {
+      return new Response(JSON.stringify({ error: 'invalid_reader' }), { status: 400, headers });
     }
 
     if (!articleId && !articleIdHashParam) {
@@ -190,7 +208,7 @@ Deno.serve(async (req) => {
       isUnlocked = await hasFiatUnlock(article.article_id_hash, fiatSession);
     }
 
-    if (!isUnlocked && reader) {
+    if (!isUnlocked && readerIsAddress && reader) {
       const { data: articleRow } = await supabase
         .from('articles')
         .select('publisher')
@@ -216,7 +234,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!isUnlocked && reader) {
+    if (!isUnlocked && readerIsAddress && reader) {
       const { data: unlocks, error: unlockError } = await supabase
         .from('unlocks')
         .select('id')
@@ -235,7 +253,12 @@ Deno.serve(async (req) => {
       isUnlocked = Boolean(unlocks && unlocks.length > 0);
 
       if (!isUnlocked && article.article_id_hash) {
-        isUnlocked = await hasUnlockedOnChain(article.article_id_hash, reader, unlockContract);
+        for (const contractAddress of contractsToCheck) {
+          if (await hasUnlockedOnChain(article.article_id_hash, reader, contractAddress)) {
+            isUnlocked = true;
+            break;
+          }
+        }
       }
     }
 

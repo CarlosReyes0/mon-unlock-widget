@@ -274,7 +274,7 @@ export async function registerOnChain(input: {
 
 export async function syncMetadataToSupabase(
   input: ArticleInput,
-  options: { confirmRegistered?: boolean } = {},
+  options: { confirmRegistered?: boolean; privateKey?: `0x${string}` } = {},
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -286,18 +286,39 @@ export async function syncMetadataToSupabase(
   const { articleIdHash, priceWei, slug } = buildGenerateResult(input);
 
   try {
+    const anonKey =
+      (typeof process !== "undefined" && process.env.SUPABASE_ANON_KEY?.trim()) ||
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
+    const publishSecret =
+      (typeof process !== "undefined" && process.env.REGISTER_PUBLISH_SECRET?.trim()) || "";
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+    };
+    if (publishSecret) headers["x-publish-secret"] = publishSecret;
+    const payload: Record<string, unknown> = {
+      slug,
+      articleIdHash,
+      priceWei,
+      publisher: input.publisher.toLowerCase(),
+      teaser: input.teaser.trim(),
+      body: input.body.trim(),
+      title: input.title.trim(),
+      author: input.author?.trim() || "",
+      confirmRegistered: Boolean(options.confirmRegistered),
+    };
+    if (!publishSecret && options.privateKey) {
+      const { buildPublishAuthMessage } = await import("../../src/core/publish-auth.ts");
+      const signer = privateKeyToAccount(options.privateKey);
+      payload.publishSig = await signer.signMessage({
+        message: await buildPublishAuthMessage(payload),
+      });
+    }
     const res = await fetch(REGISTER_ARTICLE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        slug,
-        articleIdHash,
-        priceWei,
-        publisher: input.publisher.toLowerCase(),
-        teaser: input.teaser.trim(),
-        body: input.body.trim(),
-        confirmRegistered: Boolean(options.confirmRegistered),
-      }),
+      headers,
+      body: JSON.stringify(payload),
     });
 
     if (res.ok) {
@@ -351,7 +372,7 @@ export async function publishArticle(
   const fullInput = { ...input, publisher };
   const result = buildGenerateResult(fullInput);
   // Reserve slug in Supabase before on-chain registration.
-  const sync = await syncMetadataToSupabase(fullInput);
+  const sync = await syncMetadataToSupabase(fullInput, { privateKey });
   if (!sync.ok && sync.error === "slug_taken") {
     throw new Error(
       sync.message ||
@@ -368,7 +389,7 @@ export async function publishArticle(
       privateKey,
     });
     if (onChain.ok) {
-      await syncMetadataToSupabase(fullInput, { confirmRegistered: true });
+      await syncMetadataToSupabase(fullInput, { confirmRegistered: true, privateKey });
     }
   } else {
     const status = await getOnChainStatus(result.articleIdHash);
@@ -376,7 +397,7 @@ export async function publishArticle(
       ? { ok: true, alreadyRegistered: true, publisher: status.publisher }
       : { ok: false, error: "Not registered on-chain" };
     if (onChain.ok && onChain.alreadyRegistered) {
-      await syncMetadataToSupabase(fullInput, { confirmRegistered: true });
+      await syncMetadataToSupabase(fullInput, { confirmRegistered: true, privateKey });
     }
   }
 

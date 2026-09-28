@@ -1364,13 +1364,51 @@
       }
 
       const SUPABASE_REGISTER_URL = 'https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article';
+      const publishSigCache = new Map();
+
+      async function signPlainMessage(eth, account, message) {
+        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const walletClient = createWalletClient({
+          account,
+          chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
+          transport: custom(eth),
+        });
+        return walletClient.signMessage({ account, message });
+      }
 
       async function syncMetadataToSupabase(payload) {
         try {
+          const { buildPublishAuthMessage, supabaseFunctionHeaders } = await import(
+            "/dist/core/publish-auth.js"
+          );
+          const next = { ...payload };
+          if (!next.publishSig && connectedWallet) {
+            const message = await buildPublishAuthMessage({
+              slug: next.slug,
+              publisher: next.publisher || connectedWallet,
+              articleIdHash: next.articleIdHash,
+              priceWei: next.priceWei,
+              paymentAsset: next.paymentAsset,
+              title: next.title,
+              author: next.author,
+              teaser: next.teaser,
+              body: next.body,
+              listOnOpenPaywall: next.listOnOpenPaywall,
+              externalUrl: next.externalUrl,
+            });
+            let publishSig = publishSigCache.get(message);
+            if (!publishSig) {
+              const eth = getInjectedProvider();
+              if (!eth) return { ok: false, error: "publish_signature_required" };
+              publishSig = await signPlainMessage(eth, connectedWallet, message);
+              publishSigCache.set(message, publishSig);
+            }
+            next.publishSig = publishSig;
+          }
           const res = await fetch(SUPABASE_REGISTER_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            headers: supabaseFunctionHeaders(),
+            body: JSON.stringify(next),
           });
           if (res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -1794,6 +1832,14 @@ ${teaserEsc}
                   publisher: connectedWallet,
                   teaser: v.teaser,
                   body: v.body,
+                  title: v.title,
+                  author: v.author,
+                  paymentAsset: selectedAsset(),
+                  ...(v.listOnOpenPaywall
+                    ? { listOnOpenPaywall: true, externalUrl: v.externalUrl || null }
+                    : v.externalUrl
+                      ? { externalUrl: v.externalUrl }
+                      : {}),
                 };
                 const reserved = await syncMetadataToSupabase(reservePayload);
                 if (!reserved.ok && reserved.error === "slug_taken") {

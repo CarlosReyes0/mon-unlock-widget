@@ -4,6 +4,6 @@
   "type": "module",
   "description": "Railway cron fallback that POSTs the Supabase indexer Edge Function. Primary schedule is Supabase pg_cron (migrations/0005_schedule_indexer_cron.sql). Set this service's config path to /cron/railway.toml.",
   "scripts": {
-    "start": "deno run --allow-net indexer.ts"
+    "start": "deno run --allow-net --allow-env indexer.ts"
   }
 }

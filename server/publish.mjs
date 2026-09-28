@@ -299,9 +299,18 @@ export async function syncMetadataToSupabase(input, options = {}) {
   const priceWei = toPriceWei(input.price, paymentAsset);
 
   try {
+    const anonKey = (process.env.SUPABASE_ANON_KEY || "").trim() ||
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
+    const publishSecret = (process.env.REGISTER_PUBLISH_SECRET || "").trim();
+    const headers = {
+      "Content-Type": "application/json",
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+    };
+    if (publishSecret) headers["x-publish-secret"] = publishSecret;
     const res = await fetch(REGISTER_ARTICLE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         slug,
         articleIdHash,

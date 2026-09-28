@@ -1,8 +1,11 @@
 // Supabase Edge Function: Indexer
 // Scans ArticleRegistered / ArticleUnlocked on MON and USDC unlock contracts.
+// Caller must send x-indexer-secret matching INDEXER_SECRET.
+// Authorization stays the public anon JWT so verify_jwt can stay enabled.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createPublicClient, http, parseAbiItem } from "https://esm.sh/viem@2";
+import { requestHasSecret } from "../../../src/core/publish-auth.ts";
 
 const MON_CONTRACT = (Deno.env.get("CONTRACT_ADDRESS") || "") as `0x${string}`;
 const USDC_CONTRACT = (Deno.env.get("USDC_CONTRACT_ADDRESS") ||
@@ -161,7 +164,15 @@ async function indexContract(
   return `${paymentAsset}: ${registeredLogs.length} articles, ${unlockedLogs.length} unlocks through ${scannedUpTo}`;
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const indexerSecret = Deno.env.get("INDEXER_SECRET") || "";
+  if (!indexerSecret.trim()) {
+    return new Response("indexer_auth_not_configured", { status: 503 });
+  }
+  if (!requestHasSecret(req.headers, indexerSecret, "x-indexer-secret")) {
+    return new Response("unauthorized", { status: 401 });
+  }
+
   try {
     const targets: { address: `0x${string}`; asset: PaymentAsset }[] = [];
     if (isAddress(MON_CONTRACT)) targets.push({ address: MON_CONTRACT, asset: "mon" });
