@@ -77,6 +77,33 @@
         max-width: 32rem;
         line-height: 1.55;
       }
+      .mast {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+      .write-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-bottom: 0.2rem;
+        padding: 0.5rem 1.05rem;
+        min-height: 2.5rem;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        text-decoration: none;
+      }
+      .write-btn:hover { background: #115e59; }
+      .write-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
       .feed {
         margin-top: 2rem;
         display: flex;
@@ -177,8 +204,13 @@
   <body>
     <div class="wrap">
       <div id="site-nav"></div>
-      <p class="kicker">Directory</p>
-      <h1>Articles</h1>
+      <header class="mast">
+        <div>
+          <p class="kicker">Directory</p>
+          <h1>Articles</h1>
+        </div>
+        <a class="write-btn" href="/write">Write</a>
+      </header>
       <p class="lede">
         Writers opt in to list here. Each article shows its price up front and charges a real micropayment to unlock — not a free demo. Unlock once; read here and on the publisher’s site when they embed the same article.
       </p>

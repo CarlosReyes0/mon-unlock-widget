@@ -80,7 +80,13 @@ test("write drafts stay on-device and do not require sign-in", () => {
   assert.match(account, /peekResumableDraft/);
   assert.match(account, /ResumeDraftCard/);
   assert.match(articles, /id="resume-draft"/);
+  assert.match(articles, /class="write-btn" href="\/write"/);
   assert.match(articles, /write-draft-resume\.js/);
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "site-nav.js"), "utf8"), /nav: "write"/);
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(ROOT, "src/publisher/SiteNav.tsx"), "utf8"),
+    /nav: "write"/,
+  );
   assert.match(dash, /write-draft-resume\.js/);
   assert.match(resume, /openpaywall-write-drafts/);
   assert.match(dockerfile, /write-draft-resume\.js/);
