@@ -11,6 +11,16 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
     <title>Writer Dashboard — Open Paywall</title>
+    <script>
+      (function () {
+        var target = new URL("/account.html", location.origin);
+        new URL(location.href).searchParams.forEach(function (value, key) {
+          target.searchParams.set(key, value);
+        });
+        target.hash = location.hash;
+        location.replace(target.toString());
+      })();
+    </script>
     <link rel="stylesheet" href="/dist/mon-unlock.css" />
     <script type="module" src="/dist/mon-unlock.js?v=20240714"></script>
     <!-- Supabase Client for reading dashboard data -->

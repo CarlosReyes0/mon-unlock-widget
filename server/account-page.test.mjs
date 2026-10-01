@@ -18,6 +18,8 @@ test("sign out stays clickable while wallet setup is busy", () => {
 test("account page is You + Get paid, no wallet address", () => {
   const app = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherApp.tsx"), "utf8");
   const auth = fs.readFileSync(path.join(ROOT, "src/publisher/PublisherAuth.tsx"), "utf8");
+  assert.match(app, /Your articles/);
+  assert.match(app, /AccountArticles/);
   assert.match(app, /Get paid/);
   assert.match(app, /Connect payments/);
   assert.match(app, /then money goes to your bank/);
@@ -40,6 +42,12 @@ test("account page is You + Get paid, no wallet address", () => {
   assert.doesNotMatch(app, /Set up Stripe payouts/);
   assert.doesNotMatch(auth, /This wallet receives on-chain MON/);
   assert.match(auth, /Email or Google\. No password\./);
+  const nav = fs.readFileSync(path.join(ROOT, "src/publisher/SiteNav.tsx"), "utf8");
+  const staticNav = fs.readFileSync(path.join(ROOT, "site-nav.js"), "utf8");
+  assert.match(nav, /label: "Account"/);
+  assert.doesNotMatch(nav, /label: "Dashboard"/);
+  assert.doesNotMatch(staticNav, /label: "Dashboard"/);
+  assert.match(fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8"), /location\.replace/);
 });
 
 test("checkout offers USDC as a lower-fee alternative to card", () => {

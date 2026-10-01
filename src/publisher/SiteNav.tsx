@@ -2,7 +2,6 @@ const LINKS = [
   { href: "/", nav: "articles", label: "Articles" },
   { href: "/demo", nav: "demo", label: "Demo" },
   { href: "/account.html", nav: "account", label: "Account" },
-  { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
   { href: "/agents", nav: "agents", label: "Agents" },
 ] as const;
 
@@ -18,8 +17,7 @@ function isActive(nav: string) {
       path.endsWith("/articles.html") ||
       path.endsWith("/article.html")
     );
-  if (nav === "account") return path.includes("account");
-  if (nav === "dashboard") return path.includes("dashboard");
+  if (nav === "account") return path.includes("account") || path.includes("dashboard");
   if (nav === "agents") return path.includes("agents") || path.includes("skill");
   return false;
 }
