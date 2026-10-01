@@ -10,7 +10,6 @@
   const PRODUCT_LINKS = [
     { href: "/", nav: "articles", label: "Articles" },
     { href: "/demo", nav: "demo", label: "Demo" },
-    { href: "/write", nav: "write", label: "Write" },
     { href: "/account.html", nav: "account", label: "Account" },
     { href: "/dashboard.html", nav: "dashboard", label: "Dashboard" },
     { href: "/agents", nav: "agents", label: "Agents" },
@@ -27,7 +26,6 @@
         path.endsWith("/articles.html") ||
         path.endsWith("/article.html")
       );
-    if (nav === "write") return path === "/write" || path.includes("write.html");
     if (nav === "account") return path.includes("account");
     if (nav === "dashboard") return path.includes("dashboard");
     if (nav === "agents") return path.includes("agents") || path.includes("skill");
