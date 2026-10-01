@@ -153,6 +153,17 @@ export default defineConfig(({ mode }) => {
               req.url?.startsWith("/write.html?")
             ) {
               req.url = "/write.html";
+            } else if (
+              req.url === "/account" ||
+              req.url?.startsWith("/account?") ||
+              req.url === "/dashboard" ||
+              req.url?.startsWith("/dashboard?")
+            ) {
+              const qIndex = req.url.indexOf("?");
+              const query = qIndex >= 0 ? req.url.slice(qIndex) : "";
+              req.url = req.url.startsWith("/dashboard")
+                ? `/dashboard.html${query}`
+                : `/account.html${query}`;
             } else if (req.url === "/articles" || req.url?.startsWith("/articles?")) {
               req.url = "/articles.html";
             } else if (req.url?.startsWith("/articles/")) {

@@ -31,9 +31,12 @@ function AccountFallback() {
         <h1>Publisher account</h1>
         <p className="mon-pub-shell__lead">
           Drafts save without an account. Set <code>VITE_PRIVY_APP_ID</code> to enable email / Google
-          sign-in. Until then, use MetaMask on the <a href="/generator.html">generator</a> or{" "}
-          <a href="/dashboard.html">dashboard</a> to publish.
+          sign-in. Until then, use MetaMask on the <a href="/generator.html">generator</a> to publish.
         </p>
+        <div className="mon-pub-shell__card mon-pub-articles">
+          <h2 className="mon-pub-shell__card-title">Your articles</h2>
+          <p className="mon-pub-auth__hint">Sign in to see unlocks, revenue, and listings.</p>
+        </div>
         <ResumeDraftCard resume={resume} />
         <SiteFooter />
       </div>

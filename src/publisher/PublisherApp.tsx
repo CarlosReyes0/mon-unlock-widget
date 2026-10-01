@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { peekResumableDraft, type ResumableDraft } from "../core/write-drafts.js";
+import { AccountArticles } from "./AccountArticles.js";
 import { PublisherAuth } from "./PublisherAuth.js";
 import { ResumeDraftCard } from "./ResumeDraftCard.js";
 import { SiteFooter, SiteNav } from "./SiteNav.js";
@@ -95,7 +96,7 @@ export function PublisherApp() {
     setPayoutBusy(true);
     setPayoutMsg("");
     try {
-      const returnUrl = new URL("/dashboard.html", window.location.origin);
+      const returnUrl = new URL("/account.html", window.location.origin);
       returnUrl.searchParams.set("stripe_onboard", "return");
       const refreshUrl = new URL("/account.html", window.location.origin);
       refreshUrl.searchParams.set("stripe_onboard", "refresh");
@@ -252,6 +253,15 @@ export function PublisherApp() {
             ) : null}
           </>
         ) : null}
+
+        {signedIn ? (
+          <AccountArticles wallet={address()} />
+        ) : (
+          <div className="mon-pub-shell__card mon-pub-articles">
+            <h2 className="mon-pub-shell__card-title">Your articles</h2>
+            <p className="mon-pub-auth__hint">Sign in to see unlocks, revenue, and listings.</p>
+          </div>
+        )}
 
         <ResumeDraftCard resume={resume} />
         <SiteFooter />
