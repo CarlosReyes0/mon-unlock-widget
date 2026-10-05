@@ -6,6 +6,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifyMessage } from 'https://esm.sh/viem@2';
+import { parseArticlePriceCents, usdcAtomicForCents } from '../../../src/core/article-price.ts';
 import {
   buildListingAuthMessage,
   requestHasSecret,
@@ -61,6 +62,7 @@ Deno.serve(async (req) => {
       author,
       embedSig,
     } = body;
+    const priceCentsInput = body.priceCents ?? body.price_cents;
 
     if (!slug || !publisher) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers });
@@ -69,6 +71,15 @@ Deno.serve(async (req) => {
     const publisherNorm = String(publisher).trim().toLowerCase();
     if (!/^0x[a-f0-9]{40}$/.test(publisherNorm)) {
       return new Response(JSON.stringify({ error: 'invalid_publisher' }), { status: 400, headers });
+    }
+
+    let priceCents: number | undefined;
+    if (priceCentsInput !== undefined && priceCentsInput !== null && priceCentsInput !== '') {
+      const parsed = parseArticlePriceCents(priceCentsInput);
+      if (!parsed.ok) {
+        return new Response(JSON.stringify({ error: parsed.error }), { status: 400, headers });
+      }
+      priceCents = parsed.cents;
     }
 
     const adminSecret = Deno.env.get('LISTING_ADMIN_SECRET') || '';
@@ -86,6 +97,7 @@ Deno.serve(async (req) => {
             title,
             author,
             embedSig,
+            ...(priceCents != null ? { priceCents } : {}),
           });
           sigOk = await verifyMessage({
             address: publisherNorm as `0x${string}`,
@@ -104,7 +116,7 @@ Deno.serve(async (req) => {
     const slugNorm = String(slug).trim();
     const { data: existing, error: lookupError } = await supabase
       .from('articles')
-      .select('article_id, article_id_hash, publisher, listing_status')
+      .select('article_id, article_id_hash, publisher, listing_status, payment_asset')
       .eq('article_id', slugNorm)
       .maybeSingle();
 
@@ -139,6 +151,14 @@ Deno.serve(async (req) => {
       patch.listing_status = 'unlisted';
     }
 
+    // Price only. Existing unlock rows and on-chain hasUnlocked flags stay as they are.
+    if (priceCents != null) {
+      patch.price_cents = priceCents;
+      if (existing.payment_asset === 'usdc') {
+        patch.price_wei = usdcAtomicForCents(priceCents).toString();
+      }
+    }
+
     if (typeof title === 'string') patch.title = title.trim() || null;
     if (typeof author === 'string') patch.author = author.trim() || null;
     if (typeof embedSig === 'string' && embedSig.trim()) {
@@ -149,7 +169,7 @@ Deno.serve(async (req) => {
       .from('articles')
       .update(patch)
       .eq('article_id_hash', existing.article_id_hash)
-      .select('article_id, listing_status, external_url, listed_at, title, author')
+      .select('article_id, listing_status, external_url, listed_at, title, author, price_cents, price_wei')
       .maybeSingle();
 
     if (updateError) {

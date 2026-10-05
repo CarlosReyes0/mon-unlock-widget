@@ -128,6 +128,23 @@ describe("listing signature", () => {
       false
     );
   });
+
+  it("appends priceCents only when the update sets a price", () => {
+    const base = buildListingAuthMessage({
+      slug: "july-rain",
+      publisher: account.address,
+      listOnOpenPaywall: true,
+    });
+    assert.doesNotMatch(base, /priceCents/);
+    const priced = buildListingAuthMessage({
+      slug: "july-rain",
+      publisher: account.address,
+      listOnOpenPaywall: true,
+      priceCents: 100,
+    });
+    assert.match(priced, /priceCents:100/);
+    assert.notEqual(priced, base);
+  });
 });
 
 describe("shouldApplyListing", () => {

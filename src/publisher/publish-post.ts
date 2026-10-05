@@ -6,11 +6,11 @@ import {
   http,
   keccak256,
   parseEther,
-  parseUnits,
   toBytes,
   type Address,
   type Hash,
 } from "viem";
+import { formatUsdFromCents, parseArticlePriceCents, usdcAtomicForCents } from "../core/article-price.js";
 import { buildEmbedSignMessage } from "../core/embed-signature.js";
 import { buildPublishAuthMessage, supabaseFunctionHeaders } from "../core/publish-auth.js";
 import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
@@ -21,7 +21,6 @@ import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js"
 
 const REGISTER_ARTICLE_URL =
   "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
-const PRICE_USDC = "0.50";
 const ZERO = "0x0000000000000000000000000000000000000000";
 /** registerArticle is free except gas; dust below this cannot pay the Monad fee. */
 const MIN_MON_FOR_GAS = parseEther("0.001");
@@ -66,6 +65,8 @@ export type PublishPostInput = {
   author?: string;
   provider: Eip1193Provider;
   publisher: Address;
+  /** USD cents. Minimum 50. */
+  priceCents: number;
   /** Reuse a slug reserved on an earlier Publish click for this draft. */
   preferredSlug?: string;
   onStatus?: (msg: string) => void;
@@ -211,13 +212,17 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
   if (!title) throw new Error("Add a title.");
   if (!teaser || !body) throw new Error("Write, or paste, the piece.");
 
-  const priceWei = parseUnits(PRICE_USDC, 6);
+  const priced = parseArticlePriceCents(input.priceCents);
+  if (!priced.ok) throw new Error("Minimum price is $0.50.");
+  const priceCents = priced.cents;
+  const priceWei = usdcAtomicForCents(priceCents);
+  const status = input.onStatus;
+  status?.(`Publishing at ${formatUsdFromCents(priceCents)}`);
   const contract = MAINNET_USDC_UNLOCK_CONTRACT as Address;
   const publisher = input.publisher.toLowerCase() as Address;
   const author = publishAuthor(input.author);
   if (!author) throw new Error("Add your name.");
   const eth = mapWalletSendToEthSend(input.provider);
-  const status = input.onStatus;
 
   const publicClient = createPublicClient({
     chain: monadMainnet,
@@ -250,7 +255,8 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
       listOnOpenPaywall: true as const,
       externalUrl: null,
     };
-    status?.("Approving publish…");
+    const pricePayload = { priceCents };
+    status?.(`Publishing at ${formatUsdFromCents(priceCents)}`);
     const publishMessage = await buildPublishAuthMessage(publishFields);
     const publishSig = await walletClient.signMessage({
       account: publisher,
@@ -260,6 +266,7 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
     status?.("Reserving…");
     const reserved = await syncMetadata({
       ...publishFields,
+      ...pricePayload,
       publishSig,
     });
     if (!reserved.ok && reserved.taken) {
@@ -346,6 +353,7 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
     status?.("Saving…");
     const saved = await syncMetadata({
       ...publishFields,
+      ...pricePayload,
       publishSig,
       confirmRegistered: true,
       embedSig,

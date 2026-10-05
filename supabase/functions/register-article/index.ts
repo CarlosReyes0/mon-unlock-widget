@@ -9,6 +9,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifyMessage } from 'https://esm.sh/viem@2';
 import {
+  parseArticlePriceCents,
+  usdcAtomicForCents,
+} from '../../../src/core/article-price.ts';
+import {
   buildPublishAuthMessage,
   requestHasSecret,
   shouldApplyListing,
@@ -78,7 +82,9 @@ Deno.serve(async (req) => {
       externalUrl,
       embedSig,
       paymentAsset,
+      priceCents: priceCentsRaw,
     } = body;
+    const priceCentsInput = priceCentsRaw ?? body.price_cents;
 
     if (!slug || !articleIdHash || priceWei == null || !publisher) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers });
@@ -126,6 +132,26 @@ Deno.serve(async (req) => {
     const slugNorm = String(slug).trim();
     const hashNorm = String(articleIdHash).trim();
     const priceWeiStr = typeof priceWei === 'string' ? priceWei : String(priceWei);
+
+    let priceCents: number | undefined;
+    if (priceCentsInput !== undefined && priceCentsInput !== null && priceCentsInput !== '') {
+      const parsed = parseArticlePriceCents(priceCentsInput);
+      if (!parsed.ok) {
+        return new Response(JSON.stringify({ error: parsed.error }), { status: 400, headers });
+      }
+      if (paymentAsset !== 'mon') {
+        let wei: bigint;
+        try {
+          wei = BigInt(priceWeiStr);
+        } catch {
+          wei = -1n;
+        }
+        if (wei !== usdcAtomicForCents(parsed.cents)) {
+          return new Response(JSON.stringify({ error: 'price_mismatch' }), { status: 400, headers });
+        }
+      }
+      priceCents = parsed.cents;
+    }
 
     // Prefer hash lookup; also reject if another row already owns this slug string.
     const { data: byHash, error: hashLookupError } = await supabase
@@ -199,6 +225,7 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
+    if (priceCents != null) row.price_cents = priceCents;
     if (typeof title === 'string') row.title = title.trim() || null;
     if (typeof author === 'string') row.author = author.trim() || null;
     if (paymentAsset === 'usdc' || paymentAsset === 'mon') row.payment_asset = paymentAsset;

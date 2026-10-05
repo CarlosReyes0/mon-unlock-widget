@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { createWalletClient, custom, type Address } from "viem";
 import { ArticleNftMint } from "./ArticleNftMint.js";
+import { ArticlePriceForm } from "./ArticlePriceForm.js";
+import { pushUsdcListingPrice } from "./update-article-price.js";
 import { monadMainnet } from "../core/chains.js";
+import { usdcAtomicForCents } from "../core/article-price.js";
 import { formatMon } from "../core/types.js";
 import { buildListingAuthMessage, supabaseFunctionHeaders } from "../core/publish-auth.js";
 import type { Eip1193Provider } from "../core/wallet.js";
@@ -14,6 +17,7 @@ type ArticleRow = {
   title: string;
   author: string;
   priceWei: bigint;
+  priceCents: number | null;
   paymentAsset: "usdc" | "mon";
   unlockCount: number;
   revenue: bigint;
@@ -36,6 +40,15 @@ function money(asset: "usdc" | "mon", amount: bigint): string {
   return `${formatMon(amount)} MON`;
 }
 
+function centsFromArticle(row: Pick<ArticleRow, "priceCents" | "priceWei" | "paymentAsset">): number | null {
+  if (row.priceCents != null && Number.isInteger(row.priceCents) && row.priceCents >= 50) return row.priceCents;
+  if (row.paymentAsset === "usdc" && row.priceWei > 0n && row.priceWei % 10_000n === 0n) {
+    const cents = Number(row.priceWei / 10_000n);
+    if (Number.isSafeInteger(cents) && cents >= 50) return cents;
+  }
+  return null;
+}
+
 function revenueLabel(rows: ArticleRow[]): string {
   const usdc = rows.filter((row) => row.paymentAsset === "usdc").reduce((sum, row) => sum + row.revenue, 0n);
   const mon = rows.filter((row) => row.paymentAsset !== "usdc").reduce((sum, row) => sum + row.revenue, 0n);
@@ -52,6 +65,8 @@ export function AccountArticles({ wallet }: Props) {
   const [listOn, setListOn] = useState(false);
   const [allowBuy, setAllowBuy] = useState(true);
   const [externalUrl, setExternalUrl] = useState("");
+  const [priceCents, setPriceCents] = useState(50);
+  const [priceDirty, setPriceDirty] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -61,7 +76,7 @@ export function AccountArticles({ wallet }: Props) {
     setStatus("Loading your articles…");
     try {
       const articleRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/articles?select=article_id,article_id_hash,publisher,price_wei,payment_asset,title,author,listing_status,allow_a_la_carte,external_url&publisher=eq.${encodeURIComponent(publisher)}`,
+        `${SUPABASE_URL}/rest/v1/articles?select=article_id,article_id_hash,publisher,price_wei,price_cents,payment_asset,title,author,listing_status,allow_a_la_carte,external_url&publisher=eq.${encodeURIComponent(publisher)}`,
         { headers: supabaseFunctionHeaders() }
       );
       if (!articleRes.ok) throw new Error("articles_" + articleRes.status);
@@ -101,11 +116,13 @@ export function AccountArticles({ wallet }: Props) {
           } catch {
             priceWei = 0n;
           }
+          const rawCents = Number(row.price_cents);
           return {
             articleId: slug,
             title: String(row.title || slug || "Untitled"),
             author: String(row.author || ""),
             priceWei,
+            priceCents: Number.isInteger(rawCents) ? rawCents : null,
             paymentAsset: row.payment_asset === "usdc" ? "usdc" : "mon",
             unlockCount: stat?.count || 0,
             revenue: stat?.revenue || 0n,
@@ -132,6 +149,8 @@ export function AccountArticles({ wallet }: Props) {
     setListOn(row.listingStatus === "listed");
     setAllowBuy(row.allowALaCarte);
     setExternalUrl(row.externalUrl);
+    setPriceCents(centsFromArticle(row) ?? 50);
+    setPriceDirty(false);
     setSaveMsg("");
   }
 
@@ -145,11 +164,36 @@ export function AccountArticles({ wallet }: Props) {
     setSaveMsg("Approve the listing signature…");
     try {
       const url = externalUrl.trim() || null;
+      const editingPrice = row.paymentAsset === "usdc" && priceDirty;
+      const nextCents = editingPrice ? priceCents : undefined;
+      const nextWei = nextCents != null ? usdcAtomicForCents(nextCents) : null;
+      let embedSig: `0x${string}` | undefined;
+      if (editingPrice && nextWei != null && nextWei !== row.priceWei) {
+        setSaveMsg("Approve the new price, then confirm it on Monad…");
+        try {
+          embedSig = await pushUsdcListingPrice({
+            slug: row.articleId,
+            publisher: wallet as Address,
+            provider,
+            priceCents: nextCents as number,
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Could not update the on-chain price.";
+          throw new Error(
+            /insufficient|funds|balance/i.test(msg)
+              ? "The wallet needs a little MON for the network fee before the price can change."
+              : msg
+          );
+        }
+        setSaveMsg("Approve the listing signature…");
+      }
       const message = buildListingAuthMessage({
         slug: row.articleId,
         publisher: wallet,
         listOnOpenPaywall: listOn,
         externalUrl: url,
+        ...(embedSig ? { embedSig } : {}),
+        ...(nextCents != null ? { priceCents: nextCents } : {}),
       });
       const account = wallet as Address;
       const walletClient = createWalletClient({
@@ -166,6 +210,8 @@ export function AccountArticles({ wallet }: Props) {
           publisher: wallet,
           listOnOpenPaywall: listOn,
           externalUrl: url,
+          ...(embedSig ? { embedSig } : {}),
+          ...(nextCents != null ? { priceCents: nextCents } : {}),
           listingSig,
         }),
       });
@@ -241,6 +287,19 @@ export function AccountArticles({ wallet }: Props) {
             <input type="checkbox" checked={allowBuy} onChange={(e) => setAllowBuy(e.target.checked)} />
             Allow pay-per-article on this piece
           </label>
+          {selected.paymentAsset === "usdc" ? (
+            <div className="mon-pub-articles__price">
+              <p className="mon-pub-shell__field-label">Price</p>
+              <ArticlePriceForm
+                cents={priceCents}
+                onChange={(next) => {
+                  setPriceCents(next);
+                  setPriceDirty(true);
+                }}
+              />
+              <p className="mon-pub-auth__hint">People who already unlocked this keep access.</p>
+            </div>
+          ) : null}
           <label className="mon-pub-shell__field-label" htmlFor="accountListingUrl">
             Your site URL (optional)
           </label>

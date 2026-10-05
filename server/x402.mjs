@@ -15,6 +15,7 @@
  */
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { publishAmount } from "./mpp.mjs";
+import { storedPriceCents } from "./article-price.mjs";
 
 export const BASE_CHAIN_ID = 8453;
 export const BASE_NETWORK_V1 = "base";
@@ -68,9 +69,11 @@ export function usdToUsdcAtomic(human) {
  * Listing price_wei is already 6-dec USDC atomic for USDC articles.
  * MON listings have no USD oracle here — fall back to the default USDC unlock.
  */
-export function usdcAtomicForListing(priceWei, paymentAsset) {
+export function usdcAtomicForListing(priceWei, paymentAsset, priceCents) {
   const asset = String(paymentAsset || "usdc").trim().toLowerCase();
   if (asset === "usdc" || asset === "usd" || asset === "stable") {
+    const stored = storedPriceCents(priceCents);
+    if (stored != null) return String(stored * 10000);
     try {
       const n = BigInt(String(priceWei ?? "").trim() || "0");
       if (n > 0n) return n.toString();

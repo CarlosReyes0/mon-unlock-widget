@@ -50,6 +50,18 @@ test("account page is You + Get paid, no wallet address", () => {
   assert.match(fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8"), /location\.replace/);
 });
 
+test("article settings edit price through update-listing", () => {
+  const articles = fs.readFileSync(path.join(ROOT, "src/publisher/AccountArticles.tsx"), "utf8");
+  const edge = fs.readFileSync(path.join(ROOT, "supabase/functions/update-listing/index.ts"), "utf8");
+  assert.match(articles, /ArticlePriceForm/);
+  assert.match(articles, /priceCents/);
+  assert.match(articles, /pushUsdcListingPrice/);
+  assert.match(articles, /already unlocked this keep access/);
+  assert.match(edge, /price_cents/);
+  assert.match(edge, /parseArticlePriceCents/);
+  assert.doesNotMatch(edge, /from\('unlocks'\)/);
+});
+
 test("checkout offers USDC as a lower-fee alternative to card", () => {
   const checkout = fs.readFileSync(path.join(ROOT, "src/checkout/CheckoutApp.tsx"), "utf8");
   const crypto = fs.readFileSync(path.join(ROOT, "src/checkout/CryptoPaySection.tsx"), "utf8");
