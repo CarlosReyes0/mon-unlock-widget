@@ -14,3 +14,10 @@ alter table public.articles
 
 comment on column public.articles.price_cents is
   'Listed USD price in cents. Card and USDC checkout use this when set. Null keeps the previous client amount.';
+
+-- public.articles SELECT is column-scoped (20260916094014_restrict_articles_body).
+-- A new column is invisible to anon until it is granted. service_role already
+-- has table-level access, so register-article and update-listing can write it.
+grant select (price_cents) on table public.articles to anon, authenticated;
+
+notify pgrst, 'reload schema';

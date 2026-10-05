@@ -45,6 +45,9 @@ test("migration revokes articles.body from anon/authenticated and re-grants list
   assert.match(sql, /\barticle_id\b/);
   assert.match(sql, /\ballow_a_la_carte\b/);
   assert.match(sql, /\bembed_sig\b/);
+  assert.match(sql, /\bprice_cents\b/);
+  const priceSql = read("supabase/migrations/0013_article_price_cents.sql");
+  assert.match(priceSql, /grant select \(price_cents\) on table public\.articles to anon, authenticated/i);
   assert.doesNotMatch(
     sql.replace(/--[^\n]*/g, ""),
     /grant select \([^)]*\bbody\b/i

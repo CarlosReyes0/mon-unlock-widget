@@ -54,7 +54,8 @@ grant select (
   external_url,
   listed_at,
   embed_sig,
-  allow_a_la_carte
+  allow_a_la_carte,
+  price_cents
 ) on table public.articles to anon, authenticated;
 
 notify pgrst, 'reload schema';
