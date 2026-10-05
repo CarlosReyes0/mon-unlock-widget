@@ -27,6 +27,11 @@ import { signMirosharkUsdc, type MirosharkClientPayment } from "../core/miroshar
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
 import { WriteDraftsPanel } from "./WriteDraftsPanel.js";
+import {
+  DEFAULT_ARTICLE_PRICE_CENTS,
+  readLastPublishedPriceCents,
+  writeLastPublishedPriceCents,
+} from "../core/article-price.js";
 import { PUBLISH_AUTHOR_MAX, publishAuthor } from "../core/publish-author.js";
 import { ensurePaywallFold, hasPaywallFold, seedPaywallFold } from "../core/split-post.js";
 import { publishPost } from "./publish-post.js";
@@ -56,6 +61,10 @@ function syncDraftUrl(id: string) {
 
 export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [title, setTitle] = useState("");
+  const [priceCents, setPriceCents] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_ARTICLE_PRICE_CENTS;
+    return readLastPublishedPriceCents(window.localStorage);
+  });
   const [author, setAuthor] = useState("");
   const [suggestedAuthor, setSuggestedAuthor] = useState("");
   const [body, setBody] = useState("");
@@ -393,18 +402,20 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       return;
     }
     setBusy(true);
-    setStatus("Publishing…");
+    setStatus("");
     try {
       const { slug } = await publishPost({
         title,
         rawBody: body,
         author: name,
+        priceCents,
         publisher: window.__monPublisherAddress as Address,
         provider: window.__monPublisherProvider as Eip1193Provider,
         preferredSlug: reservedSlug,
         onStatus: setStatus,
         onSlugReserved: setReservedSlug,
       });
+      writeLastPublishedPriceCents(window.localStorage, priceCents);
       try {
         deleteWriteDraft(window.localStorage, draftId);
         setDrafts(listWriteDrafts(window.localStorage));
@@ -601,6 +612,8 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         ) : null}
         <WriteDoc
           value={body}
+          priceCents={priceCents}
+          onPriceCents={setPriceCents}
           onChange={(next) => {
             setConfirmDelete(false);
             setDeleteNote("");

@@ -171,10 +171,12 @@ export type ListingAuthFields = {
   title?: unknown;
   author?: unknown;
   embedSig?: unknown;
+  /** Appended only when a listing update sets a price, so older signatures still verify. */
+  priceCents?: unknown;
 };
 
 export function buildListingAuthMessage(input: ListingAuthFields): string {
-  return [
+  const lines = [
     LISTING_AUTH_PREFIX,
     `slug:${asText(input.slug).trim()}`,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
@@ -183,7 +185,11 @@ export function buildListingAuthMessage(input: ListingAuthFields): string {
     `title:${asText(input.title)}`,
     `author:${asText(input.author)}`,
     `embedSig:${asText(input.embedSig).trim()}`,
-  ].join("\n");
+  ];
+  if (input.priceCents != null && input.priceCents !== "") {
+    lines.push(`priceCents:${asText(input.priceCents).trim()}`);
+  }
+  return lines.join("\n");
 }
 
 /**

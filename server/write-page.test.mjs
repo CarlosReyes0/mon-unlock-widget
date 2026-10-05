@@ -20,8 +20,8 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(doc, /snippetFromPastedText/);
   assert.match(app, /WriteDoc/);
   assert.match(app, /WriteMediaSheet/);
-  assert.match(doc, /Paywall · free above · paid below/);
-  assert.match(doc, /Paywall · free above · paid below/);
+  assert.match(doc, /Paid below this line/);
+  assert.match(doc, /ArticlePriceForm/);
   assert.match(doc, /Remove paywall/);
   assert.match(doc, /insertPaywall/);
   assert.match(app, /Add paywall/);
@@ -39,7 +39,8 @@ test("write page is title + body + Publish, not an embed form", () => {
   assert.match(app, /preferredSlug: reservedSlug/);
   assert.match(app, /onSlugReserved: setReservedSlug/);
   assert.match(app, /reservedSlug/);
-  assert.match(doc, /Paywall · free above · paid below/);
+  assert.match(doc, /Paid below this line/);
+  assert.match(doc, /Edit price, currently/);
   assert.match(app, /Delete draft/);
   assert.match(app, /onDeleteCurrentDraft/);
   assert.match(app, /Keep draft/);
@@ -161,7 +162,10 @@ test("publishPost lists USDC posts on Open Paywall", () => {
   const src = fs.readFileSync(path.join(ROOT, "src/publisher/publish-post.ts"), "utf8");
   assert.match(src, /listOnOpenPaywall: true/);
   assert.match(src, /paymentAsset: "usdc"/);
-  assert.match(src, /parseUnits\(PRICE_USDC, 6\)/);
+  assert.match(src, /priceCents/);
+  assert.match(src, /Publishing at /);
+  assert.match(src, /usdcAtomicForCents/);
+  assert.doesNotMatch(src, /PRICE_USDC/);
   assert.match(src, /\/api\/relay\/register/);
   assert.match(src, /tryRelayRegister/);
   assert.match(src, /registerArticleFor|relayer_not_configured|fallback/);

@@ -17,6 +17,7 @@ import Stripe from "stripe";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { keccak256, toBytes } from "viem";
 import { authorizeFiatUnlock } from "./embed-signature.mjs";
+import { resolveUnlockChargeCents } from "./article-price.mjs";
 import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
@@ -110,7 +111,7 @@ export function checkoutIntegrationId(prefix) {
 export async function lookupArticle(articleId) {
   const hash = articleIdHash(articleId);
   const cols =
-    "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte";
+    "article_id,article_id_hash,publisher,price_wei,price_cents,listing_status,payment_asset,allow_a_la_carte";
   const bySlug = await supabase(
     `articles?select=${cols}&article_id=eq.${encodeURIComponent(articleId)}&limit=1`
   );
@@ -137,7 +138,6 @@ export async function lookupArticle(articleId) {
  */
 async function prepareArticleFiatCharge(input) {
   const articleId = String(input.articleId || "").trim();
-  const amountUsdCents = Math.round(Number(input.amountUsdCents));
   const buyerEmail =
     typeof input.buyerEmail === "string" && input.buyerEmail.includes("@")
       ? input.buyerEmail.trim()
@@ -150,16 +150,6 @@ async function prepareArticleFiatCharge(input) {
     err.status = 400;
     throw err;
   }
-  if (!Number.isFinite(amountUsdCents) || amountUsdCents < 50) {
-    const err = new Error("invalid_amount");
-    err.status = 400;
-    throw err;
-  }
-  if (amountUsdCents > 100_000) {
-    const err = new Error("amount_too_large");
-    err.status = 400;
-    throw err;
-  }
 
   const article = await lookupArticle(articleId);
   if (!article?.publisher) {
@@ -167,6 +157,14 @@ async function prepareArticleFiatCharge(input) {
     err.status = 404;
     throw err;
   }
+
+  const priced = resolveUnlockChargeCents(article, input.amountUsdCents);
+  if (!priced.ok) {
+    const err = new Error(priced.error);
+    err.status = 400;
+    throw err;
+  }
+  const amountUsdCents = priced.cents;
 
   const publisherKey = String(article.publisher).toLowerCase();
   if (article.allow_a_la_carte === false) {

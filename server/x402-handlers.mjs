@@ -208,7 +208,7 @@ export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
     });
   }
 
-  const amountAtomic = usdcAtomicForListing(meta.price_wei, meta.payment_asset);
+  const amountAtomic = usdcAtomicForListing(meta.price_wei, meta.payment_asset, meta.price_cents);
   const origin = publicOriginFromReq(req);
   const listingNote =
     String(meta.payment_asset || "usdc").toLowerCase() === "usdc"

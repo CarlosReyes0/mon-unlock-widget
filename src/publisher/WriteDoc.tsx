@@ -1,4 +1,6 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { formatUsdFromCents } from "../core/article-price.js";
+import { ArticlePriceForm } from "./ArticlePriceForm.js";
 import { classifyClientFile, filesFromTransfer, uploadHostedMedia } from "../core/media-file.js";
 import { snippetFromPastedText } from "../core/media-url.js";
 import {
@@ -39,11 +41,15 @@ export function WriteDoc({
   onChange,
   onNote,
   docRef,
+  priceCents,
+  onPriceCents,
 }: {
   value: string;
   onChange: (next: string) => void;
   onNote: (note: string) => void;
   docRef: React.Ref<WriteDocHandle>;
+  priceCents: number;
+  onPriceCents: (cents: number) => void;
 }) {
   const [blocks, setBlocks] = useState<WriteBlock[]>(() => parseWriteDoc(value));
   const [dropping, setDropping] = useState(false);
@@ -238,6 +244,8 @@ export function WriteDoc({
         <div key={block.id} data-before={block.id}>
           {explicitAt === index ? (
             <PaywallChip
+              priceCents={priceCents}
+              onPriceCents={onPriceCents}
               onRemove={onRemoveFold}
               onDragKind={(kind) => {
                 dragKindRef.current = kind;
@@ -292,6 +300,8 @@ export function WriteDoc({
       {pending && pending.beforeId == null ? <PendingFigure label={pending.label} /> : null}
       {explicitAt != null && explicitAt >= content.length ? (
         <PaywallChip
+          priceCents={priceCents}
+          onPriceCents={onPriceCents}
           onRemove={onRemoveFold}
           onDragKind={(kind) => {
             dragKindRef.current = kind;
@@ -483,20 +493,44 @@ function PendingFigure({ label }: { label: string }) {
 }
 
 function PaywallChip({
+  priceCents,
+  onPriceCents,
   onRemove,
   onDragKind,
 }: {
+  priceCents: number;
+  onPriceCents: (cents: number) => void;
   onRemove: () => void;
   onDragKind: (kind: null | "fold") => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const priceLabel = formatUsdFromCents(priceCents);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
-    <div className="mon-write__paywall">
+    <div className="mon-write__paywall" ref={rootRef}>
       <div
         className="mon-write__paywall-chip"
         draggable
         role="separator"
         data-paywall="fold"
-        aria-label="Paywall. Free above, paid below. Drag to move."
+        aria-label={`Paid below this line. ${priceLabel}. Drag to move.`}
         title="Drag to choose what readers see for free"
         onDragStart={(event) => {
           event.dataTransfer.setData(FOLD_DRAG, "1");
@@ -506,8 +540,32 @@ function PaywallChip({
         onDragEnd={() => onDragKind(null)}
       >
         <LockIcon />
-        <span>Paywall · free above · paid below</span>
+        <span>Paid below this line</span>
+        <span aria-hidden="true">·</span>
+        <button
+          type="button"
+          className="mon-write__paywall-price"
+          aria-expanded={open}
+          aria-label={`Edit price, currently ${priceLabel}`}
+          onMouseDown={(event) => event.stopPropagation()}
+          onDragStart={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen((current) => !current);
+          }}
+        >
+          {priceLabel} ✎
+        </button>
       </div>
+      {open ? (
+        <div className="mon-price-pop" role="dialog" aria-label="Article price">
+          <ArticlePriceForm cents={priceCents} onChange={onPriceCents} />
+        </div>
+      ) : null}
       <button type="button" className="mon-write__paywall-remove" onClick={onRemove}>
         Remove paywall
       </button>

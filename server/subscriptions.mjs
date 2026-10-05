@@ -212,7 +212,7 @@ async function lookupArticleForAccess(articleId) {
 }
 
 const UNLOCK_QUOTE_COLS =
-  "article_id,article_id_hash,publisher,price_wei,listing_status,payment_asset,allow_a_la_carte,teaser,title";
+  "article_id,article_id_hash,publisher,price_wei,price_cents,listing_status,payment_asset,allow_a_la_carte,teaser,title";
 
 /**
  * Public metadata for an agent unlock quote. Never includes `body`.
