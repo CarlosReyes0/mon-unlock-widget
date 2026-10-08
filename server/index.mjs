@@ -79,6 +79,13 @@ import { articleHtmlForSlug, feedHtmlForReq, isDefaultOgPath, ogJpegForSlug, par
 import { defaultOgJpegBuffer, parseOgImagePath } from "./og-card.mjs";
 import { publicOrigin } from "./article-og.mjs";
 import { createArticleDownload, parseDownloadPath } from "./article-download.mjs";
+import {
+  gateWalletReader,
+  issueReaderSession,
+  readerSessionCookie,
+  requestDomain,
+  resolveRequestReaderSession,
+} from "./reader-session.mjs";
 import { relayGasDrip } from "./relay-gas.mjs";
 import {
   getNftConfig,
@@ -151,7 +158,7 @@ function cors(res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept, X-PAYMENT, PAYMENT-SIGNATURE, X-Media-Name"
+    "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept, X-PAYMENT, PAYMENT-SIGNATURE, X-Media-Name, X-Reader-Session"
   );
   res.setHeader(
     "Access-Control-Expose-Headers",
@@ -174,14 +181,34 @@ function sendSecuredHtml(req, res, status, html, extraHeaders = {}) {
   return res.end(payload);
 }
 
-function sendJson(res, status, body) {
+function sendJson(res, status, body, extraHeaders = {}) {
   cors(res);
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...extraHeaders,
   });
   res.end(payload);
+}
+
+function fiatSessionFromUrl(url) {
+  return String(url.searchParams.get("fiat_session") || url.searchParams.get("fiatSession") || "").trim();
+}
+
+/**
+ * Wallet reads require a reader session. A Stripe fiat_session still stands
+ * on its own, and a bare reader= address is not treated as that wallet.
+ */
+function authenticatedReaderForRead(req, url) {
+  const fiatSession = fiatSessionFromUrl(url);
+  const session = resolveRequestReaderSession(req);
+  const reader = gateWalletReader({
+    queryReader: url.searchParams.get("reader"),
+    session,
+    fiatSession,
+  });
+  return { reader, fiatSession };
 }
 
 function clientIp(req) {
@@ -930,13 +957,40 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // --- Reader session (one wallet signature, then a short-lived token) ---
+  if (method === "POST" && url.pathname === "/api/reader/session") {
+    try {
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const issued = await issueReaderSession({
+        domain: requestDomain(req),
+        address: parsed.address,
+        issuedAt: parsed.issuedAt,
+        expiresAt: parsed.expiresAt,
+        signature: parsed.signature,
+      });
+      const secure = publicOrigin(req).startsWith("https:");
+      return sendJson(
+        res,
+        200,
+        { token: issued.token, address: issued.address, expiresAt: issued.expiresAt },
+        { "Set-Cookie": readerSessionCookie(issued.token, issued.expiresAt, { secure }) }
+      );
+    } catch (e) {
+      if (e instanceof SyntaxError) return sendJson(res, 400, { error: "invalid_json" });
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "reader_session_failed" });
+    }
+  }
+
   // --- Writer subscriptions (fiat + Monad USDC) ---
   if (method === "GET" && url.pathname === "/api/access") {
     try {
+      const auth = authenticatedReaderForRead(req, url);
       const body = await resolveArticleAccess({
         articleId: url.searchParams.get("article_id") || url.searchParams.get("articleId"),
-        reader: url.searchParams.get("reader"),
-        fiatSession: url.searchParams.get("fiat_session") || url.searchParams.get("fiatSession"),
+        reader: auth.reader,
+        fiatSession: auth.fiatSession,
       });
       return sendJson(res, 200, body);
     } catch (e) {
@@ -947,10 +1001,11 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "GET" && url.pathname === "/api/article-body") {
     try {
+      const auth = authenticatedReaderForRead(req, url);
       const body = await resolveArticleAccess({
         articleId: url.searchParams.get("article_id") || url.searchParams.get("articleId"),
-        reader: url.searchParams.get("reader"),
-        fiatSession: url.searchParams.get("fiat_session") || url.searchParams.get("fiatSession"),
+        reader: auth.reader,
+        fiatSession: auth.fiatSession,
         includeBody: true,
       });
       return sendJson(res, 200, { body: body.body, reason: body.reason });
@@ -964,10 +1019,11 @@ const server = http.createServer(async (req, res) => {
   const downloadSlug = parseDownloadPath(url.pathname);
   if ((method === "GET" || method === "HEAD") && downloadSlug) {
     try {
+      const auth = authenticatedReaderForRead(req, url);
       const file = await createArticleDownload({
         articleId: downloadSlug,
-        reader: url.searchParams.get("reader"),
-        fiatSession: url.searchParams.get("fiat_session") || url.searchParams.get("fiatSession"),
+        reader: auth.reader,
+        fiatSession: auth.fiatSession,
         origin: publicOrigin(req),
       });
       cors(res);

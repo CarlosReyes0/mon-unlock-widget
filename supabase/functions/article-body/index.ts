@@ -1,6 +1,7 @@
 // Edge Function: article-body
-// Returns the full article body only if the requesting wallet has unlocked it
-// OR a valid Stripe fiat_session exists.
+// Returns the full article body only if the requesting wallet has a valid
+// reader session (HMAC token from POST /api/reader/session) OR a Stripe
+// fiat_session. A bare reader= address is not proof of ownership.
 //
 // Unlock verification order:
 // 1. Fiat session (Stripe) via fiat_unlocks
@@ -14,6 +15,7 @@ import {
   allowedUnlockContracts,
   isAllowedUnlockContract,
 } from '../../../src/core/publish-auth.ts';
+import { verifyReaderSessionToken } from '../../../src/core/reader-session.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -25,7 +27,7 @@ const DEFAULT_RPC = 'https://rpc.monad.xyz';
 const headers = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-Reader-Session',
   'Content-Type': 'application/json',
 };
 
@@ -99,8 +101,41 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const articleId = url.searchParams.get('article_id'); // human-readable slug
     const articleIdHashParam = url.searchParams.get('article_id_hash');
-    const reader = url.searchParams.get('reader')?.toLowerCase();
+    const queryReader = url.searchParams.get('reader')?.trim().toLowerCase() || '';
     const fiatSession = url.searchParams.get('fiat_session')?.trim();
+    const sessionToken = req.headers.get('x-reader-session')?.trim() || '';
+    const sessionSecret = (
+      Deno.env.get('READER_SESSION_SECRET') ||
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ||
+      ''
+    ).trim();
+
+    let reader = '';
+    if (sessionToken) {
+      if (!sessionSecret) {
+        return new Response(JSON.stringify({ error: 'reader_session_not_configured' }), {
+          status: 503,
+          headers,
+        });
+      }
+      const claims = await verifyReaderSessionToken(sessionToken, sessionSecret, { nowMs: Date.now() });
+      if (!claims) {
+        return new Response(JSON.stringify({ error: 'invalid_reader_session' }), {
+          status: 401,
+          headers,
+        });
+      }
+      reader = claims.address;
+    }
+    if (queryReader && reader && queryReader !== reader) {
+      return new Response(JSON.stringify({ error: 'reader_mismatch' }), { status: 403, headers });
+    }
+    if (queryReader && !reader && !fiatSession) {
+      return new Response(JSON.stringify({ error: 'reader_session_required' }), {
+        status: 401,
+        headers,
+      });
+    }
     const extraContracts = [
       Deno.env.get('CONTRACT_ADDRESS'),
       Deno.env.get('USDC_CONTRACT_ADDRESS'),
