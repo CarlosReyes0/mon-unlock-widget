@@ -82,6 +82,7 @@ import {
   writerNotFoundHtml,
   writerWalletFromPath,
 } from "./follows.mjs";
+import { guardRequest } from "./route-guard.mjs";
 import { defaultOgJpegBuffer, parseOgImagePath } from "./og-card.mjs";
 import { publicOrigin } from "./article-og.mjs";
 import { createArticleDownload, parseDownloadPath } from "./article-download.mjs";
@@ -517,7 +518,7 @@ function serveStatic(req, res, urlPath) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer(guardRequest(async (req, res) => {
   const method = req.method || "GET";
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
@@ -1465,7 +1466,7 @@ const server = http.createServer(async (req, res) => {
   cors(res);
   res.writeHead(405);
   res.end("Method not allowed");
-});
+}));
 
 server.listen(PORT, () => {
   console.log(
