@@ -3,16 +3,20 @@ import { describe, it } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import { verifyMessage } from "viem";
 import {
+  A_LA_CARTE_AUTH_PREFIX,
+  FOLLOWER_AUTH_PREFIX,
+  FOLLOWERS_EXPORT_AUTH_PREFIX,
   LISTING_AUTH_PREFIX,
   MON_UNLOCK_CONTRACT,
+  PLAN_AUTH_PREFIX,
   PUBLISH_AUTH_PREFIX,
   USDC_UNLOCK_CONTRACT,
   allowedUnlockContracts,
-  FOLLOWER_AUTH_PREFIX,
-  FOLLOWERS_EXPORT_AUTH_PREFIX,
+  buildALaCarteAuthMessage,
   buildFollowerAuthMessage,
   buildFollowersExportAuthMessage,
   buildListingAuthMessage,
+  buildPlanAuthMessage,
   buildPublishAuthMessage,
   canonicalPublishContent,
   isAllowedUnlockContract,
@@ -148,6 +152,65 @@ describe("listing signature", () => {
     });
     assert.match(priced, /priceCents:100/);
     assert.notEqual(priced, base);
+  });
+});
+
+describe("plan signature", () => {
+  it("binds publisher, price, and allow-a-la-carte so another change does not verify", async () => {
+    const fields = {
+      publisher: account.address.toUpperCase(),
+      monthlyPriceCents: 500,
+      allowALaCarte: false,
+    };
+    const message = buildPlanAuthMessage(fields);
+    assert.ok(message.startsWith(PLAN_AUTH_PREFIX));
+    assert.match(message, new RegExp(`publisher:${account.address.toLowerCase()}`));
+    assert.match(message, /monthlyPriceCents:500/);
+    assert.match(message, /allowALaCarte:false/);
+    const signature = await account.signMessage({ message });
+    assert.equal(
+      await verifyMessage({ address: account.address, message, signature }),
+      true
+    );
+    const otherPrice = buildPlanAuthMessage({ ...fields, monthlyPriceCents: 900 });
+    const otherFlag = buildPlanAuthMessage({ ...fields, allowALaCarte: true });
+    assert.equal(
+      await verifyMessage({ address: account.address, message: otherPrice, signature }),
+      false
+    );
+    assert.equal(
+      await verifyMessage({ address: account.address, message: otherFlag, signature }),
+      false
+    );
+  });
+});
+
+describe("a-la-carte signature", () => {
+  it("binds article, publisher, and the flag being set", async () => {
+    const fields = {
+      articleId: "july-rain",
+      publisher: account.address,
+      allowALaCarte: false,
+    };
+    const message = buildALaCarteAuthMessage(fields);
+    assert.ok(message.startsWith(A_LA_CARTE_AUTH_PREFIX));
+    assert.match(message, /article:july-rain/);
+    assert.match(message, /allowALaCarte:false/);
+    const signature = await account.signMessage({ message });
+    assert.equal(
+      await verifyMessage({ address: account.address, message, signature }),
+      true
+    );
+    const otherArticle = buildALaCarteAuthMessage({ ...fields, articleId: "other-piece" });
+    const otherFlag = buildALaCarteAuthMessage({ ...fields, allowALaCarte: true });
+    assert.equal(
+      await verifyMessage({ address: account.address, message: otherArticle, signature }),
+      false
+    );
+    assert.equal(
+      await verifyMessage({ address: account.address, message: otherFlag, signature }),
+      false
+    );
   });
 });
 

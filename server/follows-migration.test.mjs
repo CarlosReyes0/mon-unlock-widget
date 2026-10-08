@@ -14,7 +14,7 @@ function read(rel) {
 }
 
 test("writer follows migration enables RLS, revokes anon, and backfills notified_at", () => {
-  const sql = read("supabase/migrations/0014_writer_follows.sql");
+  const sql = read("supabase/migrations/0015_writer_follows.sql");
   const code = sql.replace(/--[^\n]*/g, "");
   for (const table of ["follows", "email_suppressions", "follow_notifications", "follow_deliveries"]) {
     assert.match(sql, new RegExp(`alter table public\\.${table}\\s+enable row level security`, "i"));
@@ -33,7 +33,7 @@ test("writer follows migration enables RLS, revokes anon, and backfills notified
 });
 
 test("follow notify cron reads the vault secret and does not commit it", () => {
-  const sql = read("supabase/migrations/0015_follow_notify_cron.sql");
+  const sql = read("supabase/migrations/0016_follow_notify_cron.sql");
   assert.match(sql, /open-paywall-follow-notify/);
   assert.match(sql, /follow_notify_secret/);
   assert.match(sql, /x-follow-notify-secret/);

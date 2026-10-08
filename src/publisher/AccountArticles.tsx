@@ -6,7 +6,11 @@ import { pushUsdcListingPrice } from "./update-article-price.js";
 import { monadMainnet } from "../core/chains.js";
 import { usdcAtomicForCents } from "../core/article-price.js";
 import { formatMon } from "../core/types.js";
-import { buildListingAuthMessage, supabaseFunctionHeaders } from "../core/publish-auth.js";
+import {
+  buildALaCarteAuthMessage,
+  buildListingAuthMessage,
+  supabaseFunctionHeaders,
+} from "../core/publish-auth.js";
 import type { Eip1193Provider } from "../core/wallet.js";
 
 const SUPABASE_URL = "https://flczjqljgntmkanipugo.supabase.co";
@@ -195,6 +199,12 @@ export function AccountArticles({ wallet }: Props) {
         ...(embedSig ? { embedSig } : {}),
         ...(nextCents != null ? { priceCents: nextCents } : {}),
       });
+      const allowALaCarte = allowBuy;
+      const aLaCarteMessage = buildALaCarteAuthMessage({
+        articleId: row.articleId,
+        publisher: wallet,
+        allowALaCarte,
+      });
       const account = wallet as Address;
       const walletClient = createWalletClient({
         account,
@@ -202,6 +212,8 @@ export function AccountArticles({ wallet }: Props) {
         transport: custom(provider),
       });
       const listingSig = await walletClient.signMessage({ account, message });
+      setSaveMsg("Approve the pay-per-article signature…");
+      const aLaCarteSig = await walletClient.signMessage({ account, message: aLaCarteMessage });
       const res = await fetch(UPDATE_LISTING_URL, {
         method: "POST",
         headers: supabaseFunctionHeaders(),
@@ -217,15 +229,18 @@ export function AccountArticles({ wallet }: Props) {
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(body.error || "save_failed");
-      await fetch("/api/articles/a-la-carte", {
+      const alcRes = await fetch("/api/articles/a-la-carte", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           articleId: row.articleId,
           publisher: wallet,
-          allowALaCarte: allowBuy,
+          allowALaCarte,
+          aLaCarteSig,
         }),
       });
+      const alcBody = (await alcRes.json().catch(() => ({}))) as { error?: string };
+      if (!alcRes.ok) throw new Error(alcBody.error || "a_la_carte_failed");
       setSaveMsg("Listing saved.");
       await load();
     } catch (e) {
