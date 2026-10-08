@@ -21,6 +21,11 @@ import {
   supabaseConfigured,
 } from "./stripe.mjs";
 import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
+import {
+  assertPublisherSignature,
+  buildALaCarteAuthMessage,
+  buildPlanAuthMessage,
+} from "./writer-mutation-auth.mjs";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -144,11 +149,23 @@ export async function getWriterPlan(publisherRaw) {
 }
 
 /**
- * @param {{ publisher: string, monthlyPriceCents?: number, allowALaCarte?: boolean }} input
+ * @param {{
+ *   publisher: string,
+ *   monthlyPriceCents?: number,
+ *   allowALaCarte?: boolean,
+ *   planSig?: string,
+ * }} input
  */
 export async function upsertWriterPlan(input) {
   const publisher = normalizeAddress(input.publisher);
   if (!publisher) throw httpError("invalid_publisher");
+  // Reject before any writer_plans read or upsert.
+  const message = buildPlanAuthMessage({
+    publisher,
+    monthlyPriceCents: input.monthlyPriceCents,
+    allowALaCarte: input.allowALaCarte,
+  });
+  await assertPublisherSignature(publisher, message, input.planSig);
   const cents = normalizeMonthlyCents(input.monthlyPriceCents);
   const allowALaCarte = input.allowALaCarte !== false;
   const rows = await supabase("writer_plans?on_conflict=publisher", {
@@ -677,11 +694,27 @@ export async function lapseExpiredCryptoSubscriptions({ now = new Date() } = {})
   return { lapsed: list.length };
 }
 
-export async function setArticleALaCarte({ articleId, publisher, allowALaCarte }) {
+export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, aLaCarteSig }) {
   const writer = normalizeAddress(publisher);
   const slug = String(articleId || "").trim();
   if (!writer) throw httpError("invalid_publisher");
   if (!slug) throw httpError("invalid_article_id");
+
+  // Reject before any articles read or update. The signed article id is the
+  // slug, not a hash lookup, so the signature cannot be aimed at another row.
+  const message = buildALaCarteAuthMessage({
+    articleId: slug,
+    publisher: writer,
+    allowALaCarte,
+  });
+  await assertPublisherSignature(writer, message, aLaCarteSig);
+
+  const found = await supabase(
+    `articles?select=article_id,publisher&article_id=eq.${encodeURIComponent(slug)}&limit=1`
+  );
+  const existing = Array.isArray(found) ? found[0] : null;
+  if (!existing) throw httpError("article_not_found", 404);
+  if (normalizeAddress(existing.publisher) !== writer) throw httpError("forbidden", 403);
 
   const rows = await supabase(
     `articles?article_id=eq.${encodeURIComponent(slug)}&publisher=eq.${encodeURIComponent(writer)}`,
