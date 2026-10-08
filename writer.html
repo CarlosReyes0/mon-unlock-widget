@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#6E54FF" />
+    <title>Writer — Open Paywall</title>
+    <meta name="description" content="Follow a writer free on Open Paywall. Pay only for the posts you read." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #57534e;
+        --soft: #78716c;
+        --line: #e7e5e4;
+        --surface: #ffffff;
+        --accent: #0f766e;
+        --accent-soft: #ccfbf1;
+        --page-pad: 2rem;
+        --font-serif: "Literata", Georgia, serif;
+        --font-sans: "DM Sans", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        background:
+          radial-gradient(900px 420px at 0% -10%, #ecfeff 0%, transparent 55%),
+          var(--surface);
+        font-family: var(--font-sans);
+      }
+      .wrap { width: min(42rem, 100%); margin: 0 auto; padding: 1.25rem var(--page-pad) 3rem; }
+      .back { color: var(--muted); text-decoration: none; font-size: 0.875rem; }
+      .back:hover { color: var(--accent); }
+      h1 {
+        margin: 0.8rem 0 0;
+        font-family: var(--font-serif);
+        font-size: clamp(2rem, 6vw, 2.6rem);
+        font-weight: 600;
+        letter-spacing: -0.03em;
+      }
+      .count { margin: 0.55rem 0 0; font-size: 1.05rem; font-weight: 600; }
+      .first { margin: 0.2rem 0 0; color: var(--soft); font-size: 0.9rem; }
+      .tagline { margin: 0.75rem 0 0; color: var(--muted); }
+      .actions { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+      .membership { font-size: 0.85rem; color: var(--muted); }
+      .membership a { color: var(--accent); }
+      .item { position: relative; padding: 1.2rem 0; border-top: 1px solid var(--line); }
+      .item:last-child { border-bottom: 1px solid var(--line); }
+      .meta { display: flex; gap: 0.75rem; align-items: center; color: var(--soft); font-size: 0.8rem; }
+      .price {
+        background: var(--accent-soft); color: #115e59; font-weight: 600;
+        border-radius: 999px; padding: 0.12rem 0.5rem; font-size: 0.75rem;
+      }
+      .title { margin: 0.3rem 0 0; font-family: var(--font-serif); font-size: 1.3rem; }
+      .title a { color: inherit; text-decoration: none; }
+      .title a::after { content: ""; position: absolute; inset: 0; }
+      .teaser { margin: 0.4rem 0 0; color: var(--muted); line-height: 1.45; }
+      .date { margin: 0.35rem 0 0; color: var(--soft); font-size: 0.75rem; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div id="site-nav"></div>
+      <a class="back" href="/articles">← All articles</a>
+      <h1 id="name">Writer</h1>
+      <p class="count" id="followerCount" data-followers="0">0 followers</p>
+      <p class="first" id="firstLine" hidden>Be the first to follow</p>
+      <p class="tagline">Free. No subscription. Pay only for the posts you read.</p>
+      <div class="actions">
+        <span id="followSlot"></span>
+        <p class="membership" id="membership" hidden></p>
+      </div>
+      <div id="list"></div>
+      <div id="site-footer"></div>
+    </div>
+    <!-- writer-bootstrap -->
+    <script src="/site-nav.js"></script>
+    <script src="/follow.js"></script>
+    <script>
+      (function () {
+        function walletFromPath() {
+          const parts = location.pathname.split("/").filter(Boolean);
+          if (parts[0] !== "writers" || !parts[1]) return "";
+          try {
+            return decodeURIComponent(parts[1]).toLowerCase();
+          } catch {
+            return "";
+          }
+        }
+
+        function readBootstrap() {
+          const node = document.getElementById("writer-bootstrap");
+          if (!node) return null;
+          try {
+            return JSON.parse(node.textContent || "");
+          } catch {
+            return null;
+          }
+        }
+
+        function escapeHtml(str) {
+          return String(str || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        function plain(html) {
+          const tmp = document.createElement("div");
+          tmp.innerHTML = html || "";
+          return (tmp.textContent || "").trim();
+        }
+
+        function render(profile) {
+          document.title = `${profile.displayName} on Open Paywall`;
+          document.getElementById("name").textContent = profile.displayName;
+          const count = Number(profile.followers) || 0;
+          const countEl = document.getElementById("followerCount");
+          countEl.dataset.followers = String(count);
+          countEl.textContent = count === 1 ? "1 follower" : `${count} followers`;
+          document.getElementById("firstLine").hidden = count !== 0;
+          const membership = document.getElementById("membership");
+          if (profile.plan && profile.plan.offered && profile.plan.monthlyPriceLabel) {
+            const href = profile.articles && profile.articles[0] ? profile.articles[0].href : "/articles";
+            membership.hidden = false;
+            membership.innerHTML = `Prefer a monthly membership? <a href="${escapeHtml(href)}">${escapeHtml(profile.plan.monthlyPriceLabel)}</a>`;
+          }
+          const list = document.getElementById("list");
+          list.replaceChildren();
+          for (const article of profile.articles || []) {
+            const el = document.createElement("article");
+            el.className = "item";
+            const teaser = plain(article.teaser);
+            const when = article.listedAt ? new Date(article.listedAt).toLocaleDateString() : "";
+            el.innerHTML = `
+              <div class="meta"><span class="price">${escapeHtml(article.priceLabel || "")}</span></div>
+              <h2 class="title"><a href="${escapeHtml(article.href)}">${escapeHtml(article.title)}</a></h2>
+              ${teaser ? `<p class="teaser">${escapeHtml(teaser)}</p>` : ""}
+              ${when ? `<p class="date">${escapeHtml(when)}</p>` : ""}
+            `;
+            list.appendChild(el);
+          }
+          window.OpenPaywallFollow.mount(document.getElementById("followSlot"), {
+            writer: profile.wallet,
+            author: profile.displayName,
+            via: "writer_page",
+            allowWallet: false,
+          });
+        }
+
+        async function main() {
+          const boot = readBootstrap();
+          if (boot && boot.wallet) {
+            render(boot);
+            return;
+          }
+          const wallet = walletFromPath();
+          if (!wallet) return;
+          const res = await fetch(`/api/writers/${wallet}`);
+          if (!res.ok) return;
+          render(await res.json());
+        }
+
+        main();
+      })();
+    </script>
+  </body>
+</html>

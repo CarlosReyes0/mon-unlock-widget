@@ -60,7 +60,8 @@
       'Need HTML for your own site? <a href="/generator.html" style="color:#57534e;">Create embed</a><br/>' +
       'Agents: <a href="/llms.txt" style="color:#57534e;">llms.txt</a> · ' +
       '<a href="/agents.md" style="color:#57534e;">agents.md</a> · ' +
-      '<a href="/openapi.json" style="color:#57534e;">OpenAPI</a><br/>' +
+      '<a href="/openapi.json" style="color:#57534e;">OpenAPI</a> · ' +
+      '<a href="/privacy" style="color:#57534e;">Privacy</a><br/>' +
       '<span style="color:#a8a29e;">Developer examples (not free demos):</span> ' +
       '<a href="/connect-demo.html" style="color:#57534e;">Stripe Connect onboarding</a> · ' +
       '<a href="/connect-store.html" style="color:#57534e;">Connect marketplace</a>';

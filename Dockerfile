@@ -50,6 +50,9 @@ COPY --from=builder /app/generator.html ./generator.html
 COPY --from=builder /app/dashboard.html ./dashboard.html
 COPY --from=builder /app/articles.html ./articles.html
 COPY --from=builder /app/article.html ./article.html
+COPY --from=builder /app/writer.html ./writer.html
+COPY --from=builder /app/follow-confirm.html ./follow-confirm.html
+COPY --from=builder /app/privacy.html ./privacy.html
 COPY --from=builder /app/admin-listings.html ./admin-listings.html
 COPY --from=builder /app/embed-example.html ./embed-example.html
 COPY --from=builder /app/register.html ./register.html
@@ -60,6 +63,7 @@ COPY --from=builder /app/connect-success.html ./connect-success.html
 # Root scripts loaded by static pages (not Vite output). generator.html 200s
 # while media validation fails if generator-media.js is missing here.
 COPY --from=builder /app/site-nav.js ./site-nav.js
+COPY --from=builder /app/follow.js ./follow.js
 COPY --from=builder /app/write-draft-resume.js ./write-draft-resume.js
 COPY --from=builder /app/generator-media.js ./generator-media.js
 COPY --from=builder /app/llms.txt ./llms.txt

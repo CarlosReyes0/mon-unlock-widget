@@ -4,7 +4,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { publicOrigin, renderArticlePage, renderFeedPage } from "./article-og.mjs";
+import { publicOrigin, renderArticlePage, renderFeedPage, renderWriterPage } from "./article-og.mjs";
+import { loadWriterProfile } from "./follows.mjs";
+import { createSupabaseFollowStore } from "./follow-store.mjs";
+import { followerCountLabel } from "./follow-core.mjs";
 import { defaultOgJpegBuffer, getArticleOgJpeg, parseOgImagePath } from "./og-card.mjs";
 import { getPublicArticle, listingsSupabaseConfigured } from "./listings-api.mjs";
 
@@ -82,6 +85,27 @@ export async function articleHtmlForSlug(req, slug) {
       /* image route still falls back to /og.jpg */
     }
   }
+  return Buffer.from(body, "utf8");
+}
+
+export async function writerHtmlForWallet(req, wallet) {
+  const store = createSupabaseFollowStore(process.env);
+  const profile = await loadWriterProfile(wallet, store);
+  if (!profile) return null;
+  const html = fs.readFileSync(path.join(ROOT, "writer.html"), "utf8");
+  let body = renderWriterPage({
+    html,
+    origin: publicOrigin(req),
+    wallet: profile.wallet,
+    displayName: profile.displayName,
+  });
+  const bootstrap = JSON.stringify(profile).replace(/</g, "\\u003c");
+  body = body.replace(
+    "<!-- writer-bootstrap -->",
+    `<script type="application/json" id="writer-bootstrap">${bootstrap}</script>`
+  );
+  body = body.replaceAll("data-followers=\"0\"", `data-followers="${Number(profile.followers) || 0}"`);
+  body = body.replaceAll(">0 followers<", `>${followerCountLabel(profile.followers)}<`);
   return Buffer.from(body, "utf8");
 }
 

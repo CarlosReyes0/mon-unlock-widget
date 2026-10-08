@@ -142,6 +142,43 @@
           "404": { "description": "Article not found" }
         }
       }
+    },
+    "/api/writers/{wallet}": {
+      "get": {
+        "operationId": "getWriter",
+        "summary": "Public writer page data",
+        "description": "Display name, follower count (including 0), optional paid membership, and listed articles. Follow is free. Each post is still pay-per-piece.",
+        "responses": {
+          "200": { "description": "Writer profile" },
+          "404": { "description": "No listed articles for this wallet" }
+        }
+      }
+    },
+    "/api/writers/followers/counts": {
+      "get": {
+        "operationId": "getWriterFollowerCounts",
+        "summary": "Public follower counts for feed cards, including 0",
+        "parameters": [
+          {
+            "name": "wallets",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated writer wallets, at most 50."
+          }
+        ],
+        "responses": {
+          "200": { "description": "{ counts: { wallet: number } }" }
+        }
+      }
+    },
+    "/api/writers/{wallet}/followers/count": {
+      "get": {
+        "operationId": "getWriterFollowerCount",
+        "summary": "Public follower count, including 0",
+        "responses": {
+          "200": { "description": "{ followers: number }" }
+        }
+      }
     }
   },
   "components": {

@@ -14,6 +14,8 @@ export const PUBLISH_AUTH_PREFIX = "Open Paywall publish v1";
 export const LISTING_AUTH_PREFIX = "Open Paywall listing v1";
 export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
 export const A_LA_CARTE_AUTH_PREFIX = "Open Paywall a-la-carte v1";
+export const FOLLOWER_AUTH_PREFIX = "Open Paywall follower v1";
+export const FOLLOWERS_EXPORT_AUTH_PREFIX = "Open Paywall followers export v1";
 export const MONAD_CHAIN_ID = 143;
 
 /** Legacy MON unlock contract. */
@@ -180,6 +182,34 @@ export type ListingAuthFields = {
   /** Appended only when a listing update sets a price, so older signatures still verify. */
   priceCents?: unknown;
 };
+
+/** One signature per device. Do not reorder lines. */
+export function buildFollowerAuthMessage(input: {
+  wallet: unknown;
+  origin: unknown;
+  issuedAt: unknown;
+}): string {
+  return [
+    FOLLOWER_AUTH_PREFIX,
+    `chain:${MONAD_CHAIN_ID}`,
+    `wallet:${asText(input.wallet).trim().toLowerCase()}`,
+    `origin:${asText(input.origin).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
+
+/** Writer CSV export. Do not reorder lines. */
+export function buildFollowersExportAuthMessage(input: {
+  writer: unknown;
+  issuedAt: unknown;
+}): string {
+  return [
+    FOLLOWERS_EXPORT_AUTH_PREFIX,
+    `chain:${MONAD_CHAIN_ID}`,
+    `writer:${asText(input.writer).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
 
 export function buildListingAuthMessage(input: ListingAuthFields): string {
   const lines = [

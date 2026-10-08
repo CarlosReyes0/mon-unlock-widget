@@ -75,7 +75,13 @@ import {
   upsertWriterPlan,
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
-import { articleHtmlForSlug, feedHtmlForReq, isDefaultOgPath, ogJpegForSlug, parseArticleSlug } from "./og-http.mjs";
+import { articleHtmlForSlug, feedHtmlForReq, isDefaultOgPath, ogJpegForSlug, parseArticleSlug, writerHtmlForWallet } from "./og-http.mjs";
+import {
+  canonicalWriterPath,
+  tryHandleFollowRequest,
+  writerNotFoundHtml,
+  writerWalletFromPath,
+} from "./follows.mjs";
 import { defaultOgJpegBuffer, parseOgImagePath } from "./og-card.mjs";
 import { publicOrigin } from "./article-og.mjs";
 import { createArticleDownload, parseDownloadPath } from "./article-download.mjs";
@@ -155,7 +161,7 @@ function parseByteRange(rangeHeader, size) {
 
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "Content-Type, Stripe-Signature, Authorization, Payment-Signature, Accept, X-PAYMENT, PAYMENT-SIGNATURE, X-Media-Name, X-Reader-Session"
@@ -190,6 +196,19 @@ function sendJson(res, status, body, extraHeaders = {}) {
     ...extraHeaders,
   });
   res.end(payload);
+}
+
+function sendText(res, status, text, extraHeaders = {}, method = "GET") {
+  cors(res);
+  const payload = Buffer.from(String(text ?? ""), "utf8");
+  res.writeHead(status, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Length": payload.length,
+    ...extraHeaders,
+  });
+  if (method === "HEAD") return res.end();
+  return res.end(payload);
 }
 
 function fiatSessionFromUrl(url) {
@@ -996,6 +1015,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (await tryHandleFollowRequest(req, res, url, {
+    readBody,
+    clientIp,
+    sendJson,
+    sendText,
+    sendHtml: sendSecuredHtml,
+  })) {
+    return;
+  }
+
   // --- Writer subscriptions (fiat + Monad USDC) ---
   if (method === "GET" && url.pathname === "/api/access") {
     try {
@@ -1399,6 +1428,33 @@ const server = http.createServer(async (req, res) => {
     const slug = parseArticleSlug(url.pathname);
     if (slug) {
       return serveArticleHtml(req, res, slug);
+    }
+  }
+
+  if ((method === "GET" || method === "HEAD") && (url.pathname === "/privacy" || url.pathname === "/privacy.html")) {
+    return serveStatic(req, res, "/privacy.html");
+  }
+  if ((method === "GET" || method === "HEAD") && (url.pathname === "/follow/confirm" || url.pathname === "/follow-confirm.html")) {
+    return serveStatic(req, res, "/follow-confirm.html");
+  }
+  const writerRedirect = canonicalWriterPath(url.pathname);
+  if ((method === "GET" || method === "HEAD") && writerRedirect) {
+    cors(res);
+    res.writeHead(301, { Location: writerRedirect, "Cache-Control": "public, max-age=86400" });
+    return res.end();
+  }
+  const writerWallet = (method === "GET" || method === "HEAD") ? writerWalletFromPath(url.pathname) : "";
+  if (writerWallet) {
+    try {
+      const html = await writerHtmlForWallet(req, writerWallet);
+      if (!html) return sendSecuredHtml(req, res, 404, writerNotFoundHtml());
+      return sendSecuredHtml(req, res, 200, html.toString(), { "Cache-Control": "public, max-age=60" });
+    } catch (e) {
+      if (e?.status === 503 || e?.message === "supabase_not_configured") {
+        return sendJson(res, 503, { error: "supabase_not_configured" });
+      }
+      console.error("[writer]", e?.message || e);
+      return sendSecuredHtml(req, res, 404, writerNotFoundHtml());
     }
   }
 

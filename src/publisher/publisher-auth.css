@@ -302,12 +302,41 @@
 }
 
 .mon-pub-shell__follow-list {
-  padding-left: 1.1rem;
-  margin: 0.5rem 0 0;
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
 }
 
 .mon-pub-shell__follow-list li {
-  margin-bottom: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0.7rem 0;
+  border-top: 1px solid #e7e5e4;
+}
+
+.mon-pub-shell__follow-name {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.mon-pub-shell__follow-name:hover {
+  color: #0f766e;
+}
+
+.mon-pub-shell__follow-meta {
+  margin: 0.15rem 0 0;
+  color: #57534e;
+  font-size: 0.85rem;
+}
+
+.mon-pub-shell__follow-actions {
+  display: flex;
+  gap: 0.4rem;
 }
 
 .mon-site-nav {

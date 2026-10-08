@@ -4,6 +4,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { verifyMessage } from "viem";
 import {
   A_LA_CARTE_AUTH_PREFIX,
+  FOLLOWER_AUTH_PREFIX,
+  FOLLOWERS_EXPORT_AUTH_PREFIX,
   LISTING_AUTH_PREFIX,
   MON_UNLOCK_CONTRACT,
   PLAN_AUTH_PREFIX,
@@ -11,6 +13,8 @@ import {
   USDC_UNLOCK_CONTRACT,
   allowedUnlockContracts,
   buildALaCarteAuthMessage,
+  buildFollowerAuthMessage,
+  buildFollowersExportAuthMessage,
   buildListingAuthMessage,
   buildPlanAuthMessage,
   buildPublishAuthMessage,
@@ -206,6 +210,49 @@ describe("a-la-carte signature", () => {
     assert.equal(
       await verifyMessage({ address: account.address, message: otherFlag, signature }),
       false
+    );
+  });
+});
+
+describe("follower signature", () => {
+  it("binds chain, wallet, origin, and issuedAt", async () => {
+    const issuedAt = "2026-10-07T22:40:00.000Z";
+    const message = buildFollowerAuthMessage({
+      wallet: account.address.toUpperCase(),
+      origin: "openpaywall.app",
+      issuedAt,
+    });
+    assert.equal(
+      message,
+      [
+        FOLLOWER_AUTH_PREFIX,
+        "chain:143",
+        `wallet:${account.address.toLowerCase()}`,
+        "origin:openpaywall.app",
+        `issuedAt:${issuedAt}`,
+      ].join("\n")
+    );
+    const signature = await account.signMessage({ message });
+    assert.equal(
+      await verifyMessage({ address: account.address, message, signature }),
+      true
+    );
+  });
+});
+
+describe("followers export signature", () => {
+  it("binds chain, writer, and issuedAt", async () => {
+    const issuedAt = "2026-10-07T22:40:00.000Z";
+    const message = buildFollowersExportAuthMessage({
+      writer: account.address,
+      issuedAt,
+    });
+    assert.ok(message.startsWith(FOLLOWERS_EXPORT_AUTH_PREFIX));
+    assert.match(message, new RegExp(`writer:${account.address.toLowerCase()}`));
+    const signature = await account.signMessage({ message });
+    assert.equal(
+      await verifyMessage({ address: account.address, message, signature }),
+      true
     );
   });
 });

@@ -104,23 +104,57 @@
         outline: 2px solid var(--accent);
         outline-offset: 3px;
       }
+      .tabs {
+        display: flex;
+        gap: 0.35rem;
+        margin-top: 1.5rem;
+      }
+      .tabs button {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--soft);
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .tabs button[aria-selected="true"] {
+        background: var(--accent-soft);
+        color: #115e59;
+      }
+      .tabs button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
       .feed {
-        margin-top: 2rem;
+        margin-top: 0.75rem;
         display: flex;
         flex-direction: column;
         gap: 0;
       }
       .item {
+        position: relative;
         display: block;
         padding: 1.35rem 0;
         border-top: 1px solid var(--line);
         text-decoration: none;
         color: inherit;
-        transition: background 0.15s ease, transform 0.15s ease;
+        transition: background 0.15s ease;
       }
       .item:last-child { border-bottom: 1px solid var(--line); }
       .item:hover { background: rgba(15, 118, 110, 0.04); }
-      .item:hover .title { color: var(--accent); }
+      .item:hover .title a { color: var(--accent); }
+      .title a { color: inherit; text-decoration: none; }
+      .title a::after { content: ""; position: absolute; inset: 0; }
+      .author-link, .follow-slot, .opw-follow, .opw-popover {
+        position: relative;
+        z-index: 1;
+      }
+      .author-link { color: inherit; text-decoration: none; }
+      .author-link:hover { color: var(--accent); }
       .meta {
         display: flex;
         flex-wrap: wrap;
@@ -139,6 +173,9 @@
         color: #115e59;
         font-weight: 600;
         font-size: 0.75rem;
+      }
+      .followers {
+        font-variant-numeric: tabular-nums;
       }
       .title {
         margin: 0;
@@ -215,12 +252,17 @@
         Writers opt in to list here. Each article shows its price up front and charges a real micropayment to unlock — not a free demo. Unlock once; read here and on the publisher’s site when they embed the same article.
       </p>
       <div id="resume-draft"></div>
+      <div class="tabs" role="tablist" aria-label="Article feed">
+        <button type="button" id="tabAll" role="tab" aria-selected="true">All</button>
+        <button type="button" id="tabFollowing" role="tab" aria-selected="false">Following</button>
+      </div>
       <div id="feed" class="feed" aria-live="polite">
         <p class="loading" id="status">Loading articles…</p>
       </div>
       <div id="site-footer"></div>
     </div>
     <script src="/site-nav.js"></script>
+    <script src="/follow.js"></script>
     <script src="/write-draft-resume.js"></script>
     <script>
       (function () {
@@ -314,25 +356,39 @@
           }));
         }
 
-        function render(articles) {
+        function followerLabel(count) {
+          const n = Number(count) || 0;
+          return n === 1 ? "1 follower" : `${n} followers`;
+        }
+
+        function render(articles, emptyHtml) {
           const feed = document.getElementById("feed");
           feed.innerHTML = "";
           if (!articles.length) {
             feed.innerHTML =
+              emptyHtml ||
               '<p class="empty">No listed articles yet. Writers can opt in from the embed generator or dashboard.</p>';
             return;
           }
           for (const a of articles) {
-            const el = document.createElement("a");
+            const el = document.createElement("article");
             el.className = "item";
-            el.href = a.href || `/articles/${encodeURIComponent(a.slug)}`;
+            const href = a.href || `/articles/${encodeURIComponent(a.slug)}`;
             const teaser = plainTeaser(a.teaser);
+            const writer = String(a.publisher || "").toLowerCase();
+            const author = a.author || "Author";
+            const authorHtml = /^0x[a-f0-9]{40}$/.test(writer)
+              ? `<a class="author-link" href="/writers/${writer}">${escapeHtml(author)}</a>`
+              : `<span>${escapeHtml(author)}</span>`;
+            const countAttrs = /^0x[a-f0-9]{40}$/.test(writer) ? ` data-writer="${writer}"` : "";
             el.innerHTML = `
               <div class="meta">
                 <span class="price">${escapeHtml(a.priceLabel || formatPrice(a.priceWei, a.paymentAsset))}</span>
-                <span>${escapeHtml(a.author || "Author")}</span>
+                ${authorHtml}
+                <span class="followers"${countAttrs}>${escapeHtml(followerLabel(a.followers))}</span>
+                <span class="follow-slot"></span>
               </div>
-              <h2 class="title">${escapeHtml(a.title || a.slug)}</h2>
+              <h2 class="title"><a href="${escapeHtml(href)}">${escapeHtml(a.title || a.slug)}</a></h2>
               ${teaser ? `<p class="teaser">${escapeHtml(teaser)}</p>` : ""}
               ${
                 a.externalUrl
@@ -341,11 +397,105 @@
               }
             `;
             feed.appendChild(el);
+            const slot = el.querySelector(".follow-slot");
+            if (slot && window.OpenPaywallFollow && /^0x[a-f0-9]{40}$/.test(writer)) {
+              window.OpenPaywallFollow.mount(slot, {
+                writer,
+                author,
+                via: "feed",
+                allowWallet: false,
+              });
+            }
+          }
+        }
+
+        const EMPTY_FOLLOWING = "Follow a writer to see their new posts here.";
+        let feedMode = "all";
+
+        function setTabs(which) {
+          feedMode = which;
+          document.getElementById("tabAll").setAttribute("aria-selected", which === "all" ? "true" : "false");
+          document.getElementById("tabFollowing").setAttribute("aria-selected", which === "following" ? "true" : "false");
+        }
+
+        function followerToken() {
+          try {
+            return localStorage.getItem("opw_follower") || "";
+          } catch {
+            return "";
+          }
+        }
+
+        async function paintCounts(articles) {
+          const wallets = [
+            ...new Set(
+              (articles || [])
+                .map((article) => String(article.publisher || "").toLowerCase())
+                .filter((wallet) => /^0x[a-f0-9]{40}$/.test(wallet))
+            ),
+          ];
+          if (!wallets.length) return;
+          try {
+            const res = await fetch(`/api/writers/followers/counts?wallets=${encodeURIComponent(wallets.join(","))}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const counts = (data && data.counts) || {};
+            document.querySelectorAll(".followers[data-writer]").forEach((el) => {
+              const wallet = el.getAttribute("data-writer");
+              const n = Object.prototype.hasOwnProperty.call(counts, wallet) ? counts[wallet] : 0;
+              el.textContent = followerLabel(n);
+            });
+          } catch {
+            /* cards already show 0 */
+          }
+        }
+
+        async function showAll(articles) {
+          setTabs("all");
+          render(articles);
+          await paintCounts(articles);
+        }
+
+        async function showFollowing() {
+          setTabs("following");
+          const token = followerToken();
+          if (!token) {
+            render([], `<p class="empty">${EMPTY_FOLLOWING}</p>`);
+            return;
+          }
+          try {
+            const res = await fetch("/api/follows/me/feed", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+              render([], `<p class="empty">${EMPTY_FOLLOWING}</p>`);
+              return;
+            }
+            const data = await res.json();
+            const articles = dedupePublicArticles(data.articles || []);
+            if (!Number(data.following)) {
+              render([], `<p class="empty">${EMPTY_FOLLOWING}</p>`);
+              return;
+            }
+            if (!articles.length) {
+              render([], '<p class="empty">No new posts from writers you follow.</p>');
+              return;
+            }
+            render(articles);
+            await paintCounts(articles);
+          } catch {
+            render([], `<p class="empty">${EMPTY_FOLLOWING}</p>`);
           }
         }
 
         async function main() {
           const status = document.getElementById("status");
+          document.getElementById("tabAll").addEventListener("click", () => {
+            void showAll(window.__opwFeedArticles || []);
+          });
+          document.getElementById("tabFollowing").addEventListener("click", () => {
+            void showFollowing();
+          });
           try {
             let articles;
             try {
@@ -353,7 +503,9 @@
             } catch {
               articles = await loadViaSupabase();
             }
-            render(dedupePublicArticles(articles));
+            const listed = dedupePublicArticles(articles);
+            window.__opwFeedArticles = listed;
+            if (feedMode === "all") await showAll(listed);
           } catch (e) {
             status.className = "error";
             status.textContent = "Could not load articles. Try again later.";

@@ -798,7 +798,7 @@ test("API and widget script responses do not get document CSP headers", async ()
   const api = await fetch(`http://127.0.0.1:${PORT}/api/coinbase/health`);
   assert.equal(api.status, 200);
   assert.equal(api.headers.get("access-control-allow-origin"), "*");
-  assert.equal(api.headers.get("access-control-allow-methods"), "GET,HEAD,POST,OPTIONS");
+  assert.equal(api.headers.get("access-control-allow-methods"), "GET,HEAD,POST,DELETE,OPTIONS");
   assert.equal(api.headers.get("content-security-policy"), null);
   assert.equal(api.headers.get("x-frame-options"), null);
 
