@@ -19,6 +19,7 @@ import {
   usdToUsdcAtomic,
 } from "./x402.mjs";
 import { ARTICLE_BODY_LIMIT, DEFAULT_JSON_BODY_LIMIT } from "./body-limit.mjs";
+import { gateWalletReader, resolveRequestReaderSession } from "./reader-session.mjs";
 
 function decodePathSlug(raw) {
   const s = String(raw || "").trim();
@@ -39,12 +40,6 @@ function slugFromUnlockInput(url, parsed) {
     pathSlug ||
     String(parsed?.articleId || parsed?.slug || url.searchParams.get("article_id") || url.searchParams.get("articleId") || url.searchParams.get("slug") || "").trim()
   );
-}
-
-function normalizeReader(value) {
-  if (typeof value !== "string") return "";
-  const a = value.trim().toLowerCase();
-  return /^0x[a-f0-9]{40}$/.test(a) ? a : "";
 }
 
 /**
@@ -107,8 +102,8 @@ export async function handleX402Publish(req, res, { readBody, sendJson }) {
 /**
  * GET/POST /api/x402/unlock and /api/x402/articles/:slug
  *
- * - Existing entitlement (reader wallet / fiat_session) → 200 body, no charge
- * - Else unpaid → 402 with USDC-on-Base requirements (never includes body)
+ * - Existing entitlement (reader session or fiat_session) → 200 body, no charge
+ * - A bare reader= wallet is not entitlement. Unpaid → 402 (never includes body)
  * - Paid + verified → 200 with body
  */
 export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
@@ -133,9 +128,6 @@ export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
     });
   }
 
-  const reader = normalizeReader(
-    parsed.reader || url.searchParams.get("reader")
-  );
   const fiatSession = String(
     parsed.fiatSession ||
       parsed.fiat_session ||
@@ -143,6 +135,24 @@ export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
       url.searchParams.get("fiatSession") ||
       ""
   ).trim();
+  let reader = "";
+  try {
+    const session = resolveRequestReaderSession(req);
+    reader = gateWalletReader({
+      queryReader: parsed.reader || url.searchParams.get("reader"),
+      session,
+      fiatSession,
+    });
+  } catch (e) {
+    if (e?.message === "reader_session_required" && !fiatSession) {
+      /* bare wallet is not entitlement — fall through to the x402 charge */
+      reader = "";
+    } else if (e?.status) {
+      return sendJson(res, e.status, { error: e.message || "reader_session_failed" });
+    } else {
+      throw e;
+    }
+  }
 
   if (reader || fiatSession) {
     try {

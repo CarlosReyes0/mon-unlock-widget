@@ -8,7 +8,8 @@
 import { verifyMessage } from "viem";
 import { takeRateLimitToken } from "./relay-register.mjs";
 import { dedupePublicArticles } from "./listings.mjs";
-import { escapeHtml } from "./article-og.mjs";
+import { escapeHtml, publicOrigin } from "./article-og.mjs";
+import { READER_SESSION_COOKIE, verifyReaderSessionToken } from "./reader-session.mjs";
 import { createMemoryFollowStore, createSupabaseFollowStore } from "./follow-store.mjs";
 import { confirmEmail, newPostEmail, sendResendEmail } from "./follow-mail.mjs";
 import {
@@ -479,14 +480,85 @@ async function getFeed(ctx) {
   return jsonResult(200, { articles, following: writers.length });
 }
 
+function readerSessionSecret(env) {
+  const dedicated = String(env?.READER_SESSION_SECRET || "").trim();
+  if (dedicated) return dedicated;
+  const fromEnv = String(env?.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (fromEnv) return fromEnv;
+  const processDedicated = String(process.env.READER_SESSION_SECRET || "").trim();
+  if (processDedicated) return processDedicated;
+  return String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+}
+
+function presentedReaderSessionToken(headers) {
+  const header = headerSecret(headers, "x-reader-session").trim();
+  if (header) return header;
+  const raw = headerSecret(headers, "cookie");
+  for (const part of raw.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    if (trimmed.slice(0, eq) !== READER_SESSION_COOKIE) continue;
+    const value = trimmed.slice(eq + 1);
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return "";
+}
+
+/**
+ * Reader session for roster memberships.
+ * The Authorization bearer is the follower token, so it is not read here.
+ * X-Reader-Session and the op_reader cookie are the session.
+ * @returns {null | { address: string }}
+ */
+function rosterReaderSession(ctx) {
+  const token = presentedReaderSessionToken(ctx.headers);
+  if (!token) return null;
+  const secret = readerSessionSecret(ctx.env);
+  if (!secret) {
+    const err = new Error("reader_session_not_configured");
+    err.status = 503;
+    throw err;
+  }
+  let domain = "";
+  try {
+    domain = new URL(publicOrigin({ headers: ctx.headers })).host.toLowerCase();
+  } catch {
+    domain = "";
+  }
+  const claims = verifyReaderSessionToken(token, secret, {
+    nowMs: ctx.now,
+    expectedDomain: domain || undefined,
+  });
+  if (!claims) {
+    const err = new Error("invalid_reader_session");
+    err.status = 401;
+    throw err;
+  }
+  return claims;
+}
+
 async function getRoster(ctx) {
   const auth = await authedIdentity(ctx);
   if (auth.error) return auth.error;
+  const claimed = normalizeWallet(ctx.searchParams?.get("reader") || ctx.body?.reader);
+  const session = rosterReaderSession(ctx);
+  if (claimed && !session) return jsonResult(401, { error: "reader_session_required" });
+  if (claimed && session.address !== claimed) return jsonResult(403, { error: "reader_mismatch" });
+  if (session && auth.identity.kind === "wallet" && session.address !== auth.identity.id) {
+    return jsonResult(403, { error: "reader_mismatch" });
+  }
   const followed = new Set(
     (await ctx.store.listFollowing(auth.identity)).map((wallet) => normalizeWallet(wallet)).filter(Boolean)
   );
   const memberships =
-    auth.identity.kind === "wallet" ? await ctx.store.listLiveMemberships(auth.identity.id) : [];
+    auth.identity.kind === "wallet" && session?.address === auth.identity.id
+      ? await ctx.store.listLiveMemberships(session.address)
+      : [];
   const wallets = [...new Set([...followed, ...memberships.map((row) => row.writer)])];
   const labels = await ctx.store.writerLabels(wallets);
   const membershipByWriter = new Map(memberships.map((row) => [row.writer, row]));

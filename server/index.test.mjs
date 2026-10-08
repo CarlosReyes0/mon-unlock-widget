@@ -155,13 +155,15 @@ test("GET /api/articles/{slug}/download without reader is 400 JSON, not a file",
   assert.equal(body.body, undefined);
 });
 
-test("GET /api/articles/{slug}/download with a wallet and no Supabase is 503", async () => {
+test("GET /api/articles/{slug}/download with a bare wallet is 401, not a file", async () => {
   const res = await fetch(
     `http://127.0.0.1:${PORT}/api/articles/demo-slug/download?reader=0x1111111111111111111111111111111111111111`
   );
-  assert.equal(res.status, 503);
+  assert.equal(res.status, 401);
+  assert.match(res.headers.get("content-type") || "", /application\/json/);
   const body = await res.json();
-  assert.equal(body.error, "supabase_not_configured");
+  assert.equal(body.error, "reader_session_required");
+  assert.equal(body.body, undefined);
 });
 
 test("POST /api/subscriptions/stripe/checkout returns 503 without secrets", async () => {

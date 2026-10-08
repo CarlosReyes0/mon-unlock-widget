@@ -7,6 +7,7 @@ import http from "node:http";
 import { test } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import { createMemoryFollowStore } from "./follow-store.mjs";
+import { signReaderSessionToken } from "./reader-session.mjs";
 import {
   buildFollowerAuthMessage,
   buildFollowersExportAuthMessage,
@@ -886,7 +887,7 @@ test("feed counts include 0 and the account roster merges follows with live memb
     { writer: both, current_period_end: "2026-11-15T00:00:00.000Z" },
   ]);
 
-  const env = baseEnv();
+  const env = baseEnv({ READER_SESSION_SECRET: "test-reader-session-secret" });
   const { server, origin } = await start({
     store,
     env,
@@ -942,6 +943,16 @@ test("feed counts include 0 and the account roster merges follows with live memb
     assert.equal(feedBody.articles.find((row) => row.publisher === WRITER).followers, 1);
     assert.equal(feedBody.articles.find((row) => row.publisher === both).followers, 1);
 
+    const otherWallet = "0x00000000000000000000000000000000000000d4";
+    const feedForOther = await fetch(`${origin}/api/follows/me/feed?reader=${otherWallet}`, { headers: auth });
+    assert.equal(feedForOther.status, 200);
+    const feedForOtherBody = await feedForOther.json();
+    assert.equal(feedForOtherBody.following, feedBody.following);
+    assert.deepEqual(
+      feedForOtherBody.articles.map((row) => row.publisher),
+      feedBody.articles.map((row) => row.publisher)
+    );
+
     const emptyFeed = await fetch(`${origin}/api/follows/me/feed`, {
       headers: { authorization: "Bearer not-a-token" },
     });
@@ -952,20 +963,84 @@ test("feed counts include 0 and the account roster merges follows with live memb
     const rosterBody = await roster.json();
     assert.deepEqual(
       rosterBody.writers.map((row) => row.wallet),
-      [WRITER, member, both]
+      [WRITER, both]
     );
     const ada = rosterBody.writers.find((row) => row.wallet === WRITER);
-    const grace = rosterBody.writers.find((row) => row.wallet === member);
     const lin = rosterBody.writers.find((row) => row.wallet === both);
     assert.equal(ada.name, "Ada Lovelace");
     assert.equal(ada.following, true);
     assert.equal(ada.membership, null);
+    assert.equal(lin.name, "Lin");
+    assert.equal(lin.following, true);
+    assert.equal(lin.membership, null);
+    assert.equal(rosterBody.writers.some((row) => row.wallet === member), false);
+
+    const claimed = await fetch(`${origin}/api/follows/me/roster?reader=${member}`, { headers: auth });
+    assert.equal(claimed.status, 401);
+    assert.equal((await claimed.json()).error, "reader_session_required");
+
+    const domain = new URL(origin).host;
+    const sessionToken = signReaderSessionToken(
+      {
+        address: reader,
+        domain,
+        issuedAt: Math.floor(now / 1000),
+        expiresAt: Math.floor(now / 1000) + 3600,
+      },
+      env.READER_SESSION_SECRET
+    );
+    const withSession = await fetch(`${origin}/api/follows/me/roster`, {
+      headers: { ...auth, "x-reader-session": sessionToken },
+    });
+    assert.equal(withSession.status, 200);
+    const sessionBody = await withSession.json();
+    assert.deepEqual(
+      sessionBody.writers.map((row) => row.wallet),
+      [WRITER, member, both]
+    );
+    const grace = sessionBody.writers.find((row) => row.wallet === member);
+    const linPaid = sessionBody.writers.find((row) => row.wallet === both);
     assert.equal(grace.name, "Grace Hopper");
     assert.equal(grace.following, false);
     assert.deepEqual(grace.membership, { priceLabel: "$5/mo", renewsAt: "2026-12-01T00:00:00.000Z" });
-    assert.equal(lin.name, "Lin");
-    assert.equal(lin.following, true);
-    assert.deepEqual(lin.membership, { priceLabel: "$7/mo", renewsAt: "2026-11-15T00:00:00.000Z" });
+    assert.equal(linPaid.following, true);
+    assert.deepEqual(linPaid.membership, { priceLabel: "$7/mo", renewsAt: "2026-11-15T00:00:00.000Z" });
+    assert.equal(sessionBody.writers.find((row) => row.wallet === WRITER).membership, null);
+
+    const viaCookie = await fetch(`${origin}/api/follows/me/roster`, {
+      headers: { ...auth, cookie: `op_reader=${encodeURIComponent(sessionToken)}` },
+    });
+    assert.equal(viaCookie.status, 200);
+    assert.equal((await viaCookie.json()).writers.some((row) => row.membership), true);
+
+    const wrong = signReaderSessionToken(
+      {
+        address: WRITER,
+        domain,
+        issuedAt: Math.floor(now / 1000),
+        expiresAt: Math.floor(now / 1000) + 3600,
+      },
+      env.READER_SESSION_SECRET
+    );
+    const mismatch = await fetch(`${origin}/api/follows/me/roster`, {
+      headers: { ...auth, "x-reader-session": wrong },
+    });
+    assert.equal(mismatch.status, 403);
+    const mismatchBody = await mismatch.json();
+    assert.equal(mismatchBody.error, "reader_mismatch");
+    assert.equal(mismatchBody.writers, undefined);
+
+    const otherClaim = await fetch(`${origin}/api/follows/me/roster?reader=${member}`, {
+      headers: { ...auth, "x-reader-session": sessionToken },
+    });
+    assert.equal(otherClaim.status, 403);
+    assert.equal((await otherClaim.json()).writers, undefined);
+
+    const sessionOnly = await fetch(`${origin}/api/follows/me/roster`, {
+      headers: { "x-reader-session": sessionToken },
+    });
+    assert.equal(sessionOnly.status, 401);
+    assert.equal((await sessionOnly.json()).error, "unauthorized");
 
     const emailTok = followerToken({
       kind: "email",

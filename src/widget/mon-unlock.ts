@@ -31,7 +31,9 @@ import {
   mintArticleNft,
   type ArticleNftConfig,
 } from "../core/index.js";
-import type { Address } from "viem";
+import { createWalletClient, custom, type Address } from "viem";
+import type { Eip1193Provider } from "../core/wallet.js";
+import { establishReaderSession, READER_SESSION_HEADER } from "../core/reader-session.js";
 import "./styles.css";
 
 /**
@@ -92,6 +94,9 @@ export class MonUnlock extends LitElement {
   @state() private nftTxHash: string | null = null;
 
   private walletManager = new WalletManager();
+  private readerSession: { token: string; address: string; expiresAt: number } | null = null;
+  private sessionInFlight: Promise<string | null> | null = null;
+  private sessionAttempted = false;
   private unlockService: UnlockService | OnchainUnlockService = new UnlockService();
   private isOnchain = false;
   private unsubWallet?: () => void;
@@ -359,11 +364,19 @@ export class MonUnlock extends LitElement {
     const filename = `${this.article.id.replace(/[^a-zA-Z0-9._-]+/g, "-") || "article"}.html`;
     try {
       const params = new URLSearchParams();
-      if (this.wallet.address) params.set("reader", this.wallet.address);
       if (this.fiatSession) params.set("fiat_session", this.fiatSession);
+      const headers: Record<string, string> = {};
+      if (this.wallet.address) {
+        const token = await this.ensureReaderSession({ interactive: true });
+        if (token) headers[READER_SESSION_HEADER] = token;
+        else if (!this.fiatSession) {
+          this.error = "Sign the session message to download this article.";
+          return;
+        }
+      }
       const qs = params.toString();
       const url = `${getCheckoutBaseUrl()}/api/articles/${encodeURIComponent(this.article.id)}/download${qs ? `?${qs}` : ""}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const blob = await res.blob();
         const header = res.headers.get("content-disposition") || "";
@@ -564,6 +577,70 @@ export class MonUnlock extends LitElement {
       });
   }
 
+  private browserStorage(): Storage | null {
+    try {
+      return globalThis.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * One wallet signature per hour. Card readers skip this and send fiat_session.
+   * Automatic checks prompt at most once; a click can ask again.
+   */
+  private async ensureReaderSession(opts?: { interactive?: boolean }): Promise<string | null> {
+    const address = this.wallet.address?.trim().toLowerCase() || "";
+    if (!address) return null;
+    const now = Math.floor(Date.now() / 1000);
+    if (
+      this.readerSession &&
+      this.readerSession.address === address &&
+      this.readerSession.expiresAt > now + 30
+    ) {
+      return this.readerSession.token;
+    }
+    if (this.sessionInFlight) return this.sessionInFlight;
+    if (this.sessionAttempted && !opts?.interactive) return null;
+    const provider =
+      this.walletManager.getProvider() ||
+      (globalThis as { ethereum?: Eip1193Provider }).ethereum;
+    if (!provider) return null;
+    this.sessionAttempted = true;
+    const domain = new URL(getCheckoutBaseUrl()).host;
+    const account = address as Address;
+    let resolveFlight: (token: string | null) => void = () => {};
+    this.sessionInFlight = new Promise((resolve) => {
+      resolveFlight = resolve;
+    });
+    try {
+      const walletClient = createWalletClient({
+        account,
+        chain: monadMainnet,
+        transport: custom(provider),
+      });
+      const session = await establishReaderSession({
+        address,
+        domain,
+        sessionUrl: `${getCheckoutBaseUrl()}/api/reader/session`,
+        storage: this.browserStorage(),
+        signMessage: (message) => walletClient.signMessage({ account, message }),
+      });
+      this.readerSession = {
+        token: session.token,
+        address: session.address,
+        expiresAt: session.expiresAt,
+      };
+      resolveFlight(session.token);
+      return session.token;
+    } catch {
+      resolveFlight(null);
+      return null;
+    } finally {
+      this.sessionInFlight = null;
+    }
+  }
+
   private checkAccess() {
     if (!this.article?.id || !this.wallet.address) {
       this.unlocked = false;
@@ -604,6 +681,7 @@ export class MonUnlock extends LitElement {
   private async fetchBodyIfNeeded(opts?: {
     fiatSession?: string;
     maxAttempts?: number;
+    interactive?: boolean;
   }): Promise<boolean> {
     if (!this.article) return false;
     if (this.fetchedBody) return true;
@@ -612,7 +690,13 @@ export class MonUnlock extends LitElement {
 
     const fiatSession = opts?.fiatSession || this.fiatSession;
     const reader = this.wallet.address;
-    if (!fiatSession && !reader) return false;
+    let sessionToken: string | null = null;
+    if (reader) {
+      sessionToken = await this.ensureReaderSession(
+        opts?.interactive ? { interactive: true } : undefined
+      );
+    }
+    if (!fiatSession && !sessionToken) return false;
 
     const apiBase = "https://flczjqljgntmkanipugo.supabase.co/functions/v1";
     const anonKey =
@@ -621,11 +705,12 @@ export class MonUnlock extends LitElement {
     const params = new URLSearchParams({
       article_id: this.article.id,
     });
-    if (reader) params.set("reader", reader);
     if (fiatSession) params.set("fiat_session", fiatSession);
     if (this.unlockContract?.trim()) {
       params.set("unlock_contract", this.unlockContract.trim());
     }
+    const sessionHeaders: Record<string, string> = {};
+    if (sessionToken) sessionHeaders[READER_SESSION_HEADER] = sessionToken;
 
     const cdnUrl = `${getCheckoutBaseUrl()}/api/article-body?${params.toString()}`;
     const edgeUrl = `${apiBase}/article-body?${params.toString()}`;
@@ -637,11 +722,12 @@ export class MonUnlock extends LitElement {
         const abortTimer = setTimeout(() => controller.abort(), 8_000);
         let res: Response;
         try {
-          res = await fetch(cdnUrl, { signal: controller.signal });
+          res = await fetch(cdnUrl, { signal: controller.signal, headers: sessionHeaders });
           if (!res.ok) {
             res = await fetch(edgeUrl, {
               signal: controller.signal,
               headers: {
+                ...sessionHeaders,
                 apikey: anonKey,
                 Authorization: `Bearer ${anonKey}`,
               },
@@ -719,11 +805,17 @@ export class MonUnlock extends LitElement {
     if (!this.article?.id) return;
     const reader = this.wallet.address;
     if (!reader && !this.fiatSession) return;
+    let sessionToken: string | null = null;
+    if (reader) {
+      sessionToken = await this.ensureReaderSession();
+      if (!sessionToken && !this.fiatSession) return;
+    }
     try {
       const params = new URLSearchParams({ article_id: this.article.id });
-      if (reader) params.set("reader", reader);
       if (this.fiatSession) params.set("fiat_session", this.fiatSession);
-      const res = await fetch(`${getCheckoutBaseUrl()}/api/access?${params}`);
+      const headers: Record<string, string> = {};
+      if (sessionToken) headers[READER_SESSION_HEADER] = sessionToken;
+      const res = await fetch(`${getCheckoutBaseUrl()}/api/access?${params}`, { headers });
       if (!res.ok) return;
       const data = (await res.json()) as {
         allowed?: boolean;
@@ -820,10 +912,15 @@ export class MonUnlock extends LitElement {
             writer: writer as Address,
             priceUsdc: price,
           });
+      const token = await this.ensureReaderSession({ interactive: true });
+      if (!token) throw new Error("Sign the session message to subscribe.");
       const confirm = await fetch(`${getCheckoutBaseUrl()}/api/subscriptions/crypto/confirm`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reader, writer, txHash }),
+        headers: {
+          "Content-Type": "application/json",
+          [READER_SESSION_HEADER]: token,
+        },
+        body: JSON.stringify({ writer, txHash }),
       });
       const body = (await confirm.json()) as { error?: string };
       if (!confirm.ok) throw new Error(body.error || "Subscription payment was not recorded.");
@@ -977,7 +1074,7 @@ export class MonUnlock extends LitElement {
           return;
         }
         this.unlocked = true;
-        await this.fetchBodyIfNeeded();
+        await this.fetchBodyIfNeeded({ interactive: true });
       } else {
         this.unlocked = true;
       }

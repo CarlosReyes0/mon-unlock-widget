@@ -26,6 +26,7 @@ import {
   buildALaCarteAuthMessage,
   buildPlanAuthMessage,
 } from "./writer-mutation-auth.mjs";
+import { verifyMonadUsdcPayment } from "./crypto-subscription-payment.mjs";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -604,16 +605,46 @@ export async function applyStripeSubscriptionEvent(event) {
   return { ignored: true, type: event.type };
 }
 
+function splitTxHashes(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+async function cryptoSubscriptionRow(reader, writer) {
+  const rows = await supabase(
+    `subscriptions?select=*&reader=eq.${encodeURIComponent(reader)}` +
+      `&writer=eq.${encodeURIComponent(writer)}&source=eq.crypto&limit=1`
+  );
+  return Array.isArray(rows) ? rows[0] : null;
+}
+
+async function subscriptionUsingTx(txHash) {
+  const rows = await supabase(
+    `subscriptions?select=*&tx_hash=like.*${encodeURIComponent(txHash)}*&limit=20`
+  );
+  const list = Array.isArray(rows) ? rows : [];
+  return list.find((row) => splitTxHashes(row.tx_hash).includes(txHash)) || null;
+}
+
 /**
  * Record a crypto sub after the reader paid first-month USDC on Monad.
- * @param {{ reader: string, writer: string, txHash?: string, periodEnd?: string }} input
+ * The tx must be a successful chain-143 USDC transfer from reader to writer
+ * for at least the plan price, and that hash cannot be reused.
+ * Client-supplied periodEnd is ignored; the period starts at the block time.
+ * @param {{ reader: string, writer: string, txHash?: string }} input
+ * @param {{ verifyUsdcPayment?: typeof verifyMonadUsdcPayment }} [deps]
  */
-export async function confirmCryptoSubscription(input) {
+export async function confirmCryptoSubscription(input, deps = {}) {
   const reader = normalizeAddress(input.reader);
   const writer = normalizeAddress(input.writer);
   if (!reader) throw httpError("invalid_reader");
   if (!writer) throw httpError("invalid_writer");
   if (reader === writer) throw httpError("cannot_subscribe_to_self");
+  const txHash = String(input.txHash || "").trim().toLowerCase();
+  if (!/^0x[a-f0-9]{64}$/.test(txHash)) throw httpError("invalid_tx_hash");
 
   const plan = await getWriterPlan(writer);
   if (!plan.offered) throw httpError("plan_not_offered", 404);
@@ -623,18 +654,29 @@ export async function confirmCryptoSubscription(input) {
     return { already: true, subscription: live.find((row) => row.source === "crypto") };
   }
 
-  const periodEnd =
-    input.periodEnd || new Date(Date.now() + CRYPTO_PERIOD_MS).toISOString();
+  const priorUse = await subscriptionUsingTx(txHash);
+  if (priorUse) throw httpError("tx_already_used", 409);
+
+  const verify = deps.verifyUsdcPayment || verifyMonadUsdcPayment;
+  const minAmount = BigInt(plan.monthlyPriceUsdc || centsToUsdcUnits(plan.monthlyPriceCents));
+  const proof = await verify({ txHash, reader, writer, minAmount });
+
+  const existing = await cryptoSubscriptionRow(reader, writer);
+  const priorHashes = splitTxHashes(existing?.tx_hash);
+  if (priorHashes.includes(txHash)) throw httpError("tx_already_used", 409);
+  const tx_hash = [...priorHashes, txHash].slice(-50).join(",");
+  const periodEnd = new Date(proof.blockTimestamp * 1000 + CRYPTO_PERIOD_MS).toISOString();
+
   const row = await upsertSubscriptionRow({
     reader,
     writer,
     status: "active",
     source: "crypto",
-    tx_hash: input.txHash || null,
+    tx_hash,
     current_period_end: periodEnd,
     canceled_at: null,
   });
-  return { already: false, subscription: row };
+  return { already: false, subscription: row, periodEnd };
 }
 
 /**

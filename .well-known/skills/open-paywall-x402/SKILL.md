@@ -42,8 +42,9 @@ Unpaid x402 calls return **HTTP 402** with `accepts[]` (`scheme: exact`,
 `X-PAYMENT` (v1) or `PAYMENT-SIGNATURE` (v2). Missing/bad payment **fail closed**
 — paid `body` is never returned.
 
-Existing reader entitlement (`reader=0x…` already unlocked, or Stripe
-`fiat_session`) returns the body **without** charging again.
+A bare `reader=0x…` address does **not** skip payment. Stripe `fiat_session`,
+or a reader session from `POST /api/reader/session` (`X-Reader-Session`),
+returns the body **without** charging again when that reader is already entitled.
 
 ## Bankr
 ```bash

@@ -119,7 +119,7 @@ Bankr and other x402 clients pay **USDC on Base**. Open Paywall's human reader u
 
 Unpaid → HTTP **402** with machine-readable `accepts[]` (`scheme: "exact"`, `network: "base"`, Base USDC, `payTo`, `maxAmountRequired`). Retry with `X-PAYMENT` (v1) or `PAYMENT-SIGNATURE` (v2). Bad/missing payment **fail closed** — `body` is never returned.
 
-If the caller already has entitlement (`reader=0x…` unlocked on-chain/indexed, or Stripe `fiat_session`), the unlock route returns the body **without** charging.
+A bare `reader=0x…` address does **not** skip the charge. If the caller already has entitlement — a reader session from `POST /api/reader/session` sent as `X-Reader-Session`, or Stripe `fiat_session` — the unlock route returns the body **without** charging.
 
 After a **paid x402 publish**, response still includes unsigned `embed`, `finishRegistrationUrl`, and `needsManualOnChainRegistration`. Open that URL, register on Monad, **Copy signed embed**. x402 does not autopilot on-chain register.
 

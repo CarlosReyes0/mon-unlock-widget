@@ -96,8 +96,15 @@ test("UI surfaces follow without nesting the button inside the card link", () =>
   assert.match(account, /Following & memberships/);
   assert.match(account, /\/api\/follows\/me\/roster/);
   assert.match(account, /\/api\/subscriptions\/cancel/);
+  assert.match(account, /establishReaderSession/);
+  assert.match(account, /READER_SESSION_HEADER/);
+  assert.match(account, /fetch\("\/api\/subscriptions", \{ headers \}\)/);
+  assert.match(account, /JSON\.stringify\(\{ writer \}\)/);
   assert.match(account, /Unfollow/);
   assert.doesNotMatch(account, /card-title">Following</);
+  assert.doesNotMatch(account, /\/api\/subscriptions\?reader=/);
+  assert.doesNotMatch(account, /JSON\.stringify\(\{ reader, writer \}\)/);
+  assert.doesNotMatch(account, /\/api\/follows\/me\/roster\?/);
   assert.match(feed, /title a::after/);
   assert.doesNotMatch(feed, /createElement\("a"\)[\s\S]{0,120}className = "item"/);
 

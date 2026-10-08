@@ -11,8 +11,9 @@
  *   GET /rest/v1/articles?select=article_id,title,teaser,... (listing cols)
  *     → 200 with public fields
  *   GET /api/article-body?article_id=… (no reader) → reader_or_fiat_session_required
- *   GET /api/article-body?article_id=…&reader=0x000…0001 → 403 not_unlocked
- *     (proves service-role body lookup still works; a missing body grant 500s)
+ *   GET /api/article-body?article_id=…&reader=0x000…0001
+ *     → 401 reader_session_required, or 403 not_unlocked before that deploy.
+ *     Paid body bytes are absent either way.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -100,6 +101,8 @@ test("article-body unlock paths read body with the service role key", () => {
   const edge = read("supabase/functions/article-body/index.ts");
   const railway = read("server/subscriptions.mjs");
   assert.match(edge, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(edge, /verifyReaderSessionToken/);
+  assert.match(edge, /reader_session_required/);
   assert.match(edge, /\.select\('article_id_hash, body'\)/);
   assert.match(railway, /includeBody/);
   assert.match(
@@ -223,8 +226,12 @@ test("production /api/article-body with a fake wallet is not_unlocked (live)", a
   }
   // 403 means service-role SELECT of body succeeded and the unlock gate ran.
   // 500 would mean the body column grant/lookup broke.
-  assert.equal(got.res.status, 403, got.text.slice(0, 300));
-  assert.equal(got.json?.error, "not_unlocked");
+  assert.ok(
+    got.res.status === 401 || got.res.status === 403,
+    got.text.slice(0, 300)
+  );
+  assert.equal(typeof got.json?.body, "undefined");
+  assert.notEqual(got.json?.error, undefined);
 });
 
 async function railwayDownload(slug, params) {
@@ -273,8 +280,10 @@ test("production article download with a fake wallet is not_unlocked (live)", as
     t.skip("production has not deployed article download yet");
     return;
   }
-  assert.equal(got.res.status, 403, got.text.slice(0, 300));
-  assert.equal(got.json?.error, "not_unlocked");
+  assert.ok(
+    got.res.status === 401 || got.res.status === 403,
+    got.text.slice(0, 300)
+  );
   assert.match(got.res.headers.get("content-type") || "", /application\/json/);
   assert.equal(typeof got.json?.body, "undefined");
 });
