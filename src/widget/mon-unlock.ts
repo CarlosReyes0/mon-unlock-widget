@@ -912,10 +912,15 @@ export class MonUnlock extends LitElement {
             writer: writer as Address,
             priceUsdc: price,
           });
+      const token = await this.ensureReaderSession({ interactive: true });
+      if (!token) throw new Error("Sign the session message to subscribe.");
       const confirm = await fetch(`${getCheckoutBaseUrl()}/api/subscriptions/crypto/confirm`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reader, writer, txHash }),
+        headers: {
+          "Content-Type": "application/json",
+          [READER_SESSION_HEADER]: token,
+        },
+        body: JSON.stringify({ writer, txHash }),
       });
       const body = (await confirm.json()) as { error?: string };
       if (!confirm.ok) throw new Error(body.error || "Subscription payment was not recorded.");

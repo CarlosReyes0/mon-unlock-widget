@@ -200,6 +200,19 @@ function fiatSessionFromUrl(url) {
  * Wallet reads require a reader session. A Stripe fiat_session still stands
  * on its own, and a bare reader= address is not treated as that wallet.
  */
+function requireReaderSession(req, claimedReader) {
+  const session = resolveRequestReaderSession(req);
+  if (!session) {
+    const err = new Error("reader_session_required");
+    err.status = 401;
+    throw err;
+  }
+  if (claimedReader) {
+    gateWalletReader({ queryReader: claimedReader, session, fiatSession: "" });
+  }
+  return session;
+}
+
 function authenticatedReaderForRead(req, url) {
   const fiatSession = fiatSessionFromUrl(url);
   const session = resolveRequestReaderSession(req);
@@ -1092,7 +1105,8 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "GET" && url.pathname === "/api/subscriptions") {
     try {
-      const rows = await listReaderSubscriptions(url.searchParams.get("reader"));
+      const session = requireReaderSession(req, url.searchParams.get("reader"));
+      const rows = await listReaderSubscriptions(session.address);
       return sendJson(res, 200, { subscriptions: rows });
     } catch (e) {
       const status = e?.status || 500;
@@ -1136,14 +1150,15 @@ const server = http.createServer(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
+      const session = requireReaderSession(req, parsed.reader);
       const result = await confirmCryptoSubscription({
-        reader: parsed.reader,
+        reader: session.address,
         writer: parsed.writer,
         txHash: parsed.txHash,
-        periodEnd: parsed.periodEnd,
       });
       return sendJson(res, 200, result);
     } catch (e) {
+      if (e instanceof SyntaxError) return sendJson(res, 400, { error: "invalid_json" });
       const status = e?.status || 500;
       return sendJson(res, status, { error: e?.message || "confirm_failed" });
     }
@@ -1153,12 +1168,14 @@ const server = http.createServer(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
+      const session = requireReaderSession(req, parsed.reader);
       const result = await cancelWriterSubscription({
-        reader: parsed.reader,
+        reader: session.address,
         writer: parsed.writer,
       });
       return sendJson(res, 200, result);
     } catch (e) {
+      if (e instanceof SyntaxError) return sendJson(res, 400, { error: "invalid_json" });
       const status = e?.status || 500;
       return sendJson(res, status, { error: e?.message || "cancel_failed" });
     }
