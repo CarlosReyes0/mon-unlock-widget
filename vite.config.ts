@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 
@@ -61,10 +62,13 @@ export default defineConfig(({ mode }) => {
         outDir: "dist-publisher",
         emptyOutDir: true,
         rollupOptions: {
+            // follow-signin.js is loaded by URL, so its exports must survive the app build.
+            preserveEntrySignatures: "exports-only",
             input: {
               account: resolve(__dirname, "account.html"),
               write: resolve(__dirname, "write.html"),
               "publisher-auth": resolve(__dirname, "publisher-auth.html"),
+              "follow-signin": resolve(__dirname, "src/publisher/follow-signin.tsx"),
             },
           output: {
             entryFileNames: "[name].js",
@@ -130,8 +134,31 @@ export default defineConfig(({ mode }) => {
             } catch (e) {
               console.error("[media-dev]", e?.message || e);
             }
+            // Opt-in: serve the production follow-signin bundle (and its chunks)
+            // instead of the TSX module. Vite's React preamble is not injected into
+            // these static HTML pages, so the TSX module throws in dev.
+            if (process.env.FOLLOW_SIGNIN_BUILT === "1") {
+              const rawPath = (req.url || "").split("?")[0];
+              const builtRoot = resolve(__dirname, "dist-publisher");
+              const chunkName = basename(rawPath);
+              const builtSignIn =
+                rawPath === "/follow-signin.js"
+                  ? resolve(builtRoot, "follow-signin.js")
+                  : rawPath === `/chunks/${chunkName}` && chunkName.endsWith(".js")
+                    ? resolve(builtRoot, "chunks", chunkName)
+                    : "";
+              if (builtSignIn && existsSync(builtSignIn)) {
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "text/javascript");
+                res.setHeader("Cache-Control", "no-cache");
+                res.end(readFileSync(builtSignIn));
+                return;
+              }
+            }
             if (req.url === "/publisher-auth.js" || req.url?.startsWith("/publisher-auth.js?")) {
               req.url = "/src/publisher/auth-mount.tsx";
+            } else if (req.url === "/follow-signin.js" || req.url?.startsWith("/follow-signin.js?")) {
+              req.url = "/src/publisher/follow-signin.tsx";
             } else if (
               req.url === "/publisher-auth.css" ||
               req.url?.startsWith("/publisher-auth.css?")
@@ -166,6 +193,11 @@ export default defineConfig(({ mode }) => {
                 : `/account.html${query}`;
             } else if (req.url === "/articles" || req.url?.startsWith("/articles?")) {
               req.url = "/articles.html";
+            } else if (req.url?.startsWith("/writers/")) {
+              const qIndex = req.url.indexOf("?");
+              const pathOnly = qIndex >= 0 ? req.url.slice(0, qIndex) : req.url;
+              const wallet = decodeURIComponent(pathOnly.slice("/writers/".length).split("/")[0] || "");
+              if (/^0x[a-fA-F0-9]{40}$/.test(wallet)) req.url = "/writer.html";
             } else if (req.url?.startsWith("/articles/")) {
               // Fallback if OG inject failed: keep pretty URLs working in Vite.
               const qIndex = req.url.indexOf("?");
