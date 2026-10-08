@@ -23,7 +23,14 @@ import { WriteMediaSheet } from "./WriteMediaSheet.js";
 import { WriteDoc, type WriteDocHandle } from "./WriteDoc.js";
 import { MirosharkPreview, type MirosharkPreviewHandle } from "./MirosharkPreview.js";
 import { MirosharkPaySheet } from "./MirosharkPaySheet.js";
-import { signMirosharkUsdc, type MirosharkClientPayment } from "../core/miroshark-pay.js";
+import {
+  initialPayNetwork,
+  mirosharkPayErrorMessage,
+  paymentForNetwork,
+  signMirosharkUsdc,
+  type MirosharkNetworkOffers,
+  type MirosharkPayNetwork,
+} from "../core/miroshark-pay.js";
 import { VoiceDrafts } from "./VoiceDrafts.js";
 import { ArticleNftMint } from "./ArticleNftMint.js";
 import { WriteDraftsPanel } from "./WriteDraftsPanel.js";
@@ -35,7 +42,7 @@ import {
 import { PUBLISH_AUTHOR_MAX, publishAuthor } from "../core/publish-author.js";
 import { ensurePaywallFold, hasPaywallFold, seedPaywallFold } from "../core/split-post.js";
 import { publishPost } from "./publish-post.js";
-import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
+import { mapWalletSendToEthSend, readPublisherWallet, type Eip1193Provider } from "../core/wallet.js";
 import { fetchArticleNftConfig } from "../core/article-nft.js";
 import type { Address } from "viem";
 
@@ -87,8 +94,8 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
   const [deleteNote, setDeleteNote] = useState("");
   const [simBusy, setSimBusy] = useState(false);
   const [simNote, setSimNote] = useState("");
-  const [paySheet, setPaySheet] = useState<MirosharkClientPayment | null>(null);
-  const [payFrom, setPayFrom] = useState("");
+  const [payOffers, setPayOffers] = useState<MirosharkNetworkOffers | null>(null);
+  const [payNetwork, setPayNetwork] = useState<MirosharkPayNetwork>("monad");
   const [payError, setPayError] = useState("");
   const [payBusy, setPayBusy] = useState(false);
   const bodyHandleRef = useRef<WriteDocHandle | null>(null);
@@ -324,13 +331,15 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     ok?: boolean;
     code?: string;
     message?: string;
-    clientPayment?: MirosharkClientPayment | null;
+    networks?: MirosharkNetworkOffers | null;
     run?: { waitUrl?: string | null; shareUrl?: string | null };
   } | null) {
     if (!json || json.run?.waitUrl || json.run?.shareUrl) return;
-    if (json.code === "payment_required" && json.clientPayment) {
-      setPaySheet(json.clientPayment);
-      setPayFrom(window.__monPublisherAddress || "");
+    const offers = json.networks;
+    const canPay = Boolean(offers?.monad?.clientPayment || offers?.base?.clientPayment);
+    if (json.code === "payment_required" && offers && canPay) {
+      setPayOffers(offers);
+      setPayNetwork(initialPayNetwork(offers));
       setPayError("");
       setSimNote("");
       return;
@@ -340,22 +349,33 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
     }
   }
 
+  function onSelectPayNetwork(network: MirosharkPayNetwork) {
+    if (payBusy) return;
+    setPayNetwork(network);
+    setPayError("");
+  }
+
   async function onApproveSim() {
-    if (!paySheet || payBusy) return;
-    const from = window.__monPublisherAddress;
-    const provider = window.__monPublisherProvider as Eip1193Provider | undefined;
-    if (!from || !provider) {
-      setPayError("Sign in, then approve $1 USDC on Base.");
+    if (!payOffers || payBusy) return;
+    const requested = paymentForNetwork(payOffers, payNetwork);
+    const session = readPublisherWallet();
+    if (!requested) {
+      const label = payNetwork === "base" ? "Base" : "Monad";
+      setPayError(`USDC on ${label} is not available for this charge.`);
+      return;
+    }
+    if (!session) {
+      setPayError("Sign in, then approve $1 USDC.");
       return;
     }
     setPayBusy(true);
     setPayError("");
     try {
-      const payment = await signMirosharkUsdc(provider, from, paySheet);
+      const payment = await signMirosharkUsdc(session.provider, session.address, requested);
       const res = await fetch("/api/miroshark/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body, payment }),
+        body: JSON.stringify({ title, body, network: payNetwork, payment }),
       });
       const json = (await res.json()) as {
         message?: string;
@@ -368,8 +388,7 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
       }
       setPayError(json?.message || "The simulation did not start. Publish still works.");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not approve the payment.";
-      setPayError(/reject|denied|cancel/i.test(msg) ? "Approval cancelled. Publish still works." : msg);
+      setPayError(mirosharkPayErrorMessage(e));
     } finally {
       setPayBusy(false);
     }
@@ -678,16 +697,17 @@ export function WriteApp({ auth = "privy" }: { auth?: WriteAuth }) {
         onOpen={onOpenDraft}
         onDelete={onDeleteDraft}
       />
-      {paySheet ? (
+      {payOffers ? (
         <MirosharkPaySheet
-          payment={paySheet}
-          from={payFrom}
+          offers={payOffers}
+          selected={payNetwork}
           busy={payBusy}
           error={payError}
+          onSelect={onSelectPayNetwork}
           onApprove={() => void onApproveSim()}
           onClose={() => {
             if (payBusy) return;
-            setPaySheet(null);
+            setPayOffers(null);
             setPayError("");
           }}
         />

@@ -53,6 +53,39 @@ export function newestExternalWalletAddress(
  * Privy forwards unknown methods to the chain RPC (https://rpc.monad.xyz),
  * which does not support that wallet-namespace method.
  */
+export type PublisherWalletSession = {
+  address: string;
+  provider: Eip1193Provider;
+};
+
+type PublisherWalletScope = {
+  __monPublisherAddress?: string;
+  __monPublisherProvider?: Eip1193Provider;
+  MonPublisherAuth?: {
+    getAddress?: () => string | null;
+    getProvider?: () => unknown;
+  };
+};
+
+/**
+ * The Write pay sheet uses the publisher session already connected by
+ * PublisherAuth (Privy or an injected wallet). It does not open a second
+ * WalletConnect or Privy login.
+ */
+export function readPublisherWallet(scope?: PublisherWalletScope): PublisherWalletSession | null {
+  const host =
+    scope ||
+    (typeof globalThis !== "undefined" ? (globalThis as PublisherWalletScope) : undefined);
+  if (!host) return null;
+  const viaAuth = host.MonPublisherAuth;
+  const address = String(viaAuth?.getAddress?.() || host.__monPublisherAddress || "").trim();
+  const provider = (viaAuth?.getProvider?.() || host.__monPublisherProvider) as
+    | Eip1193Provider
+    | undefined;
+  if (!address || !provider || typeof provider.request !== "function") return null;
+  return { address, provider };
+}
+
 export function mapWalletSendToEthSend(eth: Eip1193Provider): Eip1193Provider {
   return {
     request: (args) => {

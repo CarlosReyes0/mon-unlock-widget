@@ -347,7 +347,7 @@ export function buildOpenApiDocument() {
           operationId: "mirosharkPreviewStatus",
           summary: "Optional MiroShark Write preview + x402aff affiliate status",
           description:
-            "Enabled only when BASE_BUILDER_CODE is set. Does not affect publish or article unlock.",
+            "Enabled only when BASE_BUILDER_CODE is set. Reports Monad and Base (availability, price, asset). Does not affect publish or article unlock.",
           security: [],
           responses: { "200": { description: "enabled flag, serverPayer boolean, affiliate meta" } },
         },
@@ -357,7 +357,7 @@ export function buildOpenApiDocument() {
           operationId: "mirosharkPreview",
           summary: "Optional MiroShark sim from a Write draft (fail-soft)",
           description:
-            "Seeds POST https://x402.miroshark.xyz/run with title + teaser + body snippet. Always attaches X-Builder-Code. If MiroShark returns 402 and MIROSHARK_X402_PRIVATE_KEY is unset, the response includes clientPayment for the signed-in wallet to approve $1 USDC on Base. Retry the same POST with payment: { signature, authorization }. A paid run returns the simulation URL. Sim errors never block publish.",
+            "Seeds POST https://x402.miroshark.xyz/run with title + teaser + body snippet. The unpaid probe sends X-Builder-Code so the Base accept can use the builder split. If MiroShark returns 402 and MIROSHARK_X402_PRIVATE_KEY is unset, the response includes USDC client payments for Monad (default) and Base. Retry with network (monad|base) and payment: { signature, authorization }. The builder-code extension is attached only when the paid network is Base. A paid run returns the simulation URL. Sim errors never block publish.",
           security: [],
           requestBody: {
             required: true,

@@ -535,6 +535,15 @@ test("GET /api/miroshark/status is disabled without BASE_BUILDER_CODE", async ()
   assert.equal(body.enabled, false);
   assert.match(body.message, /BASE_BUILDER_CODE/);
   assert.equal(body.builderCode, null);
+  assert.equal(body.defaultNetwork, "monad");
+  assert.equal(body.networks.monad.available, true);
+  assert.equal(body.networks.monad.asset, "USDC");
+  assert.equal(body.networks.monad.amountUsd, "1.00");
+  assert.equal(body.networks.base.available, true);
+  assert.equal(body.networks.base.asset, "USDC");
+  assert.equal(body.networks.base.amountUsd, "1.00");
+  assert.equal(body.networks.base.affiliate, true);
+  assert.equal(body.networks.monad.affiliate, false);
 });
 
 test("GET /api/voice-drafts/status is disabled without an LLM key", async () => {
