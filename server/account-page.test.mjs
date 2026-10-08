@@ -37,6 +37,9 @@ test("account page is You + Get paid, no wallet address", () => {
   assert.match(card, /Your draft is waiting/);
   assert.match(card, /Continue/);
   assert.match(card, /href="\/write"/);
+  assert.match(app, /Following & memberships/);
+  assert.match(app, /\/api\/subscriptions\/cancel/);
+  assert.doesNotMatch(app, /card-title">Following</);
   assert.doesNotMatch(app, /Your writer plan/);
   assert.doesNotMatch(app, /Subscriptions you pay for/);
   assert.doesNotMatch(app, /Set up Stripe payouts/);

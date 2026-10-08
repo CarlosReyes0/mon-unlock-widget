@@ -398,6 +398,68 @@ export function buildOpenApiDocument() {
           responses: { "200": { description: "Run status + optional report summary" } },
         },
       },
+      "/api/writers/{wallet}": {
+        get: {
+          operationId: "getWriter",
+          summary: "Public writer page data",
+          description:
+            "Display name, follower count (including 0), optional paid membership, and listed articles for a writer wallet. Follow is free. Reading a post is still pay-per-piece.",
+          security: [],
+          parameters: [
+            {
+              name: "wallet",
+              in: "path",
+              required: true,
+              schema: { type: "string", pattern: "^0x[a-fA-F0-9]{40}$" },
+            },
+          ],
+          responses: {
+            "200": { description: "Writer profile. Cache-Control public, max-age=60." },
+            "404": { description: "No listed articles for this wallet." },
+          },
+        },
+      },
+      "/api/writers/followers/counts": {
+        get: {
+          operationId: "getWriterFollowerCounts",
+          summary: "Public follower counts for feed cards",
+          description:
+            "Verified follows that are not unsubscribed, one number per writer wallet. Every requested wallet is included, even when the count is 0. At most 50 wallets. Email and wallet breakdown is not public.",
+          security: [],
+          parameters: [
+            {
+              name: "wallets",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+              description: "Comma-separated writer wallets.",
+            },
+          ],
+          responses: {
+            "200": { description: "{ counts: { [wallet]: number } }. Cache-Control public, max-age=60." },
+          },
+        },
+      },
+      "/api/writers/{wallet}/followers/count": {
+        get: {
+          operationId: "getWriterFollowerCount",
+          summary: "Public follower count",
+          description:
+            "Verified follows that are not unsubscribed. The count is always returned, including 0. Email and wallet breakdown is not public.",
+          security: [],
+          parameters: [
+            {
+              name: "wallet",
+              in: "path",
+              required: true,
+              schema: { type: "string", pattern: "^0x[a-fA-F0-9]{40}$" },
+            },
+          ],
+          responses: {
+            "200": { description: "{ followers: number }" },
+          },
+        },
+      },
       "/api/voice-drafts/status": {
         get: {
           operationId: "voiceDraftStatus",

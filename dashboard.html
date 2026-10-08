@@ -112,8 +112,19 @@
           </div>
         </div>
 
+        <div class="card" style="margin-top:1.25rem;" id="followersCard">
+          <h2 class="section-title">Followers</h2>
+          <p id="followerCountLine" style="margin:0 0 0.35rem; font-size:1.05rem; font-weight:600;">Sign in to see your followers.</p>
+          <p id="followerDetailLine" style="margin:0 0 0.75rem; font-size:0.85rem; color:#6b7280;" hidden></p>
+          <p style="margin:0 0 0.75rem; font-size:0.875rem; color:#6b7280; line-height:1.45;">
+            Your list is yours. Export it anytime. Follow is free. Readers still pay per post.
+          </p>
+          <button class="btn btn-primary" id="exportFollowersBtn" type="button" disabled>Export CSV</button>
+          <p id="exportFollowersStatus" style="margin:0.55rem 0 0; font-size:0.75rem; color:#6b7280;"></p>
+        </div>
+
         <div class="card" style="margin-top:1.25rem;">
-          <h2 class="section-title">Writer subscription</h2>
+          <h2 class="section-title">Paid membership (optional)</h2>
           <p style="margin:0 0 0.75rem; font-size:0.875rem; color:#6b7280; line-height:1.45;">
             Readers can subscribe to <em>you</em> with a card or Monad USDC. No site-wide pass.
             Cancel locks articles they did not buy.
@@ -784,6 +795,8 @@ ${teaser}
         if (btn) btn.disabled = !enabled;
         const planBtn = document.getElementById("planSaveBtn");
         if (planBtn) planBtn.disabled = !enabled;
+        const exportBtn = document.getElementById("exportFollowersBtn");
+        if (exportBtn) exportBtn.disabled = !enabled;
       }
 
       async function loadWriterPlan(wallet) {
@@ -870,6 +883,80 @@ ${teaser}
         if (reload) {
           loadFromSupabase(currentWallet);
           loadWriterPlan(currentWallet);
+          loadFollowerCount(currentWallet);
+        }
+      }
+
+      function followersExportMessage(writer, issuedAt) {
+        return [
+          "Open Paywall followers export v1",
+          "chain:143",
+          `writer:${String(writer || "").toLowerCase()}`,
+          `issuedAt:${issuedAt}`,
+        ].join("\n");
+      }
+
+      async function loadFollowerCount(wallet) {
+        const line = document.getElementById("followerCountLine");
+        if (!line || !wallet) return;
+        try {
+          const res = await fetch(`/api/writers/${encodeURIComponent(wallet)}/followers/count`);
+          if (!res.ok) throw new Error("count_failed");
+          const data = await res.json();
+          const n = Number(data.followers) || 0;
+          line.textContent = n === 1 ? "1 follower" : `${n} followers`;
+        } catch {
+          line.textContent = "Follower count is unavailable.";
+        }
+      }
+
+      async function exportFollowers() {
+        const status = document.getElementById("exportFollowersStatus");
+        if (!currentWallet) {
+          status.textContent = "Sign in first.";
+          return;
+        }
+        const eth = getInjectedProvider();
+        if (!eth) {
+          status.textContent = "Connect a wallet to export.";
+          return;
+        }
+        status.textContent = "Waiting for signature…";
+        try {
+          const issuedAt = new Date().toISOString();
+          const message = followersExportMessage(currentWallet, issuedAt);
+          const sig = await signPlainMessage(eth, currentWallet, message);
+          const res = await fetch("/api/writers/followers/export", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ writer: currentWallet, issuedAt, sig }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `http_${res.status}`);
+          const blob = new Blob([data.csv || ""], { type: "text/csv" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = data.filename || "openpaywall-followers.csv";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          const detail = document.getElementById("followerDetailLine");
+          if (detail) {
+            detail.hidden = false;
+            detail.textContent = `${data.email || 0} email · ${data.wallet || 0} wallet · ${data.pending || 0} pending confirmation`;
+          }
+          const line = document.getElementById("followerCountLine");
+          if (line) {
+            const n = Number(data.followers) || 0;
+            line.textContent = n === 1 ? "1 follower" : `${n} followers`;
+          }
+          status.textContent = "Downloaded.";
+          status.style.color = "#16a34a";
+        } catch (e) {
+          status.textContent = e.message || "Export failed";
+          status.style.color = "#b91c1c";
         }
       }
 
@@ -1108,6 +1195,7 @@ ${teaser}
         document.getElementById("stripeOnboardBtn")?.addEventListener("click", () => void startStripeOnboarding());
         document.getElementById("listingSaveBtn")?.addEventListener("click", () => void saveListingFromDashboard());
         document.getElementById("planSaveBtn")?.addEventListener("click", () => void saveWriterPlan());
+        document.getElementById("exportFollowersBtn")?.addEventListener("click", () => void exportFollowers());
 
         // Keep dashboard in sync when the user switches account/network in the extension.
         const eth = getInjectedProvider();

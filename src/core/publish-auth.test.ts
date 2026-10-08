@@ -8,6 +8,10 @@ import {
   PUBLISH_AUTH_PREFIX,
   USDC_UNLOCK_CONTRACT,
   allowedUnlockContracts,
+  FOLLOWER_AUTH_PREFIX,
+  FOLLOWERS_EXPORT_AUTH_PREFIX,
+  buildFollowerAuthMessage,
+  buildFollowersExportAuthMessage,
   buildListingAuthMessage,
   buildPublishAuthMessage,
   canonicalPublishContent,
@@ -144,6 +148,49 @@ describe("listing signature", () => {
     });
     assert.match(priced, /priceCents:100/);
     assert.notEqual(priced, base);
+  });
+});
+
+describe("follower signature", () => {
+  it("binds chain, wallet, origin, and issuedAt", async () => {
+    const issuedAt = "2026-10-07T22:40:00.000Z";
+    const message = buildFollowerAuthMessage({
+      wallet: account.address.toUpperCase(),
+      origin: "openpaywall.app",
+      issuedAt,
+    });
+    assert.equal(
+      message,
+      [
+        FOLLOWER_AUTH_PREFIX,
+        "chain:143",
+        `wallet:${account.address.toLowerCase()}`,
+        "origin:openpaywall.app",
+        `issuedAt:${issuedAt}`,
+      ].join("\n")
+    );
+    const signature = await account.signMessage({ message });
+    assert.equal(
+      await verifyMessage({ address: account.address, message, signature }),
+      true
+    );
+  });
+});
+
+describe("followers export signature", () => {
+  it("binds chain, writer, and issuedAt", async () => {
+    const issuedAt = "2026-10-07T22:40:00.000Z";
+    const message = buildFollowersExportAuthMessage({
+      writer: account.address,
+      issuedAt,
+    });
+    assert.ok(message.startsWith(FOLLOWERS_EXPORT_AUTH_PREFIX));
+    assert.match(message, new RegExp(`writer:${account.address.toLowerCase()}`));
+    const signature = await account.signMessage({ message });
+    assert.equal(
+      await verifyMessage({ address: account.address, message, signature }),
+      true
+    );
   });
 });
 

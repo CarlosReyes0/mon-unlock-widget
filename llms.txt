@@ -33,6 +33,7 @@ Key facts:
 - Agent x402 settlement is USDC on **Base**. Human readers still unlock USDC on **Monad**. There is no `$OPENPAYWALL` token.
 - OpenClaw plugin: github.com/CarlosReyes0/mon-unlock-widget/tree/main/skills/mon-unlock-embed
 - Chain: Monad (chain id 143). Default unlock: USDC at $0.50 (`payment-asset="usdc"`, contract `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f`). Legacy MON contract: `0x27cA0c23835328e2Ab1424b66330be86fe177FA6`.
+- Free per-writer follow (not a paid membership): writer page `https://openpaywall.app/writers/{wallet}`, public reads `GET /api/writers/{wallet}`, `GET /api/writers/{wallet}/followers/count`, and `GET /api/writers/followers/counts?wallets=`. Each post is still pay-per-piece. Privacy: https://openpaywall.app/privacy
 - Publishing needs three steps: embed HTML, body stored in Supabase, on-chain registration so readers can pay.
 - Embed signatures still use prefix `MON Unlock v1` (also verify `Open Paywall v1`).
 

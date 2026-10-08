@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Privacy — Open Paywall</title>
+    <meta
+      name="description"
+      content="How Open Paywall handles follow emails and wallet follows. Follow is free. You pay only for the posts you read."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body { margin: 0; font-family: "DM Sans", system-ui, sans-serif; color: #111827; background: #fff; }
+      main { width: min(40rem, calc(100% - 2.5rem)); margin: 2rem auto 3rem; }
+      h1 { font-family: Literata, Georgia, serif; font-weight: 600; letter-spacing: -0.03em; }
+      h2 { font-family: Literata, Georgia, serif; font-size: 1.25rem; margin-top: 1.75rem; }
+      p, li { color: #44403c; line-height: 1.55; }
+      a { color: #0f766e; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="site-nav"></div>
+      <h1>Privacy</h1>
+      <p>
+        Open Paywall lets you follow a writer for free and pay only for the posts you read.
+        This page covers that follow. Payments still go through the card checkout or a USDC transfer on Monad.
+      </p>
+
+      <h2>What we collect when you follow</h2>
+      <ul>
+        <li>Your email address, if you choose email follow. We store it in lowercase.</li>
+        <li>Your wallet address, if you follow with a connected wallet. No email is required for that.</li>
+        <li>When you followed, which page you used, and a hash of your IP address. We do not store the raw IP.</li>
+        <li>The consent line you saw, and the time you confirmed an email follow.</li>
+      </ul>
+      <p>
+        Email follow is double opt-in. We send one confirm message. You are not followed until you press Confirm on the page that link opens. A scanner that only opens the link does not confirm.
+      </p>
+
+      <h2>Who can see your email</h2>
+      <p>
+        The writer you follow can export their list, including your email, as a CSV. The follow form says so before you submit. Wallet-only follows are an address, not an email. We do not sell or import mailing lists.
+      </p>
+      <p>
+        New-post email is sent with Resend from <code>mail.openpaywall.app</code> when that mail is turned on. Until a postal address is configured, Open Paywall does not send new-post email.
+      </p>
+
+      <h2>Stopping email</h2>
+      <p>
+        Every new-post email has an unfollow link for that writer and a way to stop all Open Paywall emails. Both take effect immediately. The one-click unsubscribe header does the same thing. You can also unfollow from a browser that saved your follower token.
+      </p>
+
+      <h2>What this is not</h2>
+      <p>
+        Follow is not a paid membership. A paid membership, when a writer offers one, is separate and stays inside the paywall. Unfollowing does not refund a post you already unlocked.
+      </p>
+      <p><a href="/articles">All articles</a></p>
+      <div id="site-footer"></div>
+    </main>
+    <script src="/site-nav.js"></script>
+  </body>
+</html>

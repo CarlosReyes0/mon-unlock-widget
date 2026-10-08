@@ -289,6 +289,36 @@ export async function renderArticlePage({ html, slug, origin, loadArticle, artic
   return injectShareMeta(html, buildShareMetaTags(share), share.documentTitle);
 }
 
+/** Share card for /writers/{wallet}. */
+export function writerShareMeta({ displayName, canonical, fallbackImage }) {
+  const name = plainText(displayName, 80) || "Writer";
+  const title = `${name} on Open Paywall`;
+  return {
+    title,
+    documentTitle: title,
+    description: plainText(
+      `Follow ${name} free on Open Paywall. Pay only for the posts you read.`,
+      OG_DESCRIPTION_MAX
+    ),
+    url: canonical,
+    imageUrl: fallbackImage,
+    imageAlt: title,
+    siteName: SITE_NAME,
+    twitterSite: TWITTER_SITE,
+    type: "profile",
+  };
+}
+
+export function renderWriterPage({ html, origin, wallet, displayName }) {
+  const canonical = `${origin}/writers/${encodeURIComponent(String(wallet || "").toLowerCase())}`;
+  const share = writerShareMeta({
+    displayName,
+    canonical,
+    fallbackImage: `${origin}${OG_IMAGE_PATH}`,
+  });
+  return injectShareMeta(html, buildShareMetaTags(share), share.documentTitle);
+}
+
 /** Inject crawler-visible OG / Twitter tags into the articles feed HTML. */
 export function renderFeedPage({ html, origin }) {
   const share = feedShareMeta({

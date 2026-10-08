@@ -13,8 +13,51 @@ type SubRow = {
   current_period_end?: string | null;
 };
 
+type MembershipInfo = {
+  priceLabel: string;
+  renewsAt: string | null;
+};
+
+type RosterRow = {
+  wallet: string;
+  name: string;
+  following: boolean;
+  membership: MembershipInfo | null;
+};
+
+const FOLLOWER_TOKEN_KEY = "opw_follower";
+
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function readFollowerToken() {
+  try {
+    return window.localStorage.getItem(FOLLOWER_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function followerTokenWallet(token: string) {
+  const dot = token.lastIndexOf(".");
+  if (dot <= 0) return "";
+  try {
+    let body = token.slice(0, dot).replace(/-/g, "+").replace(/_/g, "/");
+    const pad = body.length % 4 === 0 ? "" : "=".repeat(4 - (body.length % 4));
+    const data = JSON.parse(atob(body + pad)) as { kind?: string; id?: string };
+    if (data.kind === "wallet" && typeof data.id === "string") return data.id.toLowerCase();
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function renewalLabel(iso: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return `Renews ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
 export function PublisherApp() {
@@ -22,6 +65,8 @@ export function PublisherApp() {
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [payoutMsg, setPayoutMsg] = useState("");
   const [subs, setSubs] = useState<SubRow[]>([]);
+  const [roster, setRoster] = useState<RosterRow[] | null>(null);
+  const [planPrices, setPlanPrices] = useState<Record<string, string>>({});
   const [subMsg, setSubMsg] = useState("");
   const [priceDollars, setPriceDollars] = useState("5");
   const [allowBuy, setAllowBuy] = useState(true);
@@ -38,6 +83,27 @@ export function PublisherApp() {
       setSubs(Array.isArray(data.subscriptions) ? data.subscriptions : []);
     } catch {
       setSubs([]);
+    }
+  }, []);
+
+  const loadRoster = useCallback(async (wallet: string) => {
+    const token = readFollowerToken();
+    if (!wallet || followerTokenWallet(token) !== wallet.toLowerCase()) {
+      setRoster(null);
+      return;
+    }
+    try {
+      const res = await fetch("/api/follows/me/roster", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setRoster(null);
+        return;
+      }
+      const data = (await res.json()) as { writers?: RosterRow[] };
+      setRoster(Array.isArray(data.writers) ? data.writers : []);
+    } catch {
+      setRoster(null);
     }
   }, []);
 
@@ -63,21 +129,24 @@ export function PublisherApp() {
       if (!ready) {
         setPayoutMsg("");
         setSubs([]);
+        setRoster(null);
         return;
       }
       const wallet = address();
       void loadSubs(wallet);
+      void loadRoster(wallet);
       void loadPlan(wallet);
     },
-    [loadPlan, loadSubs]
+    [loadPlan, loadRoster, loadSubs]
   );
 
   useEffect(() => {
     if (!signedIn) return;
     const wallet = address();
     void loadSubs(wallet);
+    void loadRoster(wallet);
     void loadPlan(wallet);
-  }, [signedIn, loadPlan, loadSubs]);
+  }, [signedIn, loadPlan, loadRoster, loadSubs]);
 
   useEffect(() => {
     try {
@@ -86,6 +155,34 @@ export function PublisherApp() {
       setResume(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (roster) return;
+    const writers = subs.filter((s) => s.live).map((s) => s.writer);
+    if (!writers.length) {
+      setPlanPrices({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const next: Record<string, string> = {};
+      await Promise.all(
+        writers.map(async (writer) => {
+          try {
+            const res = await fetch(`/api/writers/${encodeURIComponent(writer)}/plan`);
+            const data = (await res.json()) as { plan?: { monthlyPriceLabel?: string } };
+            next[writer.toLowerCase()] = data.plan?.monthlyPriceLabel || "";
+          } catch {
+            next[writer.toLowerCase()] = "";
+          }
+        })
+      );
+      if (!cancelled) setPlanPrices(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roster, subs]);
 
   async function setupStripePayouts() {
     const publisher = address();
@@ -159,12 +256,47 @@ export function PublisherApp() {
       if (!res.ok) throw new Error(data.error || "cancel_failed");
       setSubMsg("Unsubscribed.");
       await loadSubs(reader);
+      await loadRoster(reader);
     } catch (e) {
       setSubMsg(e instanceof Error ? e.message : "Could not cancel");
     }
   }
 
-  const following = subs.filter((s) => s.live);
+  async function unfollow(writer: string) {
+    const token = readFollowerToken();
+    const reader = address();
+    if (!token || !reader) return;
+    setSubMsg("");
+    try {
+      const res = await fetch("/api/follows/wallet", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ writer }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "unfollow_failed");
+      setSubMsg("Unfollowed.");
+      await loadRoster(reader);
+    } catch (e) {
+      setSubMsg(e instanceof Error ? e.message : "Could not unfollow");
+    }
+  }
+
+  const liveSubs = subs.filter((s) => s.live);
+  const rows: RosterRow[] =
+    roster ??
+    liveSubs.map((s) => ({
+      wallet: s.writer,
+      name: shortAddr(s.writer),
+      following: false,
+      membership: {
+        priceLabel: planPrices[s.writer.toLowerCase()] || "",
+        renewsAt: s.current_period_end || null,
+      },
+    }));
 
   return (
     <div className="mon-pub-shell">
@@ -231,26 +363,56 @@ export function PublisherApp() {
               {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}
             </div>
 
-            {following.length > 0 ? (
-              <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
-                <h2 className="mon-pub-shell__card-title">Following</h2>
+            <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
+              <h2 className="mon-pub-shell__card-title">Following & memberships</h2>
+              {rows.length === 0 ? (
+                <p className="mon-pub-auth__hint">
+                  You are not following anyone, and you have no memberships.
+                </p>
+              ) : (
                 <ul className="mon-pub-shell__follow-list">
-                  {following.map((s) => (
-                    <li key={`${s.writer}-${s.source}`}>
-                      {shortAddr(s.writer)}
-                      <button
-                        type="button"
-                        className="mon-pub-auth__btn"
-                        onClick={() => void cancelSub(s.writer)}
-                      >
-                        Cancel
-                      </button>
-                    </li>
-                  ))}
+                  {rows.map((row) => {
+                    const meta = [
+                      row.membership?.priceLabel || "",
+                      row.membership ? renewalLabel(row.membership.renewsAt) : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
+                    return (
+                      <li key={row.wallet}>
+                        <div>
+                          <a className="mon-pub-shell__follow-name" href={`/writers/${row.wallet}`}>
+                            {row.name || shortAddr(row.wallet)}
+                          </a>
+                          {meta ? <p className="mon-pub-shell__follow-meta">{meta}</p> : null}
+                        </div>
+                        <div className="mon-pub-shell__follow-actions">
+                          {row.following ? (
+                            <button
+                              type="button"
+                              className="mon-pub-auth__btn"
+                              onClick={() => void unfollow(row.wallet)}
+                            >
+                              Unfollow
+                            </button>
+                          ) : null}
+                          {row.membership ? (
+                            <button
+                              type="button"
+                              className="mon-pub-auth__btn"
+                              onClick={() => void cancelSub(row.wallet)}
+                            >
+                              Cancel
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
-                {subMsg ? <p className="mon-pub-auth__hint">{subMsg}</p> : null}
-              </div>
-            ) : null}
+              )}
+              {subMsg ? <p className="mon-pub-auth__hint">{subMsg}</p> : null}
+            </div>
           </>
         ) : null}
 

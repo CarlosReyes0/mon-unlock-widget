@@ -57,9 +57,16 @@
       .back:hover { color: var(--accent); }
       .meta {
         margin: 0 0 0.5rem;
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         color: var(--soft);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem 0.75rem;
+        align-items: center;
       }
+      .meta a { color: inherit; }
+      .meta a:hover { color: var(--accent); }
+      #followPrompt { margin-top: 1.25rem; }
       .also {
         margin: 0 0 1.25rem;
         font-size: 0.875rem;
@@ -80,13 +87,21 @@
     <div class="wrap">
       <div id="site-nav"></div>
       <a class="back" href="/articles">← All articles</a>
-      <p class="meta" id="meta" hidden></p>
+      <p class="meta" id="meta" hidden>
+        <span id="byline"></span>
+        <span id="followSlot"></span>
+      </p>
       <p class="also" id="also" hidden></p>
       <div id="paywallHost"></div>
+      <aside id="followPrompt" hidden>
+        <p id="followPromptCopy"></p>
+        <div id="followPromptSlot"></div>
+      </aside>
       <p class="status" id="status">Loading article…</p>
       <div id="site-footer"></div>
     </div>
     <script src="/site-nav.js"></script>
+    <script src="/follow.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://flczjqljgntmkanipugo.supabase.co";
@@ -236,7 +251,25 @@
             document.title = `${article.title} — Open Paywall`;
             const meta = document.getElementById("meta");
             meta.hidden = false;
-            meta.textContent = `By ${article.author}`;
+            const byline = document.getElementById("byline");
+            const writer = String(article.publisher || "").toLowerCase();
+            if (/^0x[a-f0-9]{40}$/.test(writer)) {
+              byline.textContent = "";
+              const label = document.createTextNode("By ");
+              const link = document.createElement("a");
+              link.href = `/writers/${writer}`;
+              link.textContent = article.author || "Author";
+              byline.append(label, link);
+              window.OpenPaywallFollow.mount(document.getElementById("followSlot"), {
+                writer,
+                author: article.author || "Author",
+                via: "article",
+                allowWallet: true,
+                primary: true,
+              });
+            } else {
+              byline.textContent = `By ${article.author}`;
+            }
 
             if (article.externalUrl) {
               const also = document.getElementById("also");
@@ -250,6 +283,61 @@
 
             mountPaywall(article);
             status.hidden = true;
+            const params = new URLSearchParams(location.search);
+            if (params.get("unlock") === "1") {
+              const host = document.getElementById("paywallHost");
+              requestAnimationFrame(() => {
+                host.scrollIntoView({ behavior: "smooth", block: "center" });
+                const focusPay = () => {
+                  const widget = host.querySelector("open-paywall");
+                  const root = widget && widget.shadowRoot;
+                  const button = root && root.querySelector("button");
+                  if (button) button.focus();
+                };
+                setTimeout(focusPay, 400);
+              });
+            }
+            document.getElementById("paywallHost").addEventListener("mon:unlocked", async (event) => {
+              const prompt = document.getElementById("followPrompt");
+              const copy = document.getElementById("followPromptCopy");
+              const name = article.author || "this writer";
+              copy.textContent = `Enjoyed this? Follow ${name} free. Get the next post by email.`;
+              prompt.hidden = false;
+              let prefill = "";
+              const session = event.detail && event.detail.record && event.detail.record.fiatSession;
+              if (session) {
+                try {
+                  const res = await fetch(`/api/follows/receipt-email?session=${encodeURIComponent(session)}`);
+                  const data = await res.json();
+                  if (data && data.email) prefill = data.email;
+                } catch { /* still double opt-in if they type it */ }
+              }
+              const connected = event.detail && event.detail.record && event.detail.record.wallet;
+              if (/^0x[a-f0-9]{40}$/.test(writer)) {
+                window.OpenPaywallFollow.mount(document.getElementById("followPromptSlot"), {
+                  writer,
+                  author: name,
+                  via: "post_unlock",
+                  allowWallet: true,
+                  connectedWallet: connected || "",
+                  prefillEmail: prefill,
+                  offerEmail: true,
+                  openEmail: !connected,
+                });
+              }
+            });
+            document.getElementById("paywallHost").addEventListener("mon:connected", (event) => {
+              const address = event.detail && event.detail.address;
+              if (!address || !/^0x[a-f0-9]{40}$/.test(writer)) return;
+              window.OpenPaywallFollow.mount(document.getElementById("followSlot"), {
+                writer,
+                author: article.author || "Author",
+                via: "article",
+                allowWallet: true,
+                connectedWallet: address,
+                primary: true,
+              });
+            });
           } catch (e) {
             status.className = "status error";
             status.textContent = "Could not load this article.";
