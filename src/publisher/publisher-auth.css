@@ -507,10 +507,40 @@
 }
 
 .mon-sim-pay__copy {
-  margin: 0 0 1rem;
+  margin: 0 0 0.9rem;
   color: #44403c;
   font-size: 0.98rem;
   line-height: 1.4;
+}
+
+.mon-sim-pay__networks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin: 0 0 0.85rem;
+}
+
+.mon-sim-pay__network {
+  border: 1px solid #e7e5e4;
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #44403c;
+  cursor: pointer;
+}
+
+.mon-sim-pay__network.is-selected {
+  border-color: #5b21b6;
+  background: #f5f3ff;
+  color: #4c1d95;
+}
+
+.mon-sim-pay__network:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .mon-sim-pay__price {

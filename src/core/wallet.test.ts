@@ -4,6 +4,7 @@ import {
   mapWalletSendToEthSend,
   newestExternalWalletAddress,
   pickPublisherWallet,
+  readPublisherWallet,
   truncateAddress,
 } from "./wallet.js";
 
@@ -58,6 +59,24 @@ describe("mapWalletSendToEthSend", () => {
       request: async (args) => args.method,
     });
     assert.equal(await wrapped.request({ method: "eth_chainId" }), "eth_chainId");
+  });
+});
+
+describe("readPublisherWallet", () => {
+  it("reads the shared publisher session and ignores a provider without request", () => {
+    const provider = { request: async () => "0x1" };
+    const session = readPublisherWallet({
+      MonPublisherAuth: {
+        getAddress: () => "0xabc",
+        getProvider: () => provider,
+      },
+    });
+    assert.equal(session?.address, "0xabc");
+    assert.equal(session?.provider, provider);
+    assert.equal(
+      readPublisherWallet({ __monPublisherAddress: "0xabc", __monPublisherProvider: {} as never }),
+      null
+    );
   });
 });
 

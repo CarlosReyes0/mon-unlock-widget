@@ -56,6 +56,16 @@ const mock = http.createServer(async (req, res) => {
               asset: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
               amount: "1000000",
               payTo: "0x0000CE08fa224696A819877070BF378e8B131ACF",
+              maxTimeoutSeconds: 300,
+              extra: { name: "USDC", version: "2" },
+            },
+            {
+              scheme: "exact",
+              network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+              asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              amount: "1000000",
+              payTo: "9vWbPNMvt8ui1cNN8jWWPUWT5LPmeXzq7nr3vry1vMPH",
+              extra: { feePayer: "GVJJ7rdGiXr5xaYbRwRbjfaJL7fmwRygFi1H6aGqDveb" },
             },
             {
               scheme: "exact",
@@ -167,6 +177,17 @@ test("GET /api/miroshark/status reports enabled builder code without leaking a p
   assert.equal(body.builderCode, BUILDER);
   assert.equal(body.serverPayer, false);
   assert.equal(body.affiliate.header, "X-Builder-Code");
+  assert.equal(body.defaultNetwork, "monad");
+  assert.equal(body.networks.monad.available, true);
+  assert.equal(body.networks.monad.asset, "USDC");
+  assert.equal(body.networks.monad.amountUsd, "1.00");
+  assert.equal(body.networks.monad.chainId, 143);
+  assert.equal(body.networks.monad.affiliate, false);
+  assert.equal(body.networks.base.available, true);
+  assert.equal(body.networks.base.asset, "USDC");
+  assert.equal(body.networks.base.amountUsd, "1.00");
+  assert.equal(body.networks.base.network, "eip155:8453");
+  assert.equal(body.networks.base.affiliate, true);
   assert.equal(JSON.stringify(body).includes(PAYER_KEY), false);
 });
 
@@ -196,6 +217,15 @@ test("POST /api/miroshark/preview returns 402 challenge and sends X-Builder-Code
   assert.equal(body.builderCodeAttached, true);
   assert.ok(seen.some((r) => r.path === "/run" && r.builder === BUILDER && !r.payment));
   assert.match(JSON.stringify(body.paymentRequired.accepts), /eip155:8453/);
+  assert.match(JSON.stringify(body.paymentRequired.accepts), /eip155:143/);
+  assert.equal(body.defaultNetwork, "monad");
+  assert.equal(body.clientPayment.network, "monad");
+  assert.equal(body.clientPayment.domain.chainId, 143);
+  assert.equal(body.clientPayment.domain.name, "USDC");
+  assert.equal(body.networks.monad.available, true);
+  assert.equal(body.networks.base.available, true);
+  assert.equal(body.networks.base.clientPayment.domain.chainId, 8453);
+  assert.equal(body.networks.base.clientPayment.domain.name, "USD Coin");
 });
 
 test("POST /api/miroshark/preview with a writer signature opens the sim", async () => {
@@ -245,13 +275,96 @@ test("POST /api/miroshark/preview with a writer signature opens the sim", async 
   assert.match(body.run.waitUrl, /\/wait\/run_bbbbbbbbbbbb$/);
   const paid = seen.find((r) => r.path === "/run" && r.payment);
   assert.ok(paid);
-  assert.equal(paid.builder, BUILDER);
+  assert.equal(paid.builder, "");
   const decoded = decodeJsonB64OrJson(paid.payment);
   assert.equal(decoded.payload.authorization.from.toLowerCase(), account.address.toLowerCase());
+  assert.equal(decoded.accepted.network, "eip155:143");
+  assert.equal(decoded.extensions, undefined);
+  assert.equal(pay.domain.chainId, 143);
+  assert.equal(pay.domain.name, "USDC");
+});
+
+test("POST /api/miroshark/preview with a Base signature attaches the builder split", async () => {
+  seen.length = 0;
+  mockMode = "402";
+  const account = privateKeyToAccount(PAYER_KEY);
+  const first = await fetch(`${origin}/api/miroshark/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "July rain walk",
+      body: "Walking home in the rain.\n\nThe paid rest of the piece.",
+    }),
+  });
+  const challenge = await first.json();
+  const pay = challenge.networks.base.clientPayment;
+  const signature = await account.signTypedData({
+    domain: pay.domain,
+    types: pay.types,
+    primaryType: pay.primaryType,
+    message: {
+      from: account.address,
+      to: pay.message.to,
+      value: BigInt(pay.message.value),
+      validAfter: BigInt(pay.message.validAfter),
+      validBefore: BigInt(pay.message.validBefore),
+      nonce: pay.message.nonce,
+    },
+  });
+  const res = await fetch(`${origin}/api/miroshark/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "July rain walk",
+      body: "Walking home in the rain.\n\nThe paid rest of the piece.",
+      network: "base",
+      payment: {
+        signature,
+        authorization: { from: account.address, ...pay.message },
+      },
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.affiliateApplied, true);
+  assert.equal(body.paymentNetwork, "eip155:8453");
+  const paid = seen.find((r) => r.path === "/run" && r.payment);
+  assert.ok(paid);
+  assert.equal(paid.builder, BUILDER);
+  const decoded = decodeJsonB64OrJson(paid.payment);
+  assert.equal(decoded.accepted.network, "eip155:8453");
   assert.deepEqual(decoded.extensions["builder-code"].info.s, [BUILDER, "x402aff"]);
 });
 
 test("POST /api/miroshark/preview with server payer pays Base and stamps x402aff s", async () => {
+  seen.length = 0;
+  mockMode = "402";
+  const res = await fetch(`${payOrigin}/api/miroshark/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "July rain walk",
+      body: "Walking home in the rain.\n\nThe paid rest of the piece.",
+      network: "base",
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.paid, true);
+  assert.equal(body.run.runId, "run_bbbbbbbbbbbb");
+  assert.equal(body.affiliateApplied, true);
+  const paid = seen.find((r) => r.path === "/run" && r.payment);
+  assert.ok(paid);
+  assert.equal(paid.builder, BUILDER);
+  const decoded = decodeJsonB64OrJson(paid.payment);
+  assert.equal(decoded.accepted.network, "eip155:8453");
+  assert.equal(decoded.accepted.payTo, "0x4444444444444444444444444444444444444444");
+  assert.deepEqual(decoded.extensions["builder-code"].info.s, [BUILDER, "x402aff"]);
+});
+
+test("POST /api/miroshark/preview server payer defaults to Monad without the builder split", async () => {
   seen.length = 0;
   mockMode = "402";
   const res = await fetch(`${payOrigin}/api/miroshark/preview`, {
@@ -266,14 +379,15 @@ test("POST /api/miroshark/preview with server payer pays Base and stamps x402aff
   const body = await res.json();
   assert.equal(body.ok, true);
   assert.equal(body.paid, true);
-  assert.equal(body.run.runId, "run_bbbbbbbbbbbb");
+  assert.equal(body.paymentNetwork, "eip155:143");
+  assert.equal(body.affiliateApplied, false);
   const paid = seen.find((r) => r.path === "/run" && r.payment);
   assert.ok(paid);
-  assert.equal(paid.builder, BUILDER);
+  assert.equal(paid.builder, "");
   const decoded = decodeJsonB64OrJson(paid.payment);
-  assert.equal(decoded.accepted.network, "eip155:8453");
-  assert.equal(decoded.accepted.payTo, "0x4444444444444444444444444444444444444444");
-  assert.deepEqual(decoded.extensions["builder-code"].info.s, [BUILDER, "x402aff"]);
+  assert.equal(decoded.accepted.network, "eip155:143");
+  assert.equal(decoded.accepted.payTo, "0x0000CE08fa224696A819877070BF378e8B131ACF");
+  assert.equal(decoded.extensions, undefined);
 });
 
 test("GET /api/miroshark/runs/:id proxies a short summary", async () => {

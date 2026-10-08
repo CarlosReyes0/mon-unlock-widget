@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import type { MirosharkClientPayment } from "../core/miroshark-pay.js";
+import type { MirosharkNetworkOffers } from "../core/miroshark-pay.js";
 
 type PreviewStatus = {
   enabled?: boolean;
@@ -15,7 +15,7 @@ type PreviewResult = {
   message?: string;
   summary?: string;
   paid?: boolean;
-  clientPayment?: MirosharkClientPayment | null;
+  networks?: MirosharkNetworkOffers | null;
   run?: {
     runId?: string | null;
     status?: string | null;
@@ -149,7 +149,7 @@ export const MirosharkPreview = forwardRef<
       <h2 className="mon-write__preview-title">Simulate how this lands with MiroShark</h2>
       <p className="mon-write__preview-copy">
         {enabled
-          ? `A 25-agent sim ($${info?.amountUsd || "1.00"} USDC on Base) models reader reaction. It does not block Publish.${
+          ? `A 25-agent sim ($${info?.amountUsd || "1.00"} USDC) models reader reaction. It does not block Publish.${
               info?.serverPayer
                 ? " This server pays the $1 run."
                 : " Your wallet approves the $1, then the simulation page opens."
