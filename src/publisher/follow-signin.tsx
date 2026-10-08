@@ -173,9 +173,13 @@ function SignInDialog({
       if (!state.address || !provider) throw noWalletError();
       onConnectedRef.current(state.address, provider);
     } catch (err) {
-      const text = err instanceof Error ? `${err.message} ${String((err as { code?: unknown }).code || "")}` : "";
+      console.error(err);
+      const code = err && typeof err === "object" && "code" in err ? String((err as { code?: unknown }).code || "") : "";
+      const message = err instanceof Error ? err.message : "";
+      const text = `${message} ${code}`;
       if (/reject|cancel|denied|closed/i.test(text)) setError("Sign-in was cancelled.");
-      else setError("No wallet found in this browser.");
+      else if (code === "no_wallet" || message === "no_wallet") setError("No wallet found in this browser.");
+      else setError(message ? `Sign-in couldn't load: ${message}` : "No wallet found in this browser.");
     } finally {
       setBusy(false);
     }

@@ -93,11 +93,15 @@ function followButton(container) {
 
 test("follow.js reuses account sign-in and the existing follower message", () => {
   assert.match(FOLLOW_JS, /SIGNIN_URL = "\/follow-signin\.js"/);
-  assert.match(FOLLOW_JS, /return import" \+ "\(url\)"/);
-  assert.match(FOLLOW_JS, /importSignIn\(SIGNIN_URL\)/);
+  assert.match(FOLLOW_JS, /script\.type = "module"/);
+  assert.match(FOLLOW_JS, /script\.src = url/);
+  assert.match(FOLLOW_JS, /loadSignInModule\(SIGNIN_URL\)/);
   assert.doesNotMatch(FOLLOW_JS, /import\s*\(/);
+  assert.doesNotMatch(FOLLOW_JS, /new Function/);
   assert.match(FOLLOW_JS, /signInApi\(window\.OpenPaywallFollowSignIn\)/);
   assert.match(FOLLOW_JS, /__vite_plugin_react_preamble_installed__/);
+  assert.match(FOLLOW_JS, /console\.error\(err\)/);
+  assert.match(FOLLOW_JS, /Sign-in couldn't load/);
   assert.doesNotMatch(FOLLOW_JS, /import\("\/dist\/openpaywall\.js"\)/);
   assert.match(FOLLOW_JS, /eth_requestAccounts/);
   assert.match(FOLLOW_JS, /personal_sign/);
@@ -316,8 +320,32 @@ test("cancelling connect or sign leaves the button on Follow", async () => {
   );
 });
 
-test("no injected wallet shows a short message and does not post a follow", async () => {
+function loggedErrors(window) {
+  const errors = [];
+  window.console.error = (...args) => {
+    errors.push(args.map((part) => (part && part.stack) || String(part)).join(" "));
+  };
+  return errors;
+}
+
+function onSignInScript(window, fire) {
+  const head = window.document.head;
+  const orig = head.appendChild.bind(head);
+  head.appendChild = (node) => {
+    const result = orig(node);
+    if (node && node.tagName === "SCRIPT" && node.type === "module" && String(node.src || "").includes("follow-signin.js")) {
+      fire(node);
+    }
+    return result;
+  };
+}
+
+test("no injected wallet surfaces the sign-in load error and does not post a follow", async () => {
   const { window, requests } = boot(`<span id="slot"></span>`);
+  const errors = loggedErrors(window);
+  onSignInScript(window, (node) => {
+    queueMicrotask(() => node.onerror && node.onerror(new window.Event("error")));
+  });
   const slot = window.document.getElementById("slot");
   await window.OpenPaywallFollow.mount(slot, {
     writer: WRITER,
@@ -327,11 +355,36 @@ test("no injected wallet shows a short message and does not post a follow", asyn
   });
   followButton(slot).click();
   await settle(() => Boolean(slot.querySelector(".opw-error")));
-  assert.equal(slot.querySelector(".opw-error").textContent, "No wallet found in this browser.");
+  assert.equal(
+    slot.querySelector(".opw-error").textContent,
+    "Sign-in couldn't load: Could not download the sign-in script"
+  );
+  assert.equal(
+    errors.some((line) => line.includes("Could not download the sign-in script")),
+    true
+  );
+  assert.doesNotMatch(slot.querySelector(".opw-error").textContent, /No wallet found/);
   assert.match(followButton(slot).textContent, /^Follow$/);
   assert.equal(followButton(slot).disabled, false);
   assert.equal(followButton(slot).classList.contains("is-busy"), false);
   assert.equal(slot.querySelector('input[type="email"]'), null);
+  assert.equal(
+    requests.some((req) => req.url.includes("/api/follows/wallet") || req.url.includes("/api/follows/session")),
+    false
+  );
+});
+
+test("empty injected wallet still says no wallet was found", async () => {
+  const { window, requests } = boot(`<span id="slot"></span>`);
+  const calls = [];
+  installWallet(window, calls, async ({ method }) => {
+    if (method === "eth_accounts" || method === "eth_requestAccounts") return [];
+    throw new Error(`unexpected ${method}`);
+  });
+  const slot = window.document.getElementById("slot");
+  await window.OpenPaywallFollow.mount(slot, { writer: WRITER, author: "Ada", via: "article" });
+  followButton(slot).click();
+  await settle(() => slot.querySelector(".opw-error")?.textContent === "No wallet found in this browser.");
   assert.equal(
     requests.some((req) => req.url.includes("/api/follows/wallet") || req.url.includes("/api/follows/session")),
     false
@@ -407,6 +460,73 @@ function readerSigner(calls) {
   };
 }
 
+test("CSP blocking eval still opens the sign-in sheet with no injected wallet", async () => {
+  const { window } = boot(`<span id="slot"></span>`, { url: "https://openpaywall.app/articles" });
+  setIphone(window);
+  const blocked = new EvalError(
+    "Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script"
+  );
+  window.Function = function () {
+    throw blocked;
+  };
+  window.eval = function () {
+    throw blocked;
+  };
+  let loaded = 0;
+  onSignInScript(window, (node) => {
+    loaded += 1;
+    window.OpenPaywallFollowSignIn = {
+      connectFollowerWallet() {
+        const dialog = window.document.createElement("div");
+        dialog.className = "opw-signin";
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-label", "Sign in to follow");
+        dialog.textContent = "Sign in to follow Continue with email";
+        window.document.body.appendChild(dialog);
+        return new Promise(() => {});
+      },
+    };
+    queueMicrotask(() => node.onload && node.onload(new window.Event("load")));
+  });
+  const slot = window.document.getElementById("slot");
+  await window.OpenPaywallFollow.mount(slot, { writer: WRITER, author: "Ada", via: "feed" });
+  followButton(slot).click();
+  await settle(() => Boolean(window.document.querySelector('[aria-label="Sign in to follow"]')));
+  assert.equal(loaded, 1);
+  assert.equal(window.ethereum, undefined);
+  assert.match(window.document.querySelector(".opw-signin").textContent, /Continue with email/);
+  assert.equal(slot.querySelector(".opw-error"), null);
+});
+
+test("sign-in script errors keep their reason instead of no-wallet", async () => {
+  const { window } = boot(`<span id="slot"></span>`, { url: "https://openpaywall.app/articles" });
+  setIphone(window);
+  const errors = loggedErrors(window);
+  onSignInScript(window, () => {
+    queueMicrotask(() => {
+      window.dispatchEvent(
+        new window.ErrorEvent("error", {
+          message:
+            "Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script",
+          filename: "https://openpaywall.app/follow-signin.js",
+        })
+      );
+    });
+  });
+  const slot = window.document.getElementById("slot");
+  await window.OpenPaywallFollow.mount(slot, { writer: WRITER, author: "Ada", via: "feed" });
+  followButton(slot).click();
+  await settle(() => Boolean(slot.querySelector(".opw-error")));
+  assert.equal(
+    slot.querySelector(".opw-error").textContent,
+    "Sign-in couldn't load: the page security policy blocked it (unsafe-eval)"
+  );
+  assert.equal(
+    errors.some((line) => /unsafe-eval/.test(line)),
+    true
+  );
+});
+
 test("mobile Safari with no injected wallet opens sign-in, signs, and follows", async () => {
   const { window, requests } = boot(`<span id="slot"></span>`, {
     url: "https://openpaywall.app/articles",
@@ -456,7 +576,8 @@ test("mobile tap shows Opening sign-in, then each failure, and does not stay fad
     {
       name: "load",
       connect: null,
-      expect: "No wallet found in this browser.",
+      failScript: true,
+      expect: "Sign-in couldn't load: Could not download the sign-in script",
     },
     {
       name: "connect reject",
@@ -472,7 +593,7 @@ test("mobile tap shows Opening sign-in, then each failure, and does not stay fad
       connect: async () => {
         throw new Error("WalletConnect initialization timed out.");
       },
-      expect: "Could not connect a wallet.",
+      expect: "WalletConnect initialization timed out.",
     },
     {
       name: "sign reject",
@@ -493,6 +614,12 @@ test("mobile tap shows Opening sign-in, then each failure, and does not stay fad
   for (const item of cases) {
     const { window, requests } = boot(`<span id="slot"></span>`);
     setIphone(window);
+    loggedErrors(window);
+    if (item.failScript) {
+      onSignInScript(window, (node) => {
+        queueMicrotask(() => node.onerror && node.onerror(new window.Event("error")));
+      });
+    }
     if (item.connect) window.OpenPaywallFollowSignIn = { connectFollowerWallet: item.connect };
     const slot = window.document.getElementById("slot");
     await window.OpenPaywallFollow.mount(slot, { writer: WRITER, author: "Ada", via: "feed" });

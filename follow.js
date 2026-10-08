@@ -8,8 +8,12 @@
  * message, then POSTs /api/follows/wallet.
  * An injected wallet uses eth_requestAccounts. Otherwise a tap lazy-loads the
  * same Privy email / embedded-wallet sign-in as /account, which also offers
- * WalletConnect. "No wallet found in this browser." is only the fallback when
- * that sign-in cannot load.
+ * WalletConnect. The sign-in file is a same-origin module script. The Function
+ * constructor and eval are blocked by the page Content-Security-Policy
+ * (no unsafe-eval).
+ * "No wallet found in this browser." is only for an injected wallet with no
+ * account, or when sign-in is unavailable and has no specific reason. Other
+ * failures stay visible, for example "Sign-in couldn't load: <reason>".
  * The faded look (opacity) is only the in-flight state and is always cleared.
  */
 (function () {
@@ -377,6 +381,15 @@
     return err;
   }
 
+  function displayReason(err) {
+    const message = err && err.message ? String(err.message).replace(/\s+/g, " ").trim() : "";
+    if (/content security policy|unsafe-eval/i.test(message)) {
+      return "the page security policy blocked it (unsafe-eval)";
+    }
+    if (!message || message === "signin_unavailable" || message === "no_wallet") return "";
+    return message.length > 180 ? `${message.slice(0, 177)}...` : message;
+  }
+
   function failureMessage(err, phase) {
     if (err && (err.code === "rate_limited" || err.message === "rate_limited")) {
       return "Too many tries. Try again in a bit.";
@@ -384,7 +397,12 @@
     if (cancelled(err)) {
       return phase === "sign" ? "Signature was cancelled." : "Sign-in was cancelled.";
     }
-    if (missingWallet(err) || (err && (err.code === "no_wallet" || err.code === "signin_unavailable"))) {
+    if (err && err.code === "signin_unavailable") {
+      const reason = displayReason(err);
+      if (!reason) return "No wallet found in this browser.";
+      return `Sign-in couldn't load: ${reason}`;
+    }
+    if (missingWallet(err)) {
       return "No wallet found in this browser.";
     }
     if (phase === "sign") {
@@ -393,13 +411,15 @@
       return "Could not sign the follow message.";
     }
     if (phase === "api") return "Could not follow right now.";
+    const reason = displayReason(err);
+    if (reason) return reason;
     return "Could not connect a wallet.";
   }
 
   function withTimeout(promise, ms, code) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        const err = new Error(code);
+        const err = new Error(code === "signin_unavailable" ? "it took too long to load" : String(code));
         err.code = code;
         reject(err);
       }, ms);
@@ -422,44 +442,119 @@
     return null;
   }
 
-  function importSignIn(url) {
-    // follow.js is a classic script. Vite rewrites a direct dynamic import into
-    // an ESM header, and then the script tag never runs.
-    return new Function("url", "return import" + "(url)")(url);
+  function viteDevPage() {
+    const scripts = document.scripts;
+    for (let i = 0; i < scripts.length; i++) {
+      if (String(scripts[i].src || "").indexOf("/@vite/client") !== -1) return true;
+    }
+    return false;
   }
 
-  async function ensureDevReactPreamble() {
-    if (window.__vite_plugin_react_preamble_installed__) return;
-    const host = location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") return;
-    try {
-      const mod = await new Function("return import" + "('/@react-refresh')")();
-      const runtime = mod.default || mod;
-      if (!runtime || typeof runtime.injectIntoGlobalHook !== "function") return;
-      runtime.injectIntoGlobalHook(window);
-      window.$RefreshReg$ = function () {};
-      window.$RefreshSig$ = function () {
-        return function (type) {
-          return type;
-        };
-      };
-      window.__vite_plugin_react_preamble_installed__ = true;
-    } catch {
-      /* built bundle, or not the Vite dev server */
+  function scriptNonce() {
+    const scripts = document.scripts;
+    for (let i = 0; i < scripts.length; i++) {
+      if (scripts[i].nonce) return scripts[i].nonce;
     }
+    return "";
   }
+
+  // follow.js is a classic script. Vite rewrites a direct dynamic import into
+  // an ESM header, and the Function constructor is eval, which the production
+  // CSP rejects (script-src has wasm-unsafe-eval but not unsafe-eval). A
+  // same-origin module script is allowed by script-src 'self'.
+  // follow-signin.js publishes window.OpenPaywallFollowSignIn as it evaluates.
+  function loadSignInModule(url) {
+    const ready = signInApi(window.OpenPaywallFollowSignIn);
+    if (ready) return Promise.resolve(ready);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const script = document.createElement("script");
+      const finish = (err) => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener("error", onWindowError);
+        if (!err) {
+          const api = signInApi(window.OpenPaywallFollowSignIn);
+          if (api) {
+            resolve(api);
+            return;
+          }
+          const missing = new Error("Sign-in script loaded without a connect function");
+          missing.code = "signin_unavailable";
+          reject(missing);
+          return;
+        }
+        reject(err);
+      };
+      const onWindowError = (event) => {
+        const file = String((event && event.filename) || "");
+        if (file.indexOf("follow-signin") === -1 && file.indexOf("/chunks/") === -1) return;
+        const err = new Error((event && event.message) || "Sign-in script failed to run");
+        err.code = "signin_unavailable";
+        finish(err);
+      };
+      script.type = "module";
+      script.src = url;
+      script.onload = () => finish(null);
+      script.onerror = () => {
+        const err = new Error("Could not download the sign-in script");
+        err.code = "signin_unavailable";
+        finish(err);
+      };
+      window.addEventListener("error", onWindowError);
+      document.head.appendChild(script);
+    });
+  }
+
+  function ensureDevReactPreamble() {
+    if (window.__vite_plugin_react_preamble_installed__) return Promise.resolve();
+    if (!viteDevPage()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, 2000);
+      const script = document.createElement("script");
+      script.type = "module";
+      const nonce = scriptNonce();
+      if (nonce) script.nonce = nonce;
+      // Keep this as a string so Vite does not rewrite follow.js into a module.
+      script.textContent = [
+        "import" + " RefreshRuntime from '/@react-refresh';",
+        "const runtime = RefreshRuntime.default || RefreshRuntime;",
+        "if (runtime && typeof runtime.injectIntoGlobalHook === 'function') {",
+        "  runtime.injectIntoGlobalHook(window);",
+        "  window.$RefreshReg$ = function () {};",
+        "  window.$RefreshSig$ = function () { return function (type) { return type; }; };",
+        "  window.__vite_plugin_react_preamble_installed__ = true;",
+        "}",
+      ].join("\n");
+      const done = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      script.onload = done;
+      script.onerror = done;
+      document.head.appendChild(script);
+    });
+  }
+
+  let signInPromise = null;
 
   function loadFollowerSignIn() {
     const hooked = signInApi(window.OpenPaywallFollowSignIn);
     if (hooked) return Promise.resolve(hooked);
-    return ensureDevReactPreamble().then(() => importSignIn(SIGNIN_URL)).then(
-      (mod) => signInApi(mod) || signInApi(window.OpenPaywallFollowSignIn) || mod,
-      (err) => {
-        const after = signInApi(window.OpenPaywallFollowSignIn);
-        if (after) return after;
-        throw err;
-      }
-    );
+    if (!signInPromise) {
+      signInPromise = ensureDevReactPreamble()
+        .then(() => loadSignInModule(SIGNIN_URL))
+        .then(
+          (mod) => signInApi(mod) || signInApi(window.OpenPaywallFollowSignIn) || mod,
+          (err) => {
+            const after = signInApi(window.OpenPaywallFollowSignIn);
+            if (after) return after;
+            signInPromise = null;
+            throw err;
+          }
+        );
+    }
+    return signInPromise;
   }
 
   function privyWalletsFound() {
@@ -522,13 +617,12 @@
     const injected = injectedProvider();
     if (injected) return connectInjected(injected);
 
-    let mod;
-    try {
-      mod = await withTimeout(loadFollowerSignIn(), 20000, "signin_unavailable");
-    } catch {
-      throw noWalletError();
+    const mod = await withTimeout(loadFollowerSignIn(), 20000, "signin_unavailable");
+    if (!mod || typeof mod.connectFollowerWallet !== "function") {
+      const err = new Error("Sign-in script loaded without a connect function");
+      err.code = "signin_unavailable";
+      throw err;
     }
-    if (!mod || typeof mod.connectFollowerWallet !== "function") throw noWalletError();
     return mod.connectFollowerWallet();
   }
 
@@ -773,6 +867,7 @@
               showEmailForm(options.prefillEmail || "");
               return;
             }
+            if (!cancelled(err)) console.error(err);
             showError(failureMessage(err, phase));
             return;
           }
@@ -832,6 +927,7 @@
         showNote("Confirm the signature in your wallet…");
         await followWithToken();
       } catch (err) {
+        if (!cancelled(err)) console.error(err);
         showError(failureMessage(err, "connect"));
       } finally {
         releaseSignIn();
