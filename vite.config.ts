@@ -193,6 +193,11 @@ export default defineConfig(({ mode }) => {
                 : `/account.html${query}`;
             } else if (req.url === "/articles" || req.url?.startsWith("/articles?")) {
               req.url = "/articles.html";
+            } else if (req.url?.startsWith("/writers/")) {
+              const qIndex = req.url.indexOf("?");
+              const pathOnly = qIndex >= 0 ? req.url.slice(0, qIndex) : req.url;
+              const wallet = decodeURIComponent(pathOnly.slice("/writers/".length).split("/")[0] || "");
+              if (/^0x[a-fA-F0-9]{40}$/.test(wallet)) req.url = "/writer.html";
             } else if (req.url?.startsWith("/articles/")) {
               // Fallback if OG inject failed: keep pretty URLs working in Vite.
               const qIndex = req.url.indexOf("?");

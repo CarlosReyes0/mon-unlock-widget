@@ -61,19 +61,29 @@ function ensureCss() {
   style.id = "opw-signin-css";
   style.textContent = `
     .opw-signin {
-      position: fixed; inset: 0; z-index: 40;
-      display: flex; align-items: center; justify-content: center;
-      padding: 1rem; background: rgba(17, 24, 39, 0.45);
-      box-sizing: border-box;
+      position: absolute; inset: 0; z-index: 1;
+      display: flex; align-items: flex-end; justify-content: center;
+      box-sizing: border-box; pointer-events: auto;
+      padding: 0;
+      background: rgba(17, 24, 39, 0.45);
+      overflow: hidden;
     }
     .opw-signin[hidden] { display: none !important; }
     .opw-signin__card {
-      width: min(24rem, 100%);
-      max-height: calc(100dvh - 1.5rem);
-      overflow: auto;
+      width: 100%; max-width: 24rem; min-width: 0;
+      box-sizing: border-box; margin: 0 auto;
+      max-height: min(85dvh, 100%); overflow: auto;
       background: #fff; color: #1c1917;
-      border-radius: 16px; padding: 1rem 1rem 0.85rem;
+      border-radius: 16px 16px 0 0;
+      padding:
+        1rem
+        max(1rem, env(safe-area-inset-right))
+        max(1rem, env(safe-area-inset-bottom))
+        max(1rem, env(safe-area-inset-left));
       box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+    }
+    .opw-signin__title, .opw-signin__copy, .opw-signin__hint {
+      overflow-wrap: anywhere; min-width: 0;
     }
     .opw-signin__title { margin: 0 0 0.35rem; font-size: 1.05rem; font-weight: 650; }
     .opw-signin__copy, .opw-signin__hint { margin: 0 0 0.75rem; font-size: 0.85rem; color: #57534e; }
@@ -82,9 +92,9 @@ function ensureCss() {
       margin-top: 0.75rem; border: 0; background: transparent; color: #57534e;
       font: inherit; font-size: 0.85rem; cursor: pointer; padding: 0.35rem 0;
     }
-    .opw-signin .mon-pub-auth__row { display: flex; flex-direction: column; gap: 0.5rem; }
+    .opw-signin .mon-pub-auth__row { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
     .opw-signin .mon-pub-auth__btn {
-      appearance: none; display: block; width: 100%; box-sizing: border-box;
+      appearance: none; display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
       min-height: 2.75rem; border-radius: 9999px; border: 1px solid #e7e5e4;
       background: #fff; color: #1c1917; font: inherit; font-size: 0.9rem;
       font-weight: 600; padding: 0.65rem 1rem; cursor: pointer;
@@ -241,6 +251,8 @@ type Mount = { root: Root; host: HTMLElement };
 function mountNode(): Mount {
   ensureCss();
   const host = document.createElement("div");
+  // Fixed viewport frame so the sheet is sized to the screen, not a wider page.
+  host.style.cssText = "position:fixed;inset:0;z-index:40;overflow:hidden;transform:translateZ(0);pointer-events:none";
   document.body.appendChild(host);
   return { root: createRoot(host), host };
 }

@@ -118,6 +118,17 @@ test("follow.js reuses account sign-in and the existing follower message", () =>
   assert.match(signin, /connectFollowerWallet/);
   assert.match(signin, /OpenPaywallFollowSignIn = \{/);
   assert.match(signin, /\/publisher-auth\.css/);
+  assert.match(signin, /align-items:\s*flex-end/);
+  assert.match(signin, /max-width:\s*24rem/);
+  assert.match(signin, /width:\s*100%/);
+  assert.match(signin, /safe-area-inset-left/);
+  assert.match(signin, /safe-area-inset-right/);
+  assert.match(signin, /safe-area-inset-bottom/);
+  assert.match(signin, /position:fixed;inset:0/);
+  assert.match(FOLLOW_JS, /\.opw-follow-wrap > \.opw-popover/);
+  assert.match(FOLLOW_JS, /position:\s*fixed/);
+  assert.match(FOLLOW_JS, /safe-area-inset-bottom/);
+  assert.doesNotMatch(FOLLOW_JS, /min-width:\s*14rem/);
   assert.doesNotMatch(signin, /openpaywall\.js/);
   const vite = fs.readFileSync(path.join(ROOT, "vite.config.ts"), "utf8");
   assert.match(vite, /follow-signin/);
@@ -126,6 +137,7 @@ test("follow.js reuses account sign-in and the existing follower message", () =>
   assert.match(feed, /\.meta\s*\{[^}]*z-index:\s*2/);
   assert.match(feed, /title a::after[^}]*z-index:\s*0/);
   assert.match(feed, /closest\("\.follow-slot"\)/);
+  assert.doesNotMatch(feed, /\.opw-popover[^{]*\{[^}]*position:\s*relative/);
   assert.match(fs.readFileSync(path.join(ROOT, "article.html"), "utf8"), /OpenPaywallFollow\.mount/);
   assert.match(fs.readFileSync(path.join(ROOT, "writer.html"), "utf8"), /OpenPaywallFollow\.mount/);
 });

@@ -42,17 +42,23 @@
       .opw-follow.is-on:hover .on, .opw-follow.is-on:focus .on { display: none; }
       .opw-follow.is-on:hover .off, .opw-follow.is-on:focus .off { display: inline; }
       .opw-follow.is-quiet { background: transparent; color: #0f766e; padding-left: 0; }
-      .opw-popover {
-        position: absolute; z-index: 5; top: calc(100% + 0.35rem); left: 0;
+      .opw-follow-wrap > .opw-popover {
+        position: fixed; z-index: 35;
+        left: max(0.75rem, env(safe-area-inset-left));
+        right: max(0.75rem, env(safe-area-inset-right));
+        bottom: max(0.75rem, env(safe-area-inset-bottom));
+        top: auto; width: auto; min-width: 0; max-width: none;
+        box-sizing: border-box;
         display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
-        min-width: 14rem; max-width: 18rem; padding: 0.45rem 0.6rem;
-        background: #fff; border: 1px solid #e7e5e4; border-radius: 10px;
+        padding: 0.55rem 0.7rem;
+        background: #fff; border: 1px solid #e7e5e4; border-radius: 12px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
       }
       .opw-popover[hidden] { display: none !important; }
       .opw-popover input[type="email"] {
         font: inherit; font-size: 0.85rem; padding: 0.35rem 0.55rem;
-        border: 1px solid #e7e5e4; border-radius: 8px; min-width: 12rem;
+        border: 1px solid #e7e5e4; border-radius: 8px;
+        box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%;
       }
       .opw-note { flex-basis: 100%; margin: 0; font-size: 0.75rem; color: #57534e; }
       .opw-note a { color: #0f766e; }
