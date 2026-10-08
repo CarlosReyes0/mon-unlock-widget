@@ -1,46 +1,55 @@
 /**
  * Free per-writer Follow button.
- * The button renders for every valid writer wallet. It stays hidden when the
- * viewer is that writer (follower token, connected wallet, or injected account).
+ * The button renders for every valid writer wallet. It is removed (not faded)
+ * when the viewer is that writer: follower token, connected wallet, injected
+ * account, stored reader session, or Privy / account session.
  * Email follow stays hidden while /api/follows/config says email is off.
- * With no follower token, Follow connects a wallet, signs the existing
- * "Open Paywall follower v1" message, then POSTs /api/follows/wallet.
- * Injected wallets use eth_requestAccounts. Otherwise the article unlock
- * bundle (WalletManager) is loaded on tap.
+ * With no follower token, Follow signs the existing "Open Paywall follower v1"
+ * message, then POSTs /api/follows/wallet.
+ * An injected wallet uses eth_requestAccounts. Otherwise a tap lazy-loads the
+ * same Privy email / embedded-wallet sign-in as /account, which also offers
+ * WalletConnect. "No wallet found in this browser." is only the fallback when
+ * that sign-in cannot load.
+ * The faded look (opacity) is only the in-flight state and is always cleared.
  */
 (function () {
   const TOKEN_KEY = "opw_follower";
-  // Same WalletConnect project id the article unlock widget uses.
-  const WALLETCONNECT_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
+  const SIGNIN_URL = "/follow-signin.js";
+  const ADDRESS_RE = /^0x[a-f0-9]{40}$/;
   let emailEnabled = null;
   let following = null;
   let configPromise = null;
+  let peekPromise = null;
 
   function injectCss() {
     if (document.getElementById("opw-follow-css")) return;
     const style = document.createElement("style");
     style.id = "opw-follow-css";
     style.textContent = `
-      .opw-follow-wrap { position: relative; z-index: 1; display: inline-flex; align-items: center; }
+      .opw-follow-wrap { position: relative; z-index: 3; display: inline-flex; align-items: center; pointer-events: auto; }
       .opw-follow {
-        position: relative; z-index: 1;
-        appearance: none; border: 0; cursor: pointer;
+        position: relative; z-index: 3;
+        appearance: none; border: 0; cursor: pointer; touch-action: manipulation;
         font: inherit; font-size: 0.75rem; font-weight: 600;
         border-radius: 999px; padding: 0.2rem 0.65rem; line-height: 1.4;
         background: #0f766e; color: #fff;
       }
       .opw-follow:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; }
-      .opw-follow:disabled { cursor: progress; opacity: 0.7; }
+      /* In-flight only. release() always clears this so it cannot stay faded. */
+      .opw-follow:disabled, .opw-follow.is-busy { cursor: progress; opacity: 0.7; }
       .opw-follow.is-on { background: #f5f5f4; color: #115e59; }
       .opw-follow.is-on .off { display: none; }
       .opw-follow.is-on:hover .on, .opw-follow.is-on:focus .on { display: none; }
       .opw-follow.is-on:hover .off, .opw-follow.is-on:focus .off { display: inline; }
       .opw-follow.is-quiet { background: transparent; color: #0f766e; padding-left: 0; }
       .opw-popover {
-        position: relative; z-index: 2;
+        position: absolute; z-index: 5; top: calc(100% + 0.35rem); left: 0;
         display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
-        margin-top: 0.35rem;
+        min-width: 14rem; max-width: 18rem; padding: 0.45rem 0.6rem;
+        background: #fff; border: 1px solid #e7e5e4; border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
       }
+      .opw-popover[hidden] { display: none !important; }
       .opw-popover input[type="email"] {
         font: inherit; font-size: 0.85rem; padding: 0.35rem 0.55rem;
         border: 1px solid #e7e5e4; border-radius: 8px; min-width: 12rem;
@@ -90,6 +99,178 @@
   function isWriter(writer, wallet) {
     const next = String(wallet || "").toLowerCase();
     return Boolean(next) && next === writer;
+  }
+
+  function pushWallet(into, value) {
+    const next = String(value || "").trim().toLowerCase();
+    if (ADDRESS_RE.test(next)) into.add(next);
+  }
+
+  function decodeB64UrlJson(segment) {
+    try {
+      let body = String(segment || "").replace(/-/g, "+").replace(/_/g, "/");
+      if (!body) return null;
+      const pad = body.length % 4 === 0 ? "" : "=".repeat(4 - (body.length % 4));
+      return JSON.parse(atob(body + pad));
+    } catch {
+      return null;
+    }
+  }
+
+  function readCookie(name) {
+    const parts = String(document.cookie || "").split(";");
+    for (const part of parts) {
+      const trimmed = part.trim();
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0 || trimmed.slice(0, eq) !== name) continue;
+      const raw = trimmed.slice(eq + 1);
+      try {
+        return decodeURIComponent(raw);
+      } catch {
+        return raw;
+      }
+    }
+    return "";
+  }
+
+  function walletFromReaderToken(token) {
+    const data = decodeB64UrlJson(String(token || "").split(".")[0]);
+    if (!data || data.v !== 1) return "";
+    const exp = Number(data.exp);
+    if (!Number.isFinite(exp) || exp * 1000 <= Date.now()) return "";
+    const addr = String(data.addr || "").toLowerCase();
+    return ADDRESS_RE.test(addr) ? addr : "";
+  }
+
+  function addLinkedAccounts(value, into) {
+    let accounts = value;
+    if (typeof accounts === "string") {
+      try {
+        accounts = JSON.parse(accounts);
+      } catch {
+        return;
+      }
+    }
+    if (!Array.isArray(accounts)) return;
+    for (const account of accounts) {
+      if (!account || typeof account !== "object") continue;
+      const type = String(account.type || "").toLowerCase();
+      if (type === "wallet" || account.chain_type === "ethereum" || account.chainType === "ethereum") {
+        pushWallet(into, account.address);
+      }
+    }
+  }
+
+  function addJwtWallets(raw, into) {
+    const token = String(raw || "").trim().replace(/^"|"$/g, "");
+    const parts = token.split(".");
+    if (parts.length < 2) return;
+    const payload = decodeB64UrlJson(parts[1]);
+    if (!payload || typeof payload !== "object") return;
+    addLinkedAccounts(payload.linked_accounts || payload.linkedAccounts, into);
+  }
+
+  function storageGet(storage, key) {
+    try {
+      return storage.getItem(key) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function readReaderSessionWallets(into) {
+    let storage = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      storage = null;
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (storage) {
+      for (let i = 0; i < storage.length; i++) {
+        const key = storage.key(i) || "";
+        if (!key.startsWith("op_reader_session:")) continue;
+        let data = null;
+        try {
+          data = JSON.parse(storageGet(storage, key) || "null");
+        } catch {
+          data = null;
+        }
+        if (!data || typeof data !== "object") continue;
+        const exp = Number(data.expiresAt);
+        if (Number.isFinite(exp) && exp <= nowSec + 30) continue;
+        pushWallet(into, data.address);
+        pushWallet(into, walletFromReaderToken(data.token));
+        pushWallet(into, key.split(":").pop());
+      }
+    }
+    pushWallet(into, walletFromReaderToken(readCookie("op_reader")));
+  }
+
+  function readPrivyWallets(into) {
+    let storage = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      storage = null;
+    }
+    if (storage) {
+      for (let i = 0; i < storage.length; i++) {
+        const key = storage.key(i) || "";
+        if (key === "privy:id_token") addJwtWallets(storageGet(storage, key), into);
+        else if (key === "privy:connections") {
+          let rows = null;
+          try {
+            rows = JSON.parse(storageGet(storage, key) || "null");
+          } catch {
+            rows = null;
+          }
+          if (Array.isArray(rows)) {
+            for (const row of rows) {
+              if (row && typeof row === "object") pushWallet(into, row.address);
+            }
+          }
+        } else {
+          const prefixed = key.match(/^privy:wallet:(0x[a-fA-F0-9]{40})$/);
+          if (prefixed) pushWallet(into, prefixed[1]);
+        }
+      }
+    }
+    addJwtWallets(readCookie("privy-id-token"), into);
+    try {
+      pushWallet(into, sessionStorage.getItem("mon-publisher-preferred-wallet"));
+    } catch {
+      /* private mode */
+    }
+    pushWallet(into, window.__monPublisherAddress);
+  }
+
+  function readKnownWallets() {
+    const found = new Set();
+    pushWallet(found, readTokenWallet());
+    readReaderSessionWallets(found);
+    readPrivyWallets(found);
+    return found;
+  }
+
+  function privySessionHint() {
+    try {
+      if (
+        localStorage.getItem("privy:token") ||
+        localStorage.getItem("privy:id_token") ||
+        localStorage.getItem("privy:refresh_token")
+      ) {
+        return true;
+      }
+    } catch {
+      /* private mode */
+    }
+    return Boolean(readCookie("privy-token") || readCookie("privy-id-token") || readCookie("privy-session"));
+  }
+
+  function viewerIsWriter(writer, options) {
+    if (isWriter(writer, readTokenWallet()) || isWriter(writer, options && options.connectedWallet)) return true;
+    return readKnownWallets().has(writer);
   }
 
   function loadConfig() {
@@ -167,7 +348,8 @@
   function cancelled(err) {
     const text = errorBits(err);
     if (text.includes("4001") || text.includes("action_rejected") || text.includes("userrejected")) return true;
-    return /user rejected|user denied|user cancelled|user canceled|rejected the request|request reset|modal closed|closed the modal|connection declined|disapproved/.test(
+    if (text.includes("signin_cancelled")) return true;
+    return /user rejected|user denied|user cancelled|user canceled|was cancelled|was canceled|rejected the request|request reset|modal closed|closed the modal|connection declined|disapproved/.test(
       text
     );
   }
@@ -187,6 +369,75 @@
     const err = new Error("no_wallet");
     err.code = "no_wallet";
     return err;
+  }
+
+  function failureMessage(err, phase) {
+    if (err && (err.code === "rate_limited" || err.message === "rate_limited")) {
+      return "Too many tries. Try again in a bit.";
+    }
+    if (cancelled(err)) {
+      return phase === "sign" ? "Signature was cancelled." : "Sign-in was cancelled.";
+    }
+    if (missingWallet(err) || (err && (err.code === "no_wallet" || err.code === "signin_unavailable"))) {
+      return "No wallet found in this browser.";
+    }
+    if (phase === "sign") {
+      const text = String((err && (err.message || err.code)) || "");
+      if (/session_failed|invalid|signature/.test(text)) return "Could not follow right now.";
+      return "Could not sign the follow message.";
+    }
+    if (phase === "api") return "Could not follow right now.";
+    return "Could not connect a wallet.";
+  }
+
+  function withTimeout(promise, ms, code) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const err = new Error(code);
+        err.code = code;
+        reject(err);
+      }, ms);
+      Promise.resolve(promise).then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        }
+      );
+    });
+  }
+
+  function loadFollowerSignIn() {
+    const hooked = window.OpenPaywallFollowSignIn;
+    if (hooked && (typeof hooked.connectFollowerWallet === "function" || typeof hooked.peekFollowerWallet === "function")) {
+      return Promise.resolve(hooked);
+    }
+    return import(SIGNIN_URL);
+  }
+
+  function privyWalletsFound() {
+    const found = new Set();
+    readPrivyWallets(found);
+    return found.size > 0;
+  }
+
+  function peekedPrivyWallet() {
+    if (!privySessionHint() || privyWalletsFound()) return Promise.resolve("");
+    if (!peekPromise) {
+      peekPromise = (async () => {
+        try {
+          const mod = await withTimeout(loadFollowerSignIn(), 8000, "signin_unavailable");
+          if (!mod || typeof mod.peekFollowerWallet !== "function") return "";
+          return String((await mod.peekFollowerWallet()) || "").toLowerCase();
+        } catch {
+          return "";
+        }
+      })();
+    }
+    return peekPromise;
   }
 
   function injectedProvider() {
@@ -229,21 +480,12 @@
 
     let mod;
     try {
-      mod = await import("/dist/openpaywall.js");
+      mod = await withTimeout(loadFollowerSignIn(), 20000, "signin_unavailable");
     } catch {
       throw noWalletError();
     }
-    const Manager = mod && mod.WalletManager;
-    if (typeof Manager !== "function") throw noWalletError();
-    const manager = new Manager();
-    if (typeof manager.setWalletConnectProjectId === "function") {
-      manager.setWalletConnectProjectId(WALLETCONNECT_PROJECT_ID);
-    }
-    const state = await manager.connect();
-    const address = state && state.address;
-    const provider = typeof manager.getProvider === "function" ? manager.getProvider() : null;
-    if (!address || !provider) throw noWalletError();
-    return { address: String(address), provider };
+    if (!mod || typeof mod.connectFollowerWallet !== "function") throw noWalletError();
+    return mod.connectFollowerWallet();
   }
 
   async function signFollower(wallet, provider) {
@@ -322,7 +564,11 @@
       container.replaceChildren();
       return;
     }
-    if (isWriter(writer, readTokenWallet()) || isWriter(writer, options.connectedWallet)) {
+    if (viewerIsWriter(writer, options)) {
+      container.replaceChildren();
+      return;
+    }
+    if (isWriter(writer, await peekedPrivyWallet())) {
       container.replaceChildren();
       return;
     }
@@ -345,6 +591,23 @@
     pop.className = "opw-popover";
     pop.hidden = true;
     let signingProvider = null;
+    let signInRelease = null;
+
+    function holdSession(session) {
+      if (session && typeof session.release === "function") signInRelease = session.release;
+      return session;
+    }
+
+    function releaseSignIn() {
+      const fn = signInRelease;
+      signInRelease = null;
+      if (typeof fn !== "function") return;
+      try {
+        fn();
+      } catch {
+        /* already closed */
+      }
+    }
 
     function paint(state) {
       applyState(btn, state, author);
@@ -356,13 +619,18 @@
       });
     }
 
-    function showError(message) {
+    function showNote(message, isError) {
       pop.hidden = false;
-      pop.innerHTML = "";
+      pop.replaceChildren();
       const note = document.createElement("p");
-      note.className = "opw-note opw-error";
+      note.className = "opw-note" + (isError ? " opw-error" : " opw-status");
+      note.setAttribute("role", isError ? "alert" : "status");
       note.textContent = message;
       pop.appendChild(note);
+    }
+
+    function showError(message) {
+      showNote(message, true);
     }
 
     function showEmailForm(prefill) {
@@ -421,21 +689,31 @@
       pop.hidden = true;
     }
 
+    function markBusy() {
+      btn.disabled = true;
+      btn.classList.add("is-busy");
+      btn.setAttribute("aria-busy", "true");
+    }
+
     function release() {
-      if (btn.isConnected) btn.disabled = false;
+      if (!btn.isConnected) return;
+      btn.disabled = false;
+      btn.classList.remove("is-busy");
+      btn.removeAttribute("aria-busy");
     }
 
     async function followWithToken() {
-      btn.disabled = true;
+      markBusy();
       try {
         let bearer = token();
         const connected = options.connectedWallet && String(options.connectedWallet).toLowerCase();
         if (connected && connected !== writer && readTokenWallet() !== connected) {
+          let phase = "connect";
           try {
             if (!signingProvider && !injectedProvider()) {
-              const result = await connectReaderWallet();
+              const result = holdSession(await connectReaderWallet());
               const address = String(result.address || "").toLowerCase();
-              if (!/^0x[a-f0-9]{40}$/.test(address)) throw noWalletError();
+              if (!ADDRESS_RE.test(address)) throw noWalletError();
               if (address === writer) {
                 container.replaceChildren();
                 return;
@@ -443,27 +721,21 @@
               signingProvider = result.provider || null;
               options.connectedWallet = address;
             }
+            phase = "sign";
+            showNote("Confirm the signature in your wallet…");
             bearer = await signFollower(String(options.connectedWallet || connected).toLowerCase(), signingProvider);
           } catch (err) {
-            if (cancelled(err)) return;
-            if (err?.code === "rate_limited" || err?.message === "rate_limited") {
-              showError("Too many tries. Try again in a bit.");
-              return;
-            }
-            if (canEmail) {
+            if (canEmail && !cancelled(err) && !(err && (err.code === "rate_limited" || err.message === "rate_limited"))) {
               showEmailForm(options.prefillEmail || "");
               return;
             }
-            if (missingWallet(err)) {
-              showError("No wallet found in this browser.");
-              return;
-            }
-            showError("Could not follow right now.");
+            showError(failureMessage(err, phase));
             return;
           }
         }
         if (!bearer) {
           if (canEmail) showEmailForm(options.prefillEmail || "");
+          else showError("Could not follow right now.");
           return;
         }
         const res = await fetch("/api/follows/wallet", {
@@ -495,41 +767,41 @@
         if (!wasFollowing) bumpFollowerCount(writer, 1);
         if (canEmail && options.offerEmail) showEmailForm(options.prefillEmail || "");
       } finally {
+        releaseSignIn();
         release();
       }
     }
 
     async function connectAndFollow() {
-      btn.disabled = true;
-      pop.hidden = true;
-      pop.replaceChildren();
+      markBusy();
+      showNote("Opening sign-in…");
       try {
-        const result = await connectReaderWallet();
-        const address = String(result.address || "").toLowerCase();
-        if (!/^0x[a-f0-9]{40}$/.test(address)) throw noWalletError();
+        const result = holdSession(await connectReaderWallet());
+        const address = String(result && result.address || "").toLowerCase();
+        if (!ADDRESS_RE.test(address)) throw noWalletError();
         if (address === writer) {
           container.replaceChildren();
           return;
         }
         signingProvider = result.provider || null;
         options.connectedWallet = address;
+        showNote("Confirm the signature in your wallet…");
         await followWithToken();
       } catch (err) {
-        if (cancelled(err)) return;
-        if (missingWallet(err)) {
-          showError("No wallet found in this browser.");
-          return;
-        }
-        showError("Could not connect a wallet.");
+        showError(failureMessage(err, "connect"));
       } finally {
+        releaseSignIn();
         release();
       }
     }
 
     async function unfollow() {
       const bearer = token();
-      if (!bearer) return;
-      btn.disabled = true;
+      if (!bearer) {
+        showError("Sign in to unfollow.");
+        return;
+      }
+      markBusy();
       try {
         const res = await fetch("/api/follows/wallet", {
           method: "DELETE",
@@ -543,7 +815,10 @@
           showError("Too many tries. Try again in a bit.");
           return;
         }
-        if (!res.ok) return;
+        if (!res.ok) {
+          showError("Could not unfollow right now.");
+          return;
+        }
         if (set.has(writer)) {
           set.delete(writer);
           bumpFollowerCount(writer, -1);
@@ -554,9 +829,12 @@
       }
     }
 
-    btn.addEventListener("click", (event) => {
+    let touchLock = 0;
+    function onActivate(event) {
       event.preventDefault();
       event.stopPropagation();
+      if (event.type === "click" && Date.now() - touchLock < 700) return;
+      if (event.type === "touchend") touchLock = Date.now();
       if (btn.disabled) return;
       if (btn.classList.contains("is-on")) {
         void unfollow();
@@ -572,6 +850,11 @@
         return;
       }
       void connectAndFollow();
+    }
+    btn.addEventListener("click", onActivate);
+    btn.addEventListener("touchend", onActivate);
+    btn.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
     });
 
     paint(set.has(writer) ? "following" : "idle");

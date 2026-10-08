@@ -148,14 +148,20 @@
       .item:hover { background: rgba(15, 118, 110, 0.04); }
       .item:hover .title a { color: var(--accent); }
       .title a { color: inherit; text-decoration: none; }
-      .title a::after { content: ""; position: absolute; inset: 0; }
-      .author-link, .follow-slot, .opw-follow, .opw-popover {
+      /* Stretch link sits under the byline. iOS Safari gives the ::after the hit
+         if the meta row does not form a higher stacking context, so Follow taps
+         never reach the button. */
+      .title a::after { content: ""; position: absolute; inset: 0; z-index: 0; }
+      .author-link, .follow-slot, .opw-follow, .opw-popover, .opw-follow-wrap {
         position: relative;
-        z-index: 1;
+        z-index: 3;
+        pointer-events: auto;
       }
       .author-link { color: inherit; text-decoration: none; }
       .author-link:hover { color: var(--accent); }
       .meta {
+        position: relative;
+        z-index: 2;
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem 0.85rem;
@@ -397,6 +403,13 @@
               }
             `;
             feed.appendChild(el);
+            el.addEventListener("click", (event) => {
+              const target = event.target;
+              if (target && target.closest && target.closest(".follow-slot")) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            });
             const slot = el.querySelector(".follow-slot");
             if (slot && window.OpenPaywallFollow && /^0x[a-f0-9]{40}$/.test(writer)) {
               window.OpenPaywallFollow.mount(slot, {

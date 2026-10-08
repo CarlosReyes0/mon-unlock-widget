@@ -65,6 +65,7 @@ export default defineConfig(({ mode }) => {
               account: resolve(__dirname, "account.html"),
               write: resolve(__dirname, "write.html"),
               "publisher-auth": resolve(__dirname, "publisher-auth.html"),
+              "follow-signin": resolve(__dirname, "src/publisher/follow-signin.tsx"),
             },
           output: {
             entryFileNames: "[name].js",
@@ -132,6 +133,8 @@ export default defineConfig(({ mode }) => {
             }
             if (req.url === "/publisher-auth.js" || req.url?.startsWith("/publisher-auth.js?")) {
               req.url = "/src/publisher/auth-mount.tsx";
+            } else if (req.url === "/follow-signin.js" || req.url?.startsWith("/follow-signin.js?")) {
+              req.url = "/src/publisher/follow-signin.tsx";
             } else if (
               req.url === "/publisher-auth.css" ||
               req.url?.startsWith("/publisher-auth.css?")
