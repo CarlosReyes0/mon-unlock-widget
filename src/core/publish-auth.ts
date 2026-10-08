@@ -1,13 +1,19 @@
 /**
- * Auth material for register-article, update-listing, and article-body.
+ * Auth material for register-article, update-listing, article-body,
+ * writer plan updates, and per-article à la carte updates.
  *
  * Browser pages import the compiled /dist/core/publish-auth.js.
  * Supabase Edge Functions import this TypeScript source.
  * Message text is the signed payload — do not reorder lines.
+ *
+ * Plan and à la carte messages are mirrored in server/writer-mutation-auth.mjs
+ * (the Railway server cannot import this TypeScript). Keep both copies identical.
  */
 
 export const PUBLISH_AUTH_PREFIX = "Open Paywall publish v1";
 export const LISTING_AUTH_PREFIX = "Open Paywall listing v1";
+export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
+export const A_LA_CARTE_AUTH_PREFIX = "Open Paywall a-la-carte v1";
 export const MONAD_CHAIN_ID = 143;
 
 /** Legacy MON unlock contract. */
@@ -190,6 +196,38 @@ export function buildListingAuthMessage(input: ListingAuthFields): string {
     lines.push(`priceCents:${asText(input.priceCents).trim()}`);
   }
   return lines.join("\n");
+}
+
+export type PlanAuthFields = {
+  publisher: unknown;
+  monthlyPriceCents: unknown;
+  allowALaCarte?: unknown;
+};
+
+/** Binds the writer and the plan fields that POST /api/writers/plan will store. */
+export function buildPlanAuthMessage(input: PlanAuthFields): string {
+  return [
+    PLAN_AUTH_PREFIX,
+    `publisher:${asText(input.publisher).trim().toLowerCase()}`,
+    `monthlyPriceCents:${asText(input.monthlyPriceCents).trim()}`,
+    `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+  ].join("\n");
+}
+
+export type ALaCarteAuthFields = {
+  articleId: unknown;
+  publisher: unknown;
+  allowALaCarte?: unknown;
+};
+
+/** Binds the article, its publisher, and the allow_a_la_carte flag being set. */
+export function buildALaCarteAuthMessage(input: ALaCarteAuthFields): string {
+  return [
+    A_LA_CARTE_AUTH_PREFIX,
+    `article:${asText(input.articleId).trim()}`,
+    `publisher:${asText(input.publisher).trim().toLowerCase()}`,
+    `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+  ].join("\n");
 }
 
 /**

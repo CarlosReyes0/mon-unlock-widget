@@ -1008,6 +1008,7 @@ const server = http.createServer(async (req, res) => {
         publisher: parsed.publisher,
         monthlyPriceCents: parsed.monthlyPriceCents,
         allowALaCarte: parsed.allowALaCarte,
+        planSig: parsed.planSig,
       });
       return sendJson(res, 200, { plan });
     } catch (e) {
@@ -1024,6 +1025,7 @@ const server = http.createServer(async (req, res) => {
         articleId: parsed.articleId,
         publisher: parsed.publisher,
         allowALaCarte: parsed.allowALaCarte,
+        aLaCarteSig: parsed.aLaCarteSig,
       });
       return sendJson(res, 200, result);
     } catch (e) {

@@ -587,9 +587,8 @@
         status.textContent = "Approve the listing signature…";
         status.style.color = "#6b7280";
         try {
-          const { buildListingAuthMessage, supabaseFunctionHeaders } = await import(
-            "/dist/core/publish-auth.js"
-          );
+          const { buildALaCarteAuthMessage, buildListingAuthMessage, supabaseFunctionHeaders } =
+            await import("/dist/core/publish-auth.js");
           const listOnOpenPaywall = Boolean(document.getElementById("listingListOn").checked);
           const externalUrl = document.getElementById("listingExternalUrl").value.trim() || null;
           const listingMessage = buildListingAuthMessage({
@@ -601,6 +600,18 @@
           const eth = getInjectedProvider();
           if (!eth) throw new Error("Connect a wallet to save the listing.");
           const listingSig = await signPlainMessage(eth, currentWallet, listingMessage);
+          const allowBuy = document.getElementById("listingAllowBuy");
+          const allowALaCarte = allowBuy ? Boolean(allowBuy.checked) : true;
+          let aLaCarteSig = "";
+          if (allowBuy) {
+            status.textContent = "Approve the pay-per-article signature…";
+            const aLaCarteMessage = buildALaCarteAuthMessage({
+              articleId: listingEditorArticle.articleId,
+              publisher: currentWallet,
+              allowALaCarte,
+            });
+            aLaCarteSig = await signPlainMessage(eth, currentWallet, aLaCarteMessage);
+          }
           const res = await fetch(UPDATE_LISTING_URL, {
             method: "POST",
             headers: supabaseFunctionHeaders(),
@@ -614,17 +625,19 @@
           });
           const body = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(body.error || `http_${res.status}`);
-          const allowBuy = document.getElementById("listingAllowBuy");
           if (allowBuy) {
-            await fetch("/api/articles/a-la-carte", {
+            const alcRes = await fetch("/api/articles/a-la-carte", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 articleId: listingEditorArticle.articleId,
                 publisher: currentWallet,
-                allowALaCarte: Boolean(allowBuy.checked),
+                allowALaCarte,
+                aLaCarteSig,
               }),
             });
+            const alcBody = await alcRes.json().catch(() => ({}));
+            if (!alcRes.ok) throw new Error(alcBody.error || "a_la_carte_failed");
           }
           status.textContent = "Listing saved ✓";
           status.style.color = "#16a34a";
@@ -813,15 +826,27 @@ ${teaser}
         }
         const dollars = Number(document.getElementById("planPrice").value);
         const cents = Math.round(dollars * 100);
-        status.textContent = "Saving…";
+        const allowALaCarte = Boolean(document.getElementById("planAllowBuy").checked);
+        status.textContent = "Approve the plan signature…";
+        status.style.color = "#6b7280";
         try {
+          const { buildPlanAuthMessage } = await import("/dist/core/publish-auth.js");
+          const planMessage = buildPlanAuthMessage({
+            publisher: currentWallet,
+            monthlyPriceCents: cents,
+            allowALaCarte,
+          });
+          const eth = getInjectedProvider();
+          if (!eth) throw new Error("Connect a wallet to save the plan.");
+          const planSig = await signPlainMessage(eth, currentWallet, planMessage);
           const res = await fetch("/api/writers/plan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               publisher: currentWallet,
               monthlyPriceCents: cents,
-              allowALaCarte: Boolean(document.getElementById("planAllowBuy").checked),
+              allowALaCarte,
+              planSig,
             }),
           });
           const body = await res.json().catch(() => ({}));

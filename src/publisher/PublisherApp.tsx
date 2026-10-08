@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { createWalletClient, custom, type Address } from "viem";
+import { monadMainnet } from "../core/chains.js";
+import { buildPlanAuthMessage } from "../core/publish-auth.js";
 import { peekResumableDraft, type ResumableDraft } from "../core/write-drafts.js";
+import type { Eip1193Provider } from "../core/wallet.js";
 import { AccountArticles } from "./AccountArticles.js";
 import { PublisherAuth } from "./PublisherAuth.js";
 import { ResumeDraftCard } from "./ResumeDraftCard.js";
@@ -125,16 +129,35 @@ export function PublisherApp() {
   async function savePlan() {
     const publisher = address();
     if (!publisher) return;
-    setPlanMsg("");
+    const provider = window.__monPublisherProvider as Eip1193Provider | undefined;
+    if (!provider) {
+      setPlanMsg("Connect a wallet to save the plan.");
+      return;
+    }
+    setPlanMsg("Approve the plan signature…");
     const cents = Math.round(Number(priceDollars) * 100);
+    const allowALaCarte = allowBuy;
     try {
+      const message = buildPlanAuthMessage({
+        publisher,
+        monthlyPriceCents: cents,
+        allowALaCarte,
+      });
+      const account = publisher as Address;
+      const walletClient = createWalletClient({
+        account,
+        chain: monadMainnet,
+        transport: custom(provider),
+      });
+      const planSig = await walletClient.signMessage({ account, message });
       const res = await fetch("/api/writers/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           publisher,
           monthlyPriceCents: cents,
-          allowALaCarte: allowBuy,
+          allowALaCarte,
+          planSig,
         }),
       });
       const data = (await res.json()) as { error?: string };
