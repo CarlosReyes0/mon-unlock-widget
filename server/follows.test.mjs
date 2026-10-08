@@ -1057,3 +1057,138 @@ test("feed counts include 0 and the account roster merges follows with live memb
     await close(server);
   }
 });
+
+function missingFollowsTable() {
+  const err = new Error("Could not find the table 'public.follows' in the schema cache");
+  err.status = 404;
+  err.code = "PGRST205";
+  err.details = { code: "PGRST205", message: err.message };
+  return err;
+}
+
+function throwingFollowStore() {
+  return new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === "then") return undefined;
+        return async () => {
+          throw missingFollowsTable();
+        };
+      },
+    }
+  );
+}
+
+test("a missing follows table returns JSON and leaves the server up", async () => {
+  const now = Date.parse("2026-10-08T12:00:00.000Z");
+  const env = baseEnv({
+    FOLLOW_EMAILS_ENABLED: "true",
+    POSTAL_ADDRESS: "1 Market St, San Francisco, CA 94105",
+    READER_SESSION_SECRET: "test-reader-session-secret",
+  });
+  const rejections = [];
+  const onRejection = (reason) => {
+    rejections.push(reason);
+  };
+  process.on("unhandledRejection", onRejection);
+  const { server, origin } = await start({
+    store: throwingFollowStore(),
+    env,
+    sendEmail: async () => {
+      throw new Error("email must not send when the store is down");
+    },
+    clock: { now },
+  });
+  const token = followerToken({
+    kind: "wallet",
+    id: OTHER,
+    secret: env.FOLLOW_TOKEN_SECRET,
+    now,
+  });
+  const auth = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  const unsub = unsubscribeToken(7, env.FOLLOW_TOKEN_SECRET);
+  try {
+    const counts = await fetch(`${origin}/api/writers/followers/counts?wallets=${WRITER},nope`);
+    assert.equal(counts.status, 200);
+    assert.equal(counts.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await counts.json(), { counts: { [WRITER]: 0 }, degraded: true });
+
+    const one = await fetch(`${origin}/api/writers/${WRITER}/followers/count`);
+    assert.equal(one.status, 200);
+    assert.equal(one.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await one.json(), { followers: 0, degraded: true });
+
+    const writer = await fetch(`${origin}/api/writers/${WRITER}`);
+    assert.equal(writer.status, 503);
+    const writerBody = await writer.json();
+    assert.equal(writerBody.error, "follow_unavailable");
+    assert.equal(writerBody.counts, undefined);
+
+    const feed = await fetch(`${origin}/api/follows/me/feed`, { headers: auth });
+    assert.equal(feed.status, 503);
+    assert.deepEqual(await feed.json(), { error: "follow_unavailable" });
+
+    const roster = await fetch(`${origin}/api/follows/me/roster`, { headers: auth });
+    assert.equal(roster.status, 503);
+    assert.deepEqual(await roster.json(), { error: "follow_unavailable" });
+
+    const session = await fetch(`${origin}/api/follows/me/roster`, {
+      headers: { ...auth, "x-reader-session": "nope" },
+    });
+    assert.equal(session.status, 401);
+    assert.equal((await session.json()).error, "invalid_reader_session");
+
+    const follow = await fetch(`${origin}/api/follows/wallet`, {
+      method: "POST",
+      headers: { ...auth, "x-forwarded-for": "10.8.8.8" },
+      body: JSON.stringify({ writer: WRITER, via: "feed" }),
+    });
+    assert.equal(follow.status, 503);
+    assert.equal((await follow.json()).error, "follow_unavailable");
+
+    const unfollow = await fetch(`${origin}/api/follows/wallet`, {
+      method: "DELETE",
+      headers: { ...auth, "x-forwarded-for": "10.8.8.8" },
+      body: JSON.stringify({ writer: WRITER }),
+    });
+    assert.equal(unfollow.status, 503);
+
+    const email = await fetch(`${origin}/api/follows/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "10.8.8.9" },
+      body: JSON.stringify({ writer: WRITER, email: "ada@example.com", via: "feed" }),
+    });
+    assert.equal(email.status, 503);
+
+    const confirm = await fetch(`${origin}/api/follows/confirm`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ t: "missing-table" }),
+    });
+    assert.equal(confirm.status, 503);
+
+    const unsubscribe = await fetch(`${origin}/api/follows/unsubscribe?t=${encodeURIComponent(unsub)}`);
+    assert.equal(unsubscribe.status, 503);
+    assert.equal((await unsubscribe.json()).error, "follow_unavailable");
+
+    const notify = await fetch(`${origin}/api/follows/notify/process`, {
+      method: "POST",
+      headers: { "x-follow-notify-secret": env.FOLLOW_NOTIFY_SECRET },
+    });
+    assert.equal(notify.status, 503);
+    assert.equal((await notify.json()).error, "follow_unavailable");
+
+    const config = await fetch(`${origin}/api/follows/config`);
+    assert.equal(config.status, 200);
+    assert.deepEqual(await config.json(), { email: true });
+
+    const again = await fetch(`${origin}/api/writers/followers/counts?wallets=${WRITER}`);
+    assert.equal(again.status, 200);
+    assert.deepEqual(await again.json(), { counts: { [WRITER]: 0 }, degraded: true });
+    assert.equal(rejections.length, 0);
+  } finally {
+    process.off("unhandledRejection", onRejection);
+    await close(server);
+  }
+});

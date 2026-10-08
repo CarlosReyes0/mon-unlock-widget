@@ -583,14 +583,7 @@ async function getRoster(ctx) {
 }
 
 async function getFollowerCounts(ctx) {
-  const unique = [
-    ...new Set(
-      String(ctx.searchParams?.get("wallets") || "")
-        .split(",")
-        .map((part) => normalizeWallet(part))
-        .filter(Boolean)
-    ),
-  ].slice(0, 50);
+  const unique = requestedCountWallets(ctx);
   const counts = await ctx.store.countFollowersMany(unique);
   return jsonResult(200, { counts }, { "Cache-Control": "public, max-age=60" });
 }
@@ -739,6 +732,45 @@ function defaultSendEmail(env) {
   return (message) => sendResendEmail(message, env);
 }
 
+const APP_FOLLOW_STATUSES = new Set([400, 401, 403, 409, 429, 503]);
+
+function requestedCountWallets(ctx) {
+  return [
+    ...new Set(
+      String(ctx.searchParams?.get("wallets") || "")
+        .split(",")
+        .map((part) => normalizeWallet(part))
+        .filter(Boolean)
+    ),
+  ].slice(0, 50);
+}
+
+/** Feed cards call these on every paint. A store outage should still render as 0. */
+function publicCountGet(method, pathname) {
+  if (method !== "GET") return false;
+  if (pathname === "/api/writers/followers/counts") return true;
+  return COUNT_RE.test(pathname);
+}
+
+function degradedCountResult(pathname, ctx) {
+  const headers = { "Cache-Control": "no-store" };
+  if (pathname === "/api/writers/followers/counts") {
+    const counts = Object.fromEntries(requestedCountWallets(ctx).map((wallet) => [wallet, 0]));
+    return jsonResult(200, { counts, degraded: true }, headers);
+  }
+  return jsonResult(200, { followers: 0, degraded: true }, headers);
+}
+
+function followErrorResult(err) {
+  const status = Number(err?.status) || 0;
+  const fromStore = err?.code != null || err?.details != null;
+  if (!fromStore && APP_FOLLOW_STATUSES.has(status)) {
+    return jsonResult(status, { error: err?.message || "follow_failed" });
+  }
+  const httpStatus = status >= 500 && status <= 599 ? status : 503;
+  return jsonResult(httpStatus, { error: "follow_unavailable" });
+}
+
 /**
  * @param {object} ctx
  */
@@ -757,34 +789,42 @@ export async function dispatchFollowRequest(ctx) {
     sendEmail: ctx.sendEmail || defaultSendEmail(ctx.env || process.env),
   };
   try {
+    // Await every handler. `return handler()` would let a rejected store call
+    // escape this try/catch and crash the process.
     if (method === "GET" && pathname === "/api/follows/config") {
       return jsonResult(200, { email: emailFollowAvailable(context.env) });
     }
     if (method === "POST" && pathname === "/api/follows/notify/process") {
-      return processFollowNotifications(context);
+      return await processFollowNotifications(context);
     }
     if (!context.store) return jsonResult(503, { error: "supabase_not_configured" });
-    if (method === "POST" && pathname === "/api/follows/email") return postEmail(context);
-    if (method === "POST" && pathname === "/api/follows/confirm") return postConfirm(context);
-    if (method === "POST" && pathname === "/api/follows/session") return postSession(context);
-    if (method === "POST" && pathname === "/api/follows/wallet") return postWalletFollow(context);
-    if (method === "DELETE" && pathname === "/api/follows/wallet") return deleteWalletFollow(context);
-    if (method === "GET" && pathname === "/api/follows/me") return getMe(context);
-    if (method === "GET" && pathname === "/api/follows/me/feed") return getFeed(context);
-    if (method === "GET" && pathname === "/api/follows/me/roster") return getRoster(context);
-    if (method === "GET" && pathname === "/api/writers/followers/counts") return getFollowerCounts(context);
-    if (method === "GET" && pathname === "/api/follows/unsubscribe") return getUnsubscribe(context);
-    if (method === "POST" && pathname === "/api/follows/unsubscribe") return postUnsubscribe(context);
-    if (method === "GET" && pathname === "/api/follows/receipt-email") return getReceiptEmail(context);
-    if (method === "POST" && pathname === "/api/writers/followers/export") return postExport(context);
+    if (method === "POST" && pathname === "/api/follows/email") return await postEmail(context);
+    if (method === "POST" && pathname === "/api/follows/confirm") return await postConfirm(context);
+    if (method === "POST" && pathname === "/api/follows/session") return await postSession(context);
+    if (method === "POST" && pathname === "/api/follows/wallet") return await postWalletFollow(context);
+    if (method === "DELETE" && pathname === "/api/follows/wallet") return await deleteWalletFollow(context);
+    if (method === "GET" && pathname === "/api/follows/me") return await getMe(context);
+    if (method === "GET" && pathname === "/api/follows/me/feed") return await getFeed(context);
+    if (method === "GET" && pathname === "/api/follows/me/roster") return await getRoster(context);
+    if (method === "GET" && pathname === "/api/writers/followers/counts") return await getFollowerCounts(context);
+    if (method === "GET" && pathname === "/api/follows/unsubscribe") return await getUnsubscribe(context);
+    if (method === "POST" && pathname === "/api/follows/unsubscribe") return await postUnsubscribe(context);
+    if (method === "GET" && pathname === "/api/follows/receipt-email") return await getReceiptEmail(context);
+    if (method === "POST" && pathname === "/api/writers/followers/export") return await postExport(context);
     const count = pathname.match(COUNT_RE);
-    if (count && method === "GET") return getCount(context, count[1]);
+    if (count && method === "GET") return await getCount(context, count[1]);
     const writer = pathname.match(WRITER_RE);
-    if (writer && method === "GET") return getWriter(context, writer[1]);
+    if (writer && method === "GET") return await getWriter(context, writer[1]);
     return null;
   } catch (err) {
-    const status = err?.status || 500;
-    return jsonResult(status, { error: err?.message || "follow_failed" });
+    const status = Number(err?.status) || 0;
+    const fromStore = err?.code != null || err?.details != null;
+    const appError = !fromStore && APP_FOLLOW_STATUSES.has(status);
+    if (!appError) {
+      console.error("[follows]", method, pathname, err?.stack || err?.message || err);
+    }
+    if (publicCountGet(method, pathname)) return degradedCountResult(pathname, context);
+    return followErrorResult(err);
   }
 }
 
@@ -1001,19 +1041,27 @@ export async function tryHandleFollowRequest(req, res, url, helpers) {
       return true;
     }
   }
-  const result = await dispatchFollowRequest({
-    method,
-    pathname,
-    searchParams: url.searchParams,
-    headers: req.headers,
-    body,
-    ip: helpers.clientIp(req),
-    store: createSupabaseFollowStore(process.env),
-    env: process.env,
-  });
-  if (!result) return false;
-  writeFollowResult(req, res, result, helpers);
-  return true;
+  try {
+    const result = await dispatchFollowRequest({
+      method,
+      pathname,
+      searchParams: url.searchParams,
+      headers: req.headers,
+      body,
+      ip: helpers.clientIp(req),
+      store: createSupabaseFollowStore(process.env),
+      env: process.env,
+    });
+    if (!result) return false;
+    writeFollowResult(req, res, result, helpers);
+    return true;
+  } catch (err) {
+    console.error("[follows]", method, pathname, err?.stack || err?.message || err);
+    if (!res.headersSent && !res.writableEnded) {
+      helpers.sendJson(res, 500, { error: "follow_failed" });
+    }
+    return true;
+  }
 }
 
 export function writeFollowResult(req, res, result, helpers) {

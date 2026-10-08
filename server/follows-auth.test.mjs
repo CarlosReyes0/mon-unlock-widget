@@ -69,6 +69,7 @@ test(".env.example lists follow mail settings and keeps new-post mail off", () =
 test("server wires follow routes and does not copy the unauthenticated reader list", () => {
   const index = read("server/index.mjs");
   assert.match(index, /tryHandleFollowRequest/);
+  assert.match(index, /guardRequest/);
   assert.match(index, /writerHtmlForWallet/);
   assert.match(index, /canonicalWriterPath/);
   const follows = read("server/follows.mjs");
