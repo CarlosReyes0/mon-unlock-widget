@@ -45,22 +45,32 @@ function publisherAddress() {
   return (window as Window & { __monPublisherAddress?: string }).__monPublisherAddress || "";
 }
 
+function ensureAuthCss() {
+  if (document.querySelector("link[data-opw-auth-css]")) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "/publisher-auth.css";
+  link.dataset.opwAuthCss = "1";
+  document.head.appendChild(link);
+}
+
 function ensureCss() {
+  ensureAuthCss();
   if (document.getElementById("opw-signin-css")) return;
   const style = document.createElement("style");
   style.id = "opw-signin-css";
   style.textContent = `
     .opw-signin {
       position: fixed; inset: 0; z-index: 40;
-      display: flex; align-items: flex-end; justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       padding: 1rem; background: rgba(17, 24, 39, 0.45);
-    }
-    @media (min-width: 640px) {
-      .opw-signin { align-items: center; }
+      box-sizing: border-box;
     }
     .opw-signin[hidden] { display: none !important; }
     .opw-signin__card {
       width: min(24rem, 100%);
+      max-height: calc(100dvh - 1.5rem);
+      overflow: auto;
       background: #fff; color: #1c1917;
       border-radius: 16px; padding: 1rem 1rem 0.85rem;
       box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
@@ -71,6 +81,16 @@ function ensureCss() {
     .opw-signin__cancel {
       margin-top: 0.75rem; border: 0; background: transparent; color: #57534e;
       font: inherit; font-size: 0.85rem; cursor: pointer; padding: 0.35rem 0;
+    }
+    .opw-signin .mon-pub-auth__row { display: flex; flex-direction: column; gap: 0.5rem; }
+    .opw-signin .mon-pub-auth__btn {
+      appearance: none; display: block; width: 100%; box-sizing: border-box;
+      min-height: 2.75rem; border-radius: 9999px; border: 1px solid #e7e5e4;
+      background: #fff; color: #1c1917; font: inherit; font-size: 0.9rem;
+      font-weight: 600; padding: 0.65rem 1rem; cursor: pointer;
+    }
+    .opw-signin .mon-pub-auth__btn--primary {
+      color: #fff; background: #5b21b6; border-color: transparent;
     }
   `;
   document.head.appendChild(style);
@@ -340,4 +360,18 @@ export function peekFollowerWallet(): Promise<string> {
       </PrivyProvider>
     );
   });
+}
+
+// App builds drop unused entry exports. Follow loads this file by URL, so the
+// API has to stay reachable as a side effect and as a named export.
+if (typeof window !== "undefined") {
+  (window as Window & {
+    OpenPaywallFollowSignIn?: {
+      connectFollowerWallet: typeof connectFollowerWallet;
+      peekFollowerWallet: typeof peekFollowerWallet;
+    };
+  }).OpenPaywallFollowSignIn = {
+    connectFollowerWallet,
+    peekFollowerWallet,
+  };
 }

@@ -410,12 +410,50 @@
     });
   }
 
-  function loadFollowerSignIn() {
-    const hooked = window.OpenPaywallFollowSignIn;
-    if (hooked && (typeof hooked.connectFollowerWallet === "function" || typeof hooked.peekFollowerWallet === "function")) {
-      return Promise.resolve(hooked);
+  function signInApi(value) {
+    if (!value) return null;
+    if (typeof value.connectFollowerWallet === "function" || typeof value.peekFollowerWallet === "function") return value;
+    return null;
+  }
+
+  function importSignIn(url) {
+    // follow.js is a classic script. Vite rewrites a direct dynamic import into
+    // an ESM header, and then the script tag never runs.
+    return new Function("url", "return import" + "(url)")(url);
+  }
+
+  async function ensureDevReactPreamble() {
+    if (window.__vite_plugin_react_preamble_installed__) return;
+    const host = location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") return;
+    try {
+      const mod = await new Function("return import" + "('/@react-refresh')")();
+      const runtime = mod.default || mod;
+      if (!runtime || typeof runtime.injectIntoGlobalHook !== "function") return;
+      runtime.injectIntoGlobalHook(window);
+      window.$RefreshReg$ = function () {};
+      window.$RefreshSig$ = function () {
+        return function (type) {
+          return type;
+        };
+      };
+      window.__vite_plugin_react_preamble_installed__ = true;
+    } catch {
+      /* built bundle, or not the Vite dev server */
     }
-    return import(SIGNIN_URL);
+  }
+
+  function loadFollowerSignIn() {
+    const hooked = signInApi(window.OpenPaywallFollowSignIn);
+    if (hooked) return Promise.resolve(hooked);
+    return ensureDevReactPreamble().then(() => importSignIn(SIGNIN_URL)).then(
+      (mod) => signInApi(mod) || signInApi(window.OpenPaywallFollowSignIn) || mod,
+      (err) => {
+        const after = signInApi(window.OpenPaywallFollowSignIn);
+        if (after) return after;
+        throw err;
+      }
+    );
   }
 
   function privyWalletsFound() {

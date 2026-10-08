@@ -93,7 +93,11 @@ function followButton(container) {
 
 test("follow.js reuses account sign-in and the existing follower message", () => {
   assert.match(FOLLOW_JS, /SIGNIN_URL = "\/follow-signin\.js"/);
-  assert.match(FOLLOW_JS, /import\(SIGNIN_URL\)/);
+  assert.match(FOLLOW_JS, /return import" \+ "\(url\)"/);
+  assert.match(FOLLOW_JS, /importSignIn\(SIGNIN_URL\)/);
+  assert.doesNotMatch(FOLLOW_JS, /import\s*\(/);
+  assert.match(FOLLOW_JS, /signInApi\(window\.OpenPaywallFollowSignIn\)/);
+  assert.match(FOLLOW_JS, /__vite_plugin_react_preamble_installed__/);
   assert.doesNotMatch(FOLLOW_JS, /import\("\/dist\/openpaywall\.js"\)/);
   assert.match(FOLLOW_JS, /eth_requestAccounts/);
   assert.match(FOLLOW_JS, /personal_sign/);
@@ -112,6 +116,8 @@ test("follow.js reuses account sign-in and the existing follower message", () =>
   assert.match(signin, /new WalletManager/);
   assert.match(signin, /setWalletConnectProjectId/);
   assert.match(signin, /connectFollowerWallet/);
+  assert.match(signin, /OpenPaywallFollowSignIn = \{/);
+  assert.match(signin, /\/publisher-auth\.css/);
   assert.doesNotMatch(signin, /openpaywall\.js/);
   const vite = fs.readFileSync(path.join(ROOT, "vite.config.ts"), "utf8");
   assert.match(vite, /follow-signin/);
