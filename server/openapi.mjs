@@ -276,7 +276,7 @@ export function buildOpenApiDocument() {
           operationId: "x402UnlockGet",
           summary: "Unlock / fetch paid body (x402 USDC on Base, or existing entitlement)",
           description:
-            "Without payment: HTTP 402 with the listing price in USDC on Base (default $0.50). Does not return body. If reader=0x… or fiat_session already entitled, returns body without charging. After X-PAYMENT, returns the paid article body. Human widget/Stripe paths are unchanged.",
+            "Without payment: HTTP 402 with the listing price in USDC on Base (default $0.50). Does not return body. A bare reader= wallet does not skip the charge. A reader session (X-Reader-Session from POST /api/reader/session) or Stripe fiat_session returns the body without charging when that reader is already entitled. After X-PAYMENT, returns the paid article body.",
           parameters: [
             {
               name: "articleId",
@@ -289,7 +289,7 @@ export function buildOpenApiDocument() {
               in: "query",
               required: false,
               schema: { type: "string" },
-              description: "0x wallet; if already entitled, skip x402",
+              description: "Ignored unless it matches a reader session. A bare address does not skip x402.",
             },
           ],
           responses: {

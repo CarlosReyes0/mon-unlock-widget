@@ -9,6 +9,8 @@ import { once } from "node:events";
 import { test, after } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { privateKeyToAccount } from "viem/accounts";
+import { buildReaderSessionMessage } from "./reader-session.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -17,8 +19,12 @@ const SB_PORT = 18781;
 const SLUG = "download-demo-article";
 const PAID_BODY = "SECRET_PAID_ARTICLE_TEXT_DO_NOT_LEAK";
 const TITLE = "Download Demo Piece";
-const ENTITLED_READER = "0x2222222222222222222222222222222222222222";
-const LOCKED_READER = "0x0000000000000000000000000000000000000001";
+const ENTITLED_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const ENTITLED_ACCOUNT = privateKeyToAccount(ENTITLED_KEY);
+const ENTITLED_READER = ENTITLED_ACCOUNT.address.toLowerCase();
+const LOCKED_KEY = "0xac0974bec39a17e36ba4a6b4d4aad435cce0e4c9335790421507b8a191e28881";
+const LOCKED_ACCOUNT = privateKeyToAccount(LOCKED_KEY);
+const LOCKED_READER = LOCKED_ACCOUNT.address.toLowerCase();
 const ENTITLED_SESSION = "sess_paid_ok";
 const ARTICLE_HASH = "0x" + "cd".repeat(32);
 
@@ -143,6 +149,34 @@ after(() => {
 const origin = `http://127.0.0.1:${APP_PORT}`;
 const downloadUrl = `${origin}/api/articles/${SLUG}/download`;
 
+async function readerSessionToken(account) {
+  const domain = `127.0.0.1:${APP_PORT}`;
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiresAt = issuedAt + 3600;
+  const message = buildReaderSessionMessage({
+    domain,
+    address: account.address,
+    issuedAt,
+    expiresAt,
+  });
+  const signature = await account.signMessage({ message });
+  const res = await fetch(`${origin}/api/reader/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      address: account.address,
+      issuedAt,
+      expiresAt,
+      signature,
+    }),
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(body));
+  assert.match(res.headers.get("set-cookie") || "", /op_reader=/);
+  assert.match(res.headers.get("set-cookie") || "", /HttpOnly/);
+  return body.token;
+}
+
 test("GET download without reader or fiat session is 400 with no paid bytes", async () => {
   const res = await fetch(downloadUrl);
   const text = await res.text();
@@ -153,8 +187,20 @@ test("GET download without reader or fiat session is 400 with no paid bytes", as
   assert.equal(body.error, "reader_or_fiat_session_required");
 });
 
-test("GET download with a locked wallet is 403 with no paid bytes", async () => {
-  const res = await fetch(`${downloadUrl}?reader=${LOCKED_READER}`);
+test("GET download with a bare entitled wallet is 401 and leaks no paid bytes", async () => {
+  const res = await fetch(`${downloadUrl}?reader=${ENTITLED_READER}`);
+  const text = await res.text();
+  assert.equal(res.status, 401);
+  assert.equal(text.includes(PAID_BODY), false);
+  const body = JSON.parse(text);
+  assert.equal(body.error, "reader_session_required");
+});
+
+test("GET download with a locked wallet session is 403 with no paid bytes", async () => {
+  const token = await readerSessionToken(LOCKED_ACCOUNT);
+  const res = await fetch(`${downloadUrl}?reader=${LOCKED_READER}`, {
+    headers: { "X-Reader-Session": token },
+  });
   const text = await res.text();
   assert.equal(res.status, 403);
   assert.match(res.headers.get("content-type") || "", /application\/json/);
@@ -164,8 +210,11 @@ test("GET download with a locked wallet is 403 with no paid bytes", async () => 
   assert.equal(body.body, undefined);
 });
 
-test("GET download with an entitled wallet is free HTML of title + body", async () => {
-  const res = await fetch(`${downloadUrl}?reader=${ENTITLED_READER}`);
+test("GET download with an entitled wallet session is free HTML of title + body", async () => {
+  const token = await readerSessionToken(ENTITLED_ACCOUNT);
+  const res = await fetch(downloadUrl, {
+    headers: { "X-Reader-Session": token },
+  });
   const text = await res.text();
   assert.equal(res.status, 200, text.slice(0, 300));
   assert.match(res.headers.get("content-type") || "", /text\/html/);

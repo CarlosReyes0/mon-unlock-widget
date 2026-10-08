@@ -400,7 +400,7 @@ function x402Cors(res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-PAYMENT, PAYMENT-SIGNATURE, Payment-Signature, Accept"
+    "Content-Type, Authorization, X-PAYMENT, PAYMENT-SIGNATURE, Payment-Signature, Accept, X-Reader-Session"
   );
   res.setHeader(
     "Access-Control-Expose-Headers",

@@ -279,6 +279,7 @@ export async function establishReaderSession(input: {
     token: data.token,
     address,
     domain,
+    issuedAt,
     expiresAt: asUnix(data.expiresAt) ?? expiresAt,
   };
   writeStoredReaderSession(input.storage, session);
