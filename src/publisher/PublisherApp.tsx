@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createWalletClient, custom, type Address } from "viem";
 import { monadMainnet } from "../core/chains.js";
 import { buildPlanAuthMessage } from "../core/publish-auth.js";
+import { establishReaderSession, READER_SESSION_HEADER } from "../core/reader-session.js";
 import { peekResumableDraft, type ResumableDraft } from "../core/write-drafts.js";
 import type { Eip1193Provider } from "../core/wallet.js";
 import { AccountArticles } from "./AccountArticles.js";
@@ -34,11 +35,32 @@ export function PublisherApp() {
 
   const address = () => window.__monPublisherAddress || "";
 
+  async function readerAuthHeaders(wallet: string): Promise<Record<string, string>> {
+    const provider = window.__monPublisherProvider as Eip1193Provider | undefined;
+    if (!provider) throw new Error("Connect a wallet to continue.");
+    const account = wallet as Address;
+    const walletClient = createWalletClient({
+      account,
+      chain: monadMainnet,
+      transport: custom(provider),
+    });
+    const session = await establishReaderSession({
+      address: wallet,
+      domain: window.location.host,
+      sessionUrl: "/api/reader/session",
+      storage: window.localStorage,
+      signMessage: (message) => walletClient.signMessage({ account, message }),
+    });
+    return { [READER_SESSION_HEADER]: session.token };
+  }
+
   const loadSubs = useCallback(async (wallet: string) => {
     if (!wallet) return;
     try {
-      const res = await fetch(`/api/subscriptions?reader=${encodeURIComponent(wallet)}`);
-      const data = (await res.json()) as { subscriptions?: SubRow[] };
+      const headers = await readerAuthHeaders(wallet);
+      const res = await fetch(`/api/subscriptions?reader=${encodeURIComponent(wallet)}`, { headers });
+      const data = (await res.json()) as { subscriptions?: SubRow[]; error?: string };
+      if (!res.ok) throw new Error(data.error || "list_failed");
       setSubs(Array.isArray(data.subscriptions) ? data.subscriptions : []);
     } catch {
       setSubs([]);
@@ -175,8 +197,11 @@ export function PublisherApp() {
     try {
       const res = await fetch("/api/subscriptions/cancel", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reader, writer }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(await readerAuthHeaders(reader)),
+        },
+        body: JSON.stringify({ writer }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "cancel_failed");
