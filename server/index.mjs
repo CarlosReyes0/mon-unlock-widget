@@ -51,6 +51,7 @@ import {
 import { withMppCharge, mppStatus, publishAmount } from "./mpp.mjs";
 import { x402Status } from "./x402.mjs";
 import { handleX402Publish, handleX402Unlock } from "./x402-handlers.mjs";
+import { handleX402ReportProbe } from "./x402-report-probe.mjs";
 import { mirosharkPublicStatus, tryHandleMirosharkRequest } from "./miroshark.mjs";
 import { tryHandleVoiceDraftRequest, voiceDraftPublicStatus } from "./voice-drafts.mjs";
 import { tryHandleMediaRequest, mediaStatus } from "./media-host.mjs";
@@ -806,6 +807,10 @@ const server = http.createServer(guardRequest(async (req, res) => {
         return publishArticleForAgent(validated.input);
       },
     });
+  }
+
+  if (method === "POST" && url.pathname === "/api/x402/report/probe") {
+    return handleX402ReportProbe(req, res, { sendJson });
   }
 
   const isX402Publish =

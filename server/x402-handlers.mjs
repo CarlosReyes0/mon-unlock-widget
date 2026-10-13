@@ -12,12 +12,14 @@ import {
   resolveArticleAccess,
 } from "./subscriptions.mjs";
 import {
+  BASE_USDC,
   publicOriginFromReq,
   usdcAtomicForListing,
   withX402Charge,
   x402PublishAmountUsd,
   usdToUsdcAtomic,
 } from "./x402.mjs";
+import { recordX402Payment } from "./x402-payment-log.mjs";
 import { ARTICLE_BODY_LIMIT, DEFAULT_JSON_BODY_LIMIT } from "./body-limit.mjs";
 import { gateWalletReader, resolveRequestReaderSession } from "./reader-session.mjs";
 
@@ -74,7 +76,7 @@ export async function handleX402Publish(req, res, { readBody, sendJson }) {
     amountAtomic,
     resource: `${origin}/api/x402/publish`,
     description: `Create one embeddable paywall — $${x402PublishAmountUsd()} USDC on Base`,
-    onPaid: async () => {
+    onPaid: async (ctx) => {
       if (!validated.ok) {
         const err = new Error("invalid_input");
         err.status = 400;
@@ -82,6 +84,18 @@ export async function handleX402Publish(req, res, { readBody, sendJson }) {
         throw err;
       }
       const published = await publishArticleForAgent(validated.input);
+      // Log after the publish work. Fire-and-forget: do not await.
+      if (!ctx?.bypass) {
+        recordX402Payment({
+          kind: "publish",
+          articleSlug: published.slug || validated.input.articleId,
+          amountAtomic,
+          network: ctx?.settlement?.network || ctx?.payload?.network || "base",
+          asset: BASE_USDC,
+          payload: ctx?.payload,
+          settlement: ctx?.settlement,
+        });
+      }
       return {
         ...published,
         payment: {
@@ -105,6 +119,7 @@ export async function handleX402Publish(req, res, { readBody, sendJson }) {
  * - Existing entitlement (reader session or fiat_session) → 200 body, no charge
  * - A bare reader= wallet is not entitlement. Unpaid → 402 (never includes body)
  * - Paid + verified → 200 with body
+ * - A previous x402 payment is not an entitlement. The next unpaid call charges again.
  */
 export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
   let parsed = {};
@@ -229,13 +244,26 @@ export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
     amountAtomic,
     resource: `${origin}/api/x402/articles/${encodeURIComponent(articleId)}`,
     description: `Unlock "${meta.title || articleId}" — USDC on Base`,
-    onPaid: async ({ settlement }) => {
+    onPaid: async (ctx) => {
       const paid = await loadArticleBodyAfterPayment(articleId);
       if (!paid) {
         const err = new Error("article_not_found");
         err.status = 404;
         err.payload = { error: "article_not_found" };
         throw err;
+      }
+      const settlement = ctx?.settlement;
+      // Log after the body load. Fire-and-forget: do not await.
+      if (!ctx?.bypass) {
+        recordX402Payment({
+          kind: "unlock",
+          articleSlug: paid.articleId || articleId,
+          amountAtomic,
+          network: settlement?.network || ctx?.payload?.network || "base",
+          asset: BASE_USDC,
+          payload: ctx?.payload,
+          settlement,
+        });
       }
       return {
         ok: true,

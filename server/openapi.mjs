@@ -276,7 +276,7 @@ export function buildOpenApiDocument() {
           operationId: "x402UnlockGet",
           summary: "Unlock / fetch paid body (x402 USDC on Base, or existing entitlement)",
           description:
-            "Without payment: HTTP 402 with the listing price in USDC on Base (default $0.50). Does not return body. A bare reader= wallet does not skip the charge. A reader session (X-Reader-Session from POST /api/reader/session) or Stripe fiat_session returns the body without charging when that reader is already entitled. After X-PAYMENT, returns the paid article body.",
+            "Without payment: HTTP 402 with the listing price in USDC on Base (default $0.50). Does not return body. A bare reader= wallet does not skip the charge. A reader session (X-Reader-Session from POST /api/reader/session) or Stripe fiat_session returns the body without charging when that reader is already entitled. After X-PAYMENT, returns the paid article body. Each paid x402 request is charged again; x402 does not store an entitlement.",
           parameters: [
             {
               name: "articleId",
@@ -326,7 +326,7 @@ export function buildOpenApiDocument() {
         get: {
           operationId: "x402ArticleBySlug",
           summary: "Unlock / fetch paid body by slug (x402)",
-          description: `Default listing price ${x402UnlockAmountUsd()} USDC. Settlement is USDC on Base for agents; readers on the web still pay USDC on Monad.`,
+          description: `Default listing price ${x402UnlockAmountUsd()} USDC. Settlement is USDC on Base for agents; readers on the web still pay USDC on Monad. Each paid x402 unlock charges again; a prior x402 payment is not an entitlement.`,
           parameters: [
             {
               name: "slug",

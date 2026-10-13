@@ -45,6 +45,8 @@ Unpaid x402 calls return **HTTP 402** with `accepts[]` (`scheme: exact`,
 A bare `reader=0x…` address does **not** skip payment. Stripe `fiat_session`,
 or a reader session from `POST /api/reader/session` (`X-Reader-Session`),
 returns the body **without** charging again when that reader is already entitled.
+A previous x402 unlock is **not** an entitlement: every paid retry charges again.
+See `docs/X402.md`.
 
 ## Bankr
 ```bash

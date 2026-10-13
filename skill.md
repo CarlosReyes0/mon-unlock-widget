@@ -23,7 +23,7 @@ Bankr wallets pay **USDC on Base**, not Monad. Use these routes (MPP PathUSD sti
 1. Validate (free): `POST /api/agents/publish/validate`
 2. Publish: `POST /api/x402/publish` — unpaid → HTTP **402** with `accepts[]` (**$0.05** USDC on Base). Pay once (`bankr x402 call` / `X-PAYMENT`), retry.
 3. After paid publish: return `finishRegistrationUrl`. The publisher still registers on Monad and **Copy signed embed**.
-4. Unlock/read: `GET /api/x402/articles/{slug}` — unpaid → 402 at the listing price (default **$0.50** USDC on Base). Paid retry returns the body. Existing `reader` / `fiat_session` entitlement skips the charge.
+4. Unlock/read: `GET /api/x402/articles/{slug}` — unpaid → 402 at the listing price (default **$0.50** USDC on Base). Paid retry returns the body. Existing `reader` / `fiat_session` entitlement skips the charge. A previous x402 payment does not: the next unpaid unlock charges again (`docs/X402.md`).
 
 ```bash
 bankr x402 call https://openpaywall.app/api/x402/publish \
