@@ -76,6 +76,21 @@ jobs:
         if: failure()
         run: cat /tmp/op-server.log || true
 
+  backup-roundtrip:
+    name: backup-roundtrip
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL 17 and age
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common ca-certificates age
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-17
+      - name: Dump, encrypt, decrypt, restore
+        run: bash scripts/backup/roundtrip.sh
+
   contract:
     name: contract
     runs-on: ubuntu-latest

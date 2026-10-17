@@ -36,6 +36,12 @@ Mark **smoke** required so a `/account` 404 cannot merge: GitHub → **Settings 
 
 Optional Railway check (does not block PRs): Actions → **production-smoke** → Run workflow.
 
+## Database backups
+
+The production database is on the Supabase Free plan, which does not include platform backups. A weekly Actions workflow dumps roles, schema, and data (read-only), encrypts the archive to an age public key, and pushes the ciphertext to a private backups repo. The age private key is not stored in GitHub.
+
+Setup, the manual **Run workflow** button, and the restore steps are in **[docs/backups.md](docs/backups.md)**. CI job `backup-roundtrip` proves that path on local Postgres 17 without connecting to production.
+
 ## Live testnet demo
 
 https://openpaywall.app

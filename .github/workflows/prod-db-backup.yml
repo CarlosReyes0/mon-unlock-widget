@@ -1,0 +1,78 @@
+# Weekly read-only dump of the Free-plan Supabase Postgres.
+# The age private key is never stored in CI. Ciphertext is pushed to a
+# separate private repo. See docs/backups.md.
+#
+# A missing secret skips the job on purpose. A dump, sanity, or publish
+# failure fails the job. The prod-alert issue workflow is not on main,
+# so GitHub's failed-workflow mail is the alert.
+name: prod-db-backup
+
+on:
+  schedule:
+    # Sunday 09:00 UTC. GitHub may delay a scheduled run; it only fires from main.
+    - cron: "0 9 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check configuration
+        id: config
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+          BACKUP_GITHUB_TOKEN: ${{ secrets.BACKUP_GITHUB_TOKEN }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT || secrets.BACKUP_AGE_RECIPIENT }}
+        run: bash scripts/backup/check-config.sh
+
+      - name: Install age
+        if: steps.config.outputs.configured == 'true'
+        run: sudo apt-get update && sudo apt-get install -y age
+
+      - name: Install Supabase CLI 2.121.0
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$(uname -m)" != "x86_64" ]]; then
+            echo "This workflow pins the linux amd64 CLI checksum. Runner arch is $(uname -m)." >&2
+            exit 1
+          fi
+          url="https://github.com/supabase/cli/releases/download/v2.121.0/supabase_2.121.0_linux_amd64.tar.gz"
+          curl -fsSL -o /tmp/supabase.tar.gz "$url"
+          echo "4b481189efbdc57cf2d37bdee5f1a0d29574314398564b32a6dfb76c0fcf275f  /tmp/supabase.tar.gz" | sha256sum -c -
+          sudo tar -C /usr/local/bin -xzf /tmp/supabase.tar.gz supabase
+          rm -f /tmp/supabase.tar.gz
+          supabase --version
+
+      - name: Dump, encrypt, and publish
+        if: steps.config.outputs.configured == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+          BACKUP_GITHUB_TOKEN: ${{ secrets.BACKUP_GITHUB_TOKEN }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT || secrets.BACKUP_AGE_RECIPIENT }}
+          BACKUP_REPO: ${{ vars.BACKUP_REPO }}
+          BACKUP_KEEP: ${{ vars.BACKUP_KEEP }}
+          BACKUP_ALLOW_DIRECT: ${{ vars.BACKUP_ALLOW_DIRECT }}
+          SUPABASE_DB_MAJOR_VERSION: "17"
+        run: bash scripts/backup/prod-backup.sh
+
+      - name: Backup failed
+        if: failure() && steps.config.outputs.configured == 'true'
+        run: |
+          echo "Prod backup failed. The workflow only runs supabase db dump, so this job did not write to the database."
+          echo "GitHub emails the repository's Actions failure recipients. docs/backups.md has the setup and the restore steps."
