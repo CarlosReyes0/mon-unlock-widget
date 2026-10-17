@@ -4,7 +4,7 @@
 // Authorization stays the public anon JWT so verify_jwt can stay enabled.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createPublicClient, http, parseAbiItem } from "https://esm.sh/viem@2.53.1";
+import { createPublicClient, http, parseAbiItem } from "https://esm.sh/viem@2.57.7";
 import { requestHasSecret } from "../../../src/core/publish-auth.ts";
 
 const MON_CONTRACT = (Deno.env.get("CONTRACT_ADDRESS") || "") as `0x${string}`;

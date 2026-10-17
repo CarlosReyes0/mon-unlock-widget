@@ -10,7 +10,7 @@
 //    A caller-supplied unlock_contract is ignored unless it is one of those.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { createPublicClient, http, keccak256, toBytes } from 'https://esm.sh/viem@2.53.1';
+import { createPublicClient, http, keccak256, toBytes } from 'https://esm.sh/viem@2.57.7';
 import {
   allowedUnlockContracts,
   isAllowedUnlockContract,

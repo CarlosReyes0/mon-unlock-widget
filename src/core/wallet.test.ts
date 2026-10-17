@@ -1,11 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  hasReliableInjectedProvider,
   mapWalletSendToEthSend,
   newestExternalWalletAddress,
   pickPublisherWallet,
   readPublisherWallet,
   truncateAddress,
+  WalletManager,
 } from "./wallet.js";
 
 const PRIVY = {
@@ -77,6 +79,54 @@ describe("readPublisherWallet", () => {
       readPublisherWallet({ __monPublisherAddress: "0xabc", __monPublisherProvider: {} as never }),
       null
     );
+  });
+});
+
+describe("MetaMask injected provider", () => {
+  const ADDRESS = "0x5bd447C52E2e854043C1d6F76DB5DEE3587049c5";
+
+  it("treats a mock MetaMask EIP-1193 provider as the desktop/in-app path and signs", async () => {
+    const calls: string[] = [];
+    const ethereum = {
+      isMetaMask: true,
+      request: async (args: { method: string }) => {
+        calls.push(args.method);
+        if (args.method === "eth_requestAccounts" || args.method === "eth_accounts") return [ADDRESS];
+        if (args.method === "personal_sign") return "0xsig";
+        return null;
+      },
+    };
+    const previous = (globalThis as { ethereum?: unknown }).ethereum;
+    (globalThis as { ethereum?: unknown }).ethereum = ethereum;
+    try {
+      assert.equal(hasReliableInjectedProvider(), true);
+      const manager = new WalletManager();
+      const state = await manager.connect();
+      assert.equal(state.connected, true);
+      assert.equal(state.address, ADDRESS);
+      assert.equal(manager.isUsingWalletConnect(), false);
+      const signature = await manager.getProvider()?.request({
+        method: "personal_sign",
+        params: ["Open Paywall", ADDRESS],
+      });
+      assert.equal(signature, "0xsig");
+      assert.ok(calls.includes("personal_sign"));
+      assert.ok(calls.includes("eth_requestAccounts"));
+    } finally {
+      if (previous === undefined) delete (globalThis as { ethereum?: unknown }).ethereum;
+      else (globalThis as { ethereum?: unknown }).ethereum = previous;
+    }
+  });
+
+  it("does not treat a bare injected provider as the MetaMask in-app browser", () => {
+    const previous = (globalThis as { ethereum?: unknown }).ethereum;
+    (globalThis as { ethereum?: unknown }).ethereum = { request: async () => [] };
+    try {
+      assert.equal(hasReliableInjectedProvider(), false);
+    } finally {
+      if (previous === undefined) delete (globalThis as { ethereum?: unknown }).ethereum;
+      else (globalThis as { ethereum?: unknown }).ethereum = previous;
+    }
   });
 });
 
