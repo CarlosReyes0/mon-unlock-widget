@@ -33,6 +33,10 @@ if grep -q 'pull_request' .github/workflows/prod-db-backup.yml; then
   echo "backup workflow must not run on pull_request" >&2
   exit 1
 fi
+if ! grep -q 'scripts/prod-alert.mjs --key db-backup' .github/workflows/prod-db-backup.yml; then
+  echo "backup workflow should reuse scripts/prod-alert.mjs" >&2
+  exit 1
+fi
 
 echo "connection class checks"
 assert_refused() {
