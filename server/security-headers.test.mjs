@@ -37,6 +37,11 @@ test("CSP matches Privy's embedded-wallet hosts and this app's dependencies", ()
   assert.match(csp, /style-src[^;]*'unsafe-inline'/);
   assert.match(csp, /style-src[^;]*https:\/\/fonts\.googleapis\.com/);
   assert.match(csp, /font-src[^;]*https:\/\/fonts\.gstatic\.com/);
+  const fontSrc = csp.split("; ").find((part) => part.startsWith("font-src "));
+  assert.equal(
+    fontSrc,
+    "font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com"
+  );
   assert.match(csp, /frame-ancestors 'none'/);
   assert.match(csp, /object-src 'none'/);
   assert.match(csp, /base-uri 'self'/);

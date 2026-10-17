@@ -192,7 +192,10 @@ export function contentSecurityPolicy(nonce) {
     ].join(" "),
     // Article bodies and write previews load publisher images from arbitrary https URLs.
     "img-src 'self' data: blob: https:",
-    "font-src 'self' data: https://fonts.gstatic.com",
+    // WalletConnect's Reown QR modal (@reown/appkit-ui ThemeUtil, bundled by
+    // @walletconnect/ethereum-provider) preloads and @font-face-loads KHTeka
+    // only from https://fonts.reown.com. No other font origin.
+    "font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com",
     "media-src 'self' blob: https:",
     "object-src 'none'",
     "base-uri 'self'",

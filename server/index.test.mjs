@@ -786,6 +786,16 @@ test("HTML documents send an enforcing Privy CSP and X-Frame-Options", async () 
   assert.match(csp, /connect-src[^;]*wss:\/\/relay\.walletconnect\.com/);
   assert.match(csp, /connect-src[^;]*https:\/\/\*\.rpc\.privy\.systems/);
   assert.match(csp, /https:\/\/js\.stripe\.com/);
+  const fontSrc = csp.split("; ").find((part) => part.startsWith("font-src "));
+  assert.equal(
+    fontSrc,
+    "font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com"
+  );
+  const scriptSrc = csp.split("; ").find((part) => part.startsWith("script-src "));
+  assert.ok(scriptSrc);
+  assert.equal(scriptSrc.includes("'unsafe-eval'"), false);
+  assert.match(scriptSrc, /'wasm-unsafe-eval'/);
+  assert.doesNotMatch(scriptSrc, /fonts\.reown\.com/);
   assert.match(csp, /https:\/\/rpc\.monad\.xyz/);
   assert.match(csp, /https:\/\/mainnet\.base\.org/);
   assert.equal(write.headers.get("x-frame-options"), "DENY");
