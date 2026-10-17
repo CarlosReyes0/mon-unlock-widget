@@ -150,11 +150,13 @@ export async function assertConnectOnboardingAuth(input, now = Date.now()) {
 }
 
 /**
- * @param {{ address: unknown, issuedAt: unknown }} input
+ * Unlock-attempt proof. Line order matches src/core/publish-auth.ts.
+ * @param {{ articleId: unknown, address: unknown, issuedAt: unknown }} input
  */
 export function buildGasAuthMessage(input) {
   return [
     GAS_AUTH_PREFIX,
+    `article:${asText(input.articleId).trim()}`,
     `address:${asText(input.address).trim().toLowerCase()}`,
     `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");

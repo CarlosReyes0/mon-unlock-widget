@@ -290,10 +290,18 @@ export type RecentWalletAuthFields = {
   issuedAt: unknown;
 };
 
-/** Gas drip registration. The paid address must be the signer. */
-export function buildGasAuthMessage(input: RecentWalletAuthFields): string {
+export type GasAuthFields = RecentWalletAuthFields & {
+  articleId: unknown;
+};
+
+/**
+ * Unlock-attempt proof for a gas drip. Binds one article, the reader address,
+ * and issuedAt. A registration or session signature is a different message.
+ */
+export function buildGasAuthMessage(input: GasAuthFields): string {
   return [
     GAS_AUTH_PREFIX,
+    `article:${asText(input.articleId).trim()}`,
     `address:${asText(input.address).trim().toLowerCase()}`,
     `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");

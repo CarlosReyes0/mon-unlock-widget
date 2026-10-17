@@ -269,18 +269,23 @@ test("client and server sign the same plan and a-la-carte messages", () => {
     address: owner.address.toUpperCase(),
     issuedAt: "2026-10-17T03:10:00.000Z",
   };
+  const gas = {
+    ...recent,
+    articleId: "priced-story",
+  };
   assert.equal(serverPlanMessage(plan), clientPlanMessage(plan));
   assert.equal(serverALaCarteMessage(article), clientALaCarteMessage(article));
   assert.match(serverPlanMessage(plan), /issuedAt:2026-10-17T03:10:00\.000Z/);
   assert.match(serverALaCarteMessage(article), /issuedAt:2026-10-17T03:10:00\.000Z/);
   assert.equal(serverConnectMessage(connect), clientConnectMessage(connect));
-  assert.equal(serverGasMessage(recent), clientGasMessage(recent));
+  assert.equal(serverGasMessage(gas), clientGasMessage(gas));
   assert.equal(serverMediaMessage(recent), clientMediaMessage(recent));
   assert.equal(serverVoiceMessage(recent), clientVoiceMessage(recent));
   assert.equal(
-    serverGasMessage(recent),
+    serverGasMessage(gas),
     [
       "Open Paywall gas v1",
+      "article:priced-story",
       `address:${owner.address.toLowerCase()}`,
       "issuedAt:2026-10-17T03:10:00.000Z",
     ].join("\n")

@@ -10,6 +10,7 @@ import {
 import { formatMon, formatUsd, parseMonAmount, parseUsdAmount } from "../core/types.js";
 import { resolvePaymentAsset } from "../core/payment-asset.js";
 import { estimateUsdcForMon, formatUsdc } from "../core/swap-usdc-to-mon.js";
+import { gasDripFallbackCopy } from "../core/gas-drip.js";
 import { StripeFiatPay, stripeFiatEnabled } from "./StripeFiatPay.js";
 import { CryptoPaySection, cryptoPrivyConfigured } from "./CryptoPaySection.js";
 import { cardUnlockNftCopy } from "../core/article-nft.js";
@@ -24,6 +25,17 @@ type CheckoutQuery = {
   returnUrl: string | null;
   paymentAsset: string;
 };
+
+/** Display-only preset so a prod build can show the cap-hit card path. It does not pay. */
+function readGasFallbackPreset(): 429 | 503 | null {
+  if (typeof window === "undefined") return null;
+  const fromWindow = (window as Window & { __OP_GAS_FALLBACK__?: string }).__OP_GAS_FALLBACK__;
+  const fromQuery = new URLSearchParams(window.location.search).get("gasFallback");
+  const preset = fromWindow || fromQuery || "";
+  if (preset === "429") return 429;
+  if (preset === "503") return 503;
+  return null;
+}
 
 function readQuery(): CheckoutQuery | null {
   const params = new URLSearchParams(window.location.search);
@@ -150,7 +162,18 @@ export function CheckoutApp() {
   const [usdEstimate, setUsdEstimate] = useState<string | null>(null);
   const [fiatBusy, setFiatBusy] = useState(false);
   const [phaseDone, setPhaseDone] = useState(false);
-  const [showCrypto, setShowCrypto] = useState(!stripeFiatEnabled());
+  const gasPreset = readGasFallbackPreset();
+  const [showCrypto, setShowCrypto] = useState(
+    gasPreset && stripeFiatEnabled() ? false : !stripeFiatEnabled()
+  );
+  const [gasNote, setGasNote] = useState<string | null>(
+    gasPreset ? gasDripFallbackCopy(gasPreset) : null
+  );
+
+  const onGasFallback = (status: number) => {
+    setGasNote(gasDripFallbackCopy(status));
+    if (stripeFiatEnabled()) setShowCrypto(false);
+  };
 
   const articleReturn = query ? safeArticleReturn(query) : null;
   const settleUsdc = query?.paymentAsset === "usdc";
@@ -271,6 +294,12 @@ export function CheckoutApp() {
           )}
         </p>
 
+        {gasNote ? (
+          <p className="checkout-status" role="status">
+            {gasNote}
+          </p>
+        ) : null}
+
         {stripeFiatEnabled() && amountUsdCents ? (
           <>
             <p className="checkout-copy">Pay with Apple Pay, Google Pay, or card.</p>
@@ -321,6 +350,7 @@ export function CheckoutApp() {
             paymentAsset={query.paymentAsset}
             onCloseWith={onCryptoClose}
             onUnlocked={onCryptoUnlocked}
+            onGasFallback={onGasFallback}
             disabled={fiatBusy || phaseDone}
           />
         ) : null}

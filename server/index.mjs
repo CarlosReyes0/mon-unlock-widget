@@ -11,7 +11,8 @@
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
  *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
  *                                        and optional reader USDC-unlock gas drips
- *   RELAYER_GAS_GLOBAL_DAILY_CAP       — gas drips per UTC day, default 8
+ *   RELAYER_GAS_GLOBAL_DAILY_CAP       — gas drips per UTC day, default 50
+ *   RELAYER_LOW_BALANCE_WEI            — log relayer_low_balance below this, default 1 MON
  *   VOICE_DRAFT_DAILY_LIMIT            — voice drafts per address per UTC day, default 8
  *                                        (public.rate_limit_counters; 503 if the database is down)
  *   MEDIA_UPLOAD_DAILY_LIMIT           — media uploads per account per UTC day, default 20
@@ -1141,17 +1142,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
-      const hasProof = Boolean(
-        String(parsed?.signature || parsed?.sig || "").trim() ||
-          String(parsed?.issuedAt || "").trim()
-      );
-      let readerSession = null;
-      try {
-        readerSession = resolveRequestReaderSession(req);
-      } catch (e) {
-        if (!hasProof) throw e;
-      }
-      const result = await relayGasDrip(parsed, { ip: clientIp(req), readerSession });
+      const result = await relayGasDrip(parsed, { ip: clientIp(req) });
       return sendJson(res, 200, result);
     } catch (e) {
       if (e?.message === "body_too_large") {
