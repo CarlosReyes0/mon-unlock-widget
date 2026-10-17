@@ -84,14 +84,16 @@ test("the workflow gates --execute on the token and the opt-in variable", () => 
   assert.match(workflow, /sparkling-transformation \/ production/);
   assert.match(workflow, /deployment_status\.state == 'success'/);
   assert.match(workflow, /deployment_status\.state == 'failure'/);
-  assert.match(workflow, /secrets\.RAILWAY_TOKEN != ''/);
+  assert.match(workflow, /secrets\.RAILWAY_TOKEN/);
   assert.match(workflow, /vars\.PROD_AUTO_ROLLBACK == 'true'/);
   const execute = workflow.split("\n").filter((line) => line.includes("--execute"));
   assert.equal(execute.length, 1);
   const step = workflow.slice(workflow.indexOf("name: Auto-rollback"));
-  assert.match(step, /secrets\.RAILWAY_TOKEN != ''/);
-  assert.match(step, /PROD_AUTO_ROLLBACK/);
+  assert.match(step, /if: failure\(\) && vars\.PROD_AUTO_ROLLBACK == 'true'/);
+  assert.match(step, /-z "\$RAILWAY_TOKEN"/);
+  assert.match(step, /PROD_AUTO_ROLLBACK" != "true"/);
   assert.match(step, /--execute/);
+  assert.doesNotMatch(step, /secrets\.RAILWAY_TOKEN !=/);
 });
 
 test("instructions mention the dashboard when no token exists", () => {

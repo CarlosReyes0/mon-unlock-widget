@@ -125,14 +125,19 @@ jobs:
           node scripts/prod-alert.mjs --key post-deploy --failing true --title "[prod-alert] production smoke" --body-file /tmp/alert.md
 
       - name: Auto-rollback
-        if: failure() && vars.PROD_AUTO_ROLLBACK == 'true' && secrets.RAILWAY_TOKEN != ''
+        if: failure() && vars.PROD_AUTO_ROLLBACK == 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          PROD_AUTO_ROLLBACK: "true"
+          PROD_AUTO_ROLLBACK: ${{ vars.PROD_AUTO_ROLLBACK }}
           RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
           RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
-        run: node scripts/railway-rollback.mjs --execute
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ "$PROD_AUTO_ROLLBACK" != "true" ]; then
+            echo "Auto-rollback stayed off. It needs secret RAILWAY_TOKEN and variable PROD_AUTO_ROLLBACK=true."
+            exit 0
+          fi
+          node scripts/railway-rollback.mjs --execute
 
       - name: Close the prod-alert issue after a good deploy
         if: success()
