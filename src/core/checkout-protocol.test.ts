@@ -4,6 +4,7 @@ import {
   CHECKOUT_MESSAGE_SOURCE,
   buildCheckoutUrl,
   buildArticleReturnUrl,
+  checkoutReturnTarget,
   readFiatReturnFromLocation,
   isCheckoutMessage,
   FIAT_SESSION_PARAM,
@@ -75,6 +76,65 @@ describe("isCheckoutMessage", () => {
 
   it("rejects foreign messages", () => {
     assert.equal(isCheckoutMessage({ type: "mon:unlocked" }), false);
+  });
+});
+
+describe("checkoutReturnTarget", () => {
+  it("allows this site without a referrer", () => {
+    assert.equal(
+      checkoutReturnTarget("https://openpaywall.app/articles/july-9?x=1", {
+        pageOrigin: "https://openpaywall.app",
+        parentOrigin: "https://evil.example",
+      }),
+      "https://openpaywall.app/articles/july-9?x=1"
+    );
+  });
+
+  it("allows the embed parent only when the referrer is that parent", () => {
+    assert.equal(
+      checkoutReturnTarget("https://publisher.example/post?x=1", {
+        pageOrigin: "https://openpaywall.app",
+        parentOrigin: "https://publisher.example",
+        referrer: "https://publisher.example/post?x=1",
+      }),
+      "https://publisher.example/post?x=1"
+    );
+    assert.equal(
+      checkoutReturnTarget("https://publisher.example/post", {
+        pageOrigin: "https://openpaywall.app",
+        parentOrigin: "https://publisher.example",
+      }),
+      null
+    );
+    assert.equal(
+      checkoutReturnTarget("https://evil.example/phish", {
+        pageOrigin: "https://openpaywall.app",
+        parentOrigin: "https://publisher.example",
+        referrer: "https://publisher.example/post",
+      }),
+      null
+    );
+    assert.equal(
+      checkoutReturnTarget("https://evil.example/phish", {
+        pageOrigin: "https://openpaywall.app",
+        parentOrigin: "https://evil.example",
+        referrer: "https://mail.example/inbox",
+      }),
+      null
+    );
+  });
+
+  it("rejects javascript and credentialed URLs", () => {
+    assert.equal(
+      checkoutReturnTarget("javascript:alert(1)", { pageOrigin: "https://openpaywall.app" }),
+      null
+    );
+    assert.equal(
+      checkoutReturnTarget("https://user:pass@openpaywall.app/account", {
+        pageOrigin: "https://openpaywall.app",
+      }),
+      null
+    );
   });
 });
 

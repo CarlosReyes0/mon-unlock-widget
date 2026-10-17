@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Produced by scripts/build-vendor-viem.mjs during npm run build.
+/vendor/
 dist-checkout/
 dist-publisher/
 .env

@@ -94,7 +94,8 @@ import {
   buildPayUrl,
   normalizeOnrampAsset,
 } from "./coinbase-onramp.mjs";
-import { createCspNonce, htmlSecurityHeaders, secureHtmlDocument } from "./security-headers.mjs";
+import { createCspNonce, baselineSecurityHeaders, htmlSecurityHeaders, httpsRedirectFor, secureHtmlDocument } from "./security-headers.mjs";
+import { sameOriginRedirectUrl } from "./same-origin-redirect.mjs";
 import { ARTICLE_BODY_LIMIT, readLimitedBody as readBody } from "./body-limit.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -159,6 +160,30 @@ function cors(res) {
     "Access-Control-Expose-Headers",
     "WWW-Authenticate, Payment-Receipt, PAYMENT-REQUIRED, X-PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE, Content-Disposition"
   );
+}
+
+function applyBaselineSecurityHeaders(res) {
+  for (const [key, value] of Object.entries(baselineSecurityHeaders())) {
+    res.setHeader(key, value);
+  }
+}
+
+/**
+ * Omitted checkout URLs fall back to our own pages. A supplied URL on another
+ * host is rejected so Stripe cannot send the browser there.
+ * @param {unknown} value
+ * @param {string} host
+ * @param {string} fallback
+ */
+function checkoutRedirectUrl(value, host, fallback) {
+  if (value == null || value === "") return fallback;
+  const safe = sameOriginRedirectUrl(value, host);
+  if (!safe) {
+    const err = new Error("invalid_redirect");
+    err.status = 400;
+    throw err;
+  }
+  return safe;
 }
 
 /** HTML documents only. API and widget script responses keep their existing headers. */
@@ -507,8 +532,19 @@ function serveStatic(req, res, urlPath) {
 }
 
 const server = http.createServer(guardRequest(async (req, res) => {
+  applyBaselineSecurityHeaders(res);
   const method = req.method || "GET";
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+
+  const httpsRedirect = httpsRedirectFor(req, url);
+  if (httpsRedirect) {
+    res.writeHead(httpsRedirect.status, {
+      Location: httpsRedirect.location,
+      "Cache-Control": "no-store",
+      "Content-Length": 0,
+    });
+    return res.end();
+  }
 
   if (method === "OPTIONS") {
     cors(res);
@@ -555,6 +591,11 @@ const server = http.createServer(guardRequest(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
+      if (parsed.returnUrl != null && parsed.returnUrl !== "") {
+        const safeReturn = sameOriginRedirectUrl(parsed.returnUrl, req.headers.host || "");
+        if (!safeReturn) return sendJson(res, 400, { error: "invalid_return_url" });
+        parsed.returnUrl = safeReturn;
+      }
       const result = await createArticleCheckoutSession({
         articleId: parsed.articleId,
         amountUsdCents: parsed.amountUsdCents,
@@ -993,22 +1034,13 @@ const server = http.createServer(guardRequest(async (req, res) => {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
       const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
-      const origin = `${proto}://${req.headers.host || "localhost"}`;
-      const safeUrl = (value, fallback) => {
-        if (typeof value !== "string") return fallback;
-        try {
-          const u = new URL(value);
-          if (u.protocol !== "https:" && u.protocol !== "http:") return fallback;
-          return u.toString();
-        } catch {
-          return fallback;
-        }
-      };
+      const host = String(req.headers.host || "localhost");
+      const origin = `${proto}://${host}`;
       const result = await createStripeSubscriptionCheckout({
         reader: parsed.reader,
         writer: parsed.writer,
-        successUrl: safeUrl(parsed.successUrl, `${origin}/account.html?sub=ok`),
-        cancelUrl: safeUrl(parsed.cancelUrl, `${origin}/account.html?sub=cancel`),
+        successUrl: checkoutRedirectUrl(parsed.successUrl, host, `${origin}/account.html?sub=ok`),
+        cancelUrl: checkoutRedirectUrl(parsed.cancelUrl, host, `${origin}/account.html?sub=cancel`),
       });
       return sendJson(res, 200, result);
     } catch (e) {

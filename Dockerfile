@@ -63,6 +63,8 @@ COPY --from=builder /app/site-nav.js ./site-nav.js
 COPY --from=builder /app/follow.js ./follow.js
 COPY --from=builder /app/write-draft-resume.js ./write-draft-resume.js
 COPY --from=builder /app/generator-media.js ./generator-media.js
+# Self-hosted viem (generator / register / dashboard). Built by scripts/build-vendor-viem.mjs.
+COPY --from=builder /app/vendor/viem.js ./vendor/viem.js
 COPY --from=builder /app/llms.txt ./llms.txt
 COPY --from=builder /app/agents.md ./agents.md
 COPY --from=builder /app/skill.md ./skill.md

@@ -15,14 +15,73 @@
  * polyfill) get a per-response nonce so script-src can stay free of
  * 'unsafe-inline'. Script tags inside those scripts (embed snippets use
  * <\/script>) are not rewritten — the walker follows HTML script parsing.
+ * Do not add 'unsafe-eval'. Follow sign-in loads a same-origin module
+ * instead; eval is what broke that sheet on the production policy.
  *
  * Do not put a nonce on style-src. A nonce or hash there makes browsers
  * ignore 'unsafe-inline', which React style attributes and page <style>
  * blocks need.
+ *
+ * viem for generator / register / dashboard is self-hosted at /vendor/viem.js.
+ * script-src does not allow esm.sh or jsDelivr (those hosts can serve any
+ * package). Supabase edge functions are not this document policy.
  */
 import { randomBytes } from "node:crypto";
 
 export const X_FRAME_OPTIONS = "DENY";
+
+/** One year. includeSubDomains, no preload. */
+export const STRICT_TRANSPORT_SECURITY = "max-age=31536000; includeSubDomains";
+
+export const X_CONTENT_TYPE_OPTIONS = "nosniff";
+
+export const REFERRER_POLICY = "strict-origin-when-cross-origin";
+
+/**
+ * Deny powerful features this app does not use. clipboard-write stays on for
+ * our pages and the Privy / WalletConnect frames that copy addresses.
+ * payment stays on for Stripe's Payment Request / express checkout.
+ * publickey-credentials-get stays on for Privy passkeys.
+ * Video embeds keep the features their iframes already request.
+ */
+export const PERMISSIONS_POLICY = [
+  "accelerometer=()",
+  "camera=()",
+  "clipboard-read=()",
+  `clipboard-write=(self "https://auth.privy.io" "https://verify.walletconnect.com" "https://verify.walletconnect.org" "https://secure.walletconnect.com" "https://secure.walletconnect.org")`,
+  "display-capture=()",
+  `encrypted-media=(self "https://www.youtube.com" "https://www.youtube-nocookie.com" "https://player.vimeo.com" "https://www.loom.com")`,
+  `fullscreen=(self "https://www.youtube.com" "https://www.youtube-nocookie.com" "https://player.vimeo.com" "https://www.loom.com" "https://js.stripe.com" "https://checkout.stripe.com")`,
+  "geolocation=()",
+  "gyroscope=()",
+  "hid=()",
+  "magnetometer=()",
+  "microphone=()",
+  "midi=()",
+  `payment=(self "https://js.stripe.com" "https://checkout.stripe.com" "https://hooks.stripe.com")`,
+  `picture-in-picture=(self "https://www.youtube.com" "https://www.youtube-nocookie.com" "https://player.vimeo.com" "https://www.loom.com")`,
+  `publickey-credentials-get=(self "https://auth.privy.io")`,
+  "screen-wake-lock=()",
+  "serial=()",
+  "usb=()",
+  "web-share=()",
+  "xr-spatial-tracking=()",
+  `autoplay=(self "https://www.youtube.com" "https://www.youtube-nocookie.com" "https://player.vimeo.com" "https://www.loom.com")`,
+].join(", ");
+
+/** railway.toml healthcheckPath. Railway sends Host healthcheck.railway.app and this user agent. */
+export const RAILWAY_HEALTHCHECK_HOST = "healthcheck.railway.app";
+export const RAILWAY_HEALTHCHECK_UA = /^RailwayHealthCheck\//i;
+
+/** Headers for every response, including API and static files. CSP stays on documents. */
+export function baselineSecurityHeaders() {
+  return {
+    "Strict-Transport-Security": STRICT_TRANSPORT_SECURITY,
+    "X-Content-Type-Options": X_CONTENT_TYPE_OPTIONS,
+    "Referrer-Policy": REFERRER_POLICY,
+    "Permissions-Policy": PERMISSIONS_POLICY,
+  };
+}
 
 /** @returns {string} CSP nonce token (base64url, safe in a header and an attribute) */
 export function createCspNonce() {
@@ -122,10 +181,6 @@ export function contentSecurityPolicy(nonce) {
       "https://*.js.stripe.com",
       "https://maps.googleapis.com",
       "https://accounts.google.com",
-      // dashboard.html loads @supabase/supabase-js from jsDelivr.
-      "https://cdn.jsdelivr.net",
-      // generator / dashboard / register dynamic-import viem from esm.sh.
-      "https://esm.sh",
     ].join(" "),
     [
       "style-src",
@@ -199,6 +254,89 @@ export function contentSecurityPolicy(nonce) {
     "manifest-src 'self'",
   ];
   return directives.join("; ");
+}
+
+function headerFirst(value) {
+  const raw = Array.isArray(value) ? value[0] : String(value || "");
+  return raw.split(",")[0].trim();
+}
+
+function requestHost(req) {
+  return headerFirst(req?.headers?.host);
+}
+
+function hostnameOf(host) {
+  const h = String(host || "").trim().toLowerCase();
+  if (!h) return "";
+  if (h.startsWith("[")) {
+    const end = h.indexOf("]");
+    return end === -1 ? h : h.slice(0, end + 1);
+  }
+  return h.replace(/:\d+$/, "");
+}
+
+/**
+ * Hosts we will send a browser to over HTTPS. Loopback is for local runs.
+ * Anything else is refused so a spoofed Host cannot turn the redirect into
+ * an open redirect. healthcheck.railway.app is intentionally not listed.
+ * @param {string} host
+ */
+export function isHttpsRedirectHost(host) {
+  const raw = String(host || "").trim().toLowerCase();
+  if (!raw || /[\s/@\\]/.test(raw) || raw.includes("..")) return false;
+  const name = hostnameOf(raw);
+  if (name === "openpaywall.app" || name === "www.openpaywall.app") return true;
+  if (name.endsWith(".up.railway.app") && name !== ".up.railway.app") return true;
+  if (name === "localhost" || name === "127.0.0.1" || name === "[::1]") return true;
+  return false;
+}
+
+/**
+ * Railway's probe is GET/HEAD / from inside the network. It does not come
+ * through the public edge (which always sets x-forwarded-proto to https).
+ * Exempt it even if a probe is forwarded with proto=http.
+ * @param {import("node:http").IncomingMessage} req
+ * @param {URL} url
+ */
+export function isRailwayHealthCheck(req, url) {
+  const method = String(req?.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") return false;
+  if ((url?.pathname || "/") !== "/") return false;
+  if (hostnameOf(requestHost(req)) === RAILWAY_HEALTHCHECK_HOST) return true;
+  return RAILWAY_HEALTHCHECK_UA.test(headerFirst(req?.headers?.["user-agent"]));
+}
+
+/**
+ * Redirect only when the first x-forwarded-proto hop is exactly "http".
+ * A missing header means the process was reached directly (local dev, or
+ * Railway's health check) and must not redirect. https must not redirect,
+ * or the proxy and the app loop. The Location host is an allowlist, not
+ * the raw Host header.
+ * @param {import("node:http").IncomingMessage} req
+ * @param {URL} url
+ * @returns {{ status: number, location: string } | null}
+ */
+export function httpsRedirectFor(req, url) {
+  if (!url || isRailwayHealthCheck(req, url)) return null;
+  const proto = headerFirst(req?.headers?.["x-forwarded-proto"]).toLowerCase();
+  if (proto !== "http") return null;
+  const host = requestHost(req);
+  if (!isHttpsRedirectHost(host)) return null;
+  const path = url.pathname || "/";
+  const search = url.search || "";
+  if (!path.startsWith("/") || /[\s\\]/.test(path) || /[\s\\]/.test(search)) return null;
+  const location = `https://${host}${path}${search}`;
+  let parsed;
+  try {
+    parsed = new URL(location);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:") return null;
+  if (parsed.host.toLowerCase() !== host.toLowerCase()) return null;
+  const method = String(req?.method || "GET").toUpperCase();
+  const status = method === "GET" || method === "HEAD" ? 301 : 308;
+  return { status, location };
 }
 
 function childOrFrame(name) {

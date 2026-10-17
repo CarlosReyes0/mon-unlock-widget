@@ -159,7 +159,7 @@
       const publishSigCache = new Map();
 
       async function signPlainMessage(eth, account, message) {
-        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const { createWalletClient, custom } = await import("/vendor/viem.js");
         const walletClient = createWalletClient({
           account,
           chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
@@ -337,7 +337,7 @@ ${teaserBlock}
       }
 
       async function signAndShowEmbed(eth, account, articleId, priceWei) {
-        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const { createWalletClient, custom } = await import("/vendor/viem.js");
         const walletClient = createWalletClient({
           account,
           chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
@@ -400,7 +400,7 @@ ${teaserBlock}
 
         try {
           const { keccak256, toBytes, parseEther, parseUnits, createWalletClient, custom, createPublicClient, http } =
-            await import("https://esm.sh/viem@2");
+            await import("/vendor/viem.js");
 
           const articleIdBytes = keccak256(toBytes(slug));
           const priceWei = paymentAsset === "usdc"

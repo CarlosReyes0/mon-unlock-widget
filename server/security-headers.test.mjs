@@ -4,9 +4,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
+  baselineSecurityHeaders,
   contentSecurityPolicy,
+  httpsRedirectFor,
+  isHttpsRedirectHost,
+  isRailwayHealthCheck,
+  PERMISSIONS_POLICY,
+  REFERRER_POLICY,
   secureHtmlDocument,
   stampInlineScriptNonces,
+  STRICT_TRANSPORT_SECURITY,
+  X_CONTENT_TYPE_OPTIONS,
   X_FRAME_OPTIONS,
 } from "./security-headers.mjs";
 
@@ -19,8 +27,12 @@ test("CSP matches Privy's embedded-wallet hosts and this app's dependencies", ()
   assert.match(csp, /script-src[^;]*'wasm-unsafe-eval'/);
   assert.match(csp, /script-src[^;]*https:\/\/challenges\.cloudflare\.com/);
   assert.match(csp, /script-src[^;]*https:\/\/js\.stripe\.com/);
-  assert.match(csp, /script-src[^;]*https:\/\/cdn\.jsdelivr\.net/);
-  assert.match(csp, /script-src[^;]*https:\/\/esm\.sh/);
+  assert.doesNotMatch(csp, /script-src[^;]*https:\/\/cdn\.jsdelivr\.net/);
+  assert.doesNotMatch(csp, /script-src[^;]*https:\/\/esm\.sh/);
+  const scriptSrc = csp.split("; ").find((part) => part.startsWith("script-src "));
+  assert.ok(scriptSrc);
+  assert.equal(scriptSrc.includes("'unsafe-eval'"), false);
+  assert.match(scriptSrc, /'wasm-unsafe-eval'/);
   assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
   assert.match(csp, /style-src[^;]*'unsafe-inline'/);
   assert.match(csp, /style-src[^;]*https:\/\/fonts\.googleapis\.com/);
@@ -99,4 +111,101 @@ test("publisher embed templates in real pages are not stamped", () => {
       /<script type="module" src="\$\{CDN_BASE\}\/dist\/openpaywall\.js\?v=\$\{WIDGET_VERSION\}"><\\\/script>/
     );
   }
+});
+
+test("baseline headers set HSTS, nosniff, referrer policy, and a deny-by-default permissions policy", () => {
+  assert.equal(STRICT_TRANSPORT_SECURITY, "max-age=31536000; includeSubDomains");
+  assert.equal(/preload/i.test(STRICT_TRANSPORT_SECURITY), false);
+  assert.ok(Number(STRICT_TRANSPORT_SECURITY.match(/max-age=(\d+)/)?.[1]) >= 31536000);
+  assert.equal(X_CONTENT_TYPE_OPTIONS, "nosniff");
+  assert.equal(REFERRER_POLICY, "strict-origin-when-cross-origin");
+  assert.match(PERMISSIONS_POLICY, /clipboard-write=\(self "https:\/\/auth\.privy\.io"/);
+  assert.match(PERMISSIONS_POLICY, /camera=\(\)/);
+  assert.match(PERMISSIONS_POLICY, /microphone=\(\)/);
+  assert.match(PERMISSIONS_POLICY, /geolocation=\(\)/);
+  assert.match(PERMISSIONS_POLICY, /payment=\(self "https:\/\/js\.stripe\.com"/);
+  const headers = baselineSecurityHeaders();
+  assert.equal(headers["Strict-Transport-Security"], STRICT_TRANSPORT_SECURITY);
+  assert.equal(headers["X-Content-Type-Options"], "nosniff");
+  assert.equal(headers["Referrer-Policy"], REFERRER_POLICY);
+  assert.equal(headers["Permissions-Policy"], PERMISSIONS_POLICY);
+  assert.equal("Content-Security-Policy" in headers, false);
+});
+
+test("static pages self-host viem and do not load esm.sh or jsDelivr", () => {
+  for (const name of ["dashboard.html", "generator.html", "register.html", "index.html", "article.html"]) {
+    const raw = fs.readFileSync(path.join(ROOT, name), "utf8");
+    assert.equal(/esm\.sh|cdn\.jsdelivr\.net/.test(raw), false, name);
+  }
+  for (const name of ["dashboard.html", "generator.html", "register.html"]) {
+    const raw = fs.readFileSync(path.join(ROOT, name), "utf8");
+    assert.match(raw, /\/vendor\/viem\.js/, name);
+  }
+});
+
+function req(headers, method = "GET") {
+  return { method, headers };
+}
+
+test("HTTP redirects to HTTPS only for an allowlisted host, and health checks stay put", () => {
+  const health = new URL("http://healthcheck.railway.app/");
+  assert.equal(
+    isRailwayHealthCheck(req({ host: "healthcheck.railway.app" }, "GET"), health),
+    true
+  );
+  assert.equal(
+    httpsRedirectFor(
+      req({ host: "healthcheck.railway.app", "x-forwarded-proto": "http", "user-agent": "RailwayHealthCheck/1.0" }),
+      health
+    ),
+    null
+  );
+  assert.equal(
+    httpsRedirectFor(
+      req({ host: "openpaywall.app", "x-forwarded-proto": "http", "user-agent": "RailwayHealthCheck/1.0" }),
+      new URL("http://openpaywall.app/")
+    ),
+    null
+  );
+  assert.equal(
+    httpsRedirectFor(req({ host: "openpaywall.app" }), new URL("http://openpaywall.app/write")),
+    null
+  );
+  assert.equal(
+    httpsRedirectFor(
+      req({ host: "openpaywall.app", "x-forwarded-proto": "https" }),
+      new URL("https://openpaywall.app/write")
+    ),
+    null
+  );
+  assert.deepEqual(
+    httpsRedirectFor(
+      req({ host: "openpaywall.app", "x-forwarded-proto": "http" }),
+      new URL("http://openpaywall.app/write?x=1")
+    ),
+    { status: 301, location: "https://openpaywall.app/write?x=1" }
+  );
+  assert.equal(
+    httpsRedirectFor(
+      req({ host: "openpaywall.app", "x-forwarded-proto": "https, http" }),
+      new URL("https://openpaywall.app/")
+    ),
+    null
+  );
+  assert.deepEqual(
+    httpsRedirectFor(
+      req({ host: "evil.example", "x-forwarded-proto": "http" }, "POST"),
+      new URL("http://evil.example/api/subscriptions/stripe/checkout")
+    ),
+    null
+  );
+  assert.equal(isHttpsRedirectHost("evil.example"), false);
+  assert.equal(isHttpsRedirectHost("preview.up.railway.app"), true);
+  assert.equal(isHttpsRedirectHost("healthcheck.railway.app"), false);
+  const post = httpsRedirectFor(
+    req({ host: "127.0.0.1:8080", "x-forwarded-proto": "http" }, "POST"),
+    new URL("http://127.0.0.1:8080/api/stripe/create-intent")
+  );
+  assert.equal(post?.status, 308);
+  assert.equal(post?.location, "https://127.0.0.1:8080/api/stripe/create-intent");
 });
