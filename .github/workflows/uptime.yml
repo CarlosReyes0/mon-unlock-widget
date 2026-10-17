@@ -1,0 +1,86 @@
+# Scheduled read-only checks for https://openpaywall.app.
+#
+# Every 15 minutes: homepage, public feed, one article page (CSP included),
+# agent health, and the gas-relayer MON balance. A check is tried 3 times
+# before it counts as a failure. Failure opens or updates one GitHub issue
+# labeled prod-alert. The next passing run closes that issue.
+#
+# Carlos — add these in GitHub → Settings → Secrets and variables → Actions.
+# The workflow skips the balance check when the address is absent. It never
+# creates production data.
+#
+#   Variable or secret RELAYER_ADDRESS
+#     The relayer wallet (0x + 40 hex chars). A variable is enough; the
+#     address is already public at GET /api/relay/health. Do not commit it.
+#   Variable RELAYER_LOW_BALANCE_WEI   (optional)
+#     Alert below this many wei. Default 1000000000000000000 (1 MON), same
+#     as RELAYER_LOW_BALANCE_WEI in server/relay-gas.mjs.
+#   Variable MONAD_RPC_URL              (optional)
+#     Default https://rpc.monad.xyz. Read-only eth_getBalance.
+#
+# Pull requests run the unit tests only. The schedule runs from main after merge.
+name: uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime-${{ github.workflow }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    if: github.event_name == 'pull_request'
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Uptime and alert unit tests
+        run: node --test scripts/uptime-check.test.mjs scripts/prod-alert.test.mjs
+
+  check:
+    if: github.event_name != 'pull_request'
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Read-only production checks
+        id: probe
+        env:
+          UPTIME_BASE_URL: https://openpaywall.app
+          RELAYER_ADDRESS: ${{ vars.RELAYER_ADDRESS || secrets.RELAYER_ADDRESS }}
+          RELAYER_LOW_BALANCE_WEI: ${{ vars.RELAYER_LOW_BALANCE_WEI }}
+          MONAD_RPC_URL: ${{ vars.MONAD_RPC_URL || 'https://rpc.monad.xyz' }}
+          UPTIME_ATTEMPTS: "3"
+          UPTIME_RETRY_MS: "5000"
+          UPTIME_REPORT_PATH: /tmp/uptime-report.md
+        run: node scripts/uptime-check.mjs
+      - name: Open or update the prod-alert issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/prod-alert.mjs --key uptime --failing true --title "[prod-alert] openpaywall.app uptime" --body-file /tmp/uptime-report.md
+      - name: Close the prod-alert issue after recovery
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/prod-alert.mjs --key uptime --failing false --title "[prod-alert] openpaywall.app uptime" --body "Checks passed."
