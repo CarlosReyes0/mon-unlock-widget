@@ -1,0 +1,57 @@
+# Pull requests that add or edit supabase/migrations are compared to
+# production when secret SUPABASE_ACCESS_TOKEN is set.
+#
+# GET https://api.supabase.com/v1/projects/{ref}/database/migrations
+# Match by schema_migrations.name (filename stem or the slug after the
+# leading number). Do not match the filename timestamp: apply_migration
+# stores its own version. See scripts/migration-guard.mjs.
+#
+# Without SUPABASE_ACCESS_TOKEN the job stays green and posts a checklist
+# comment: apply the migrations before merging.
+#
+#   Secret   SUPABASE_ACCESS_TOKEN   personal access token, database read
+#   Variable SUPABASE_PROJECT_REF    optional, default flczjqljgntmkanipugo
+#
+# The job never calls apply_migration and never runs SQL.
+name: migration-guard
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: migration-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Unit tests
+        run: node --test scripts/migration-guard.test.mjs
+      - name: Fetch the base branch
+        run: git fetch --no-tags origin ${{ github.base_ref }}
+      - name: Compare migrations to production
+        id: guard
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'flczjqljgntmkanipugo' }}
+        run: node scripts/migration-guard.mjs --base origin/${{ github.base_ref }} --comment-file /tmp/migration-guard-comment.md
+      - name: Post or update the checklist
+        if: always() && (steps.guard.outcome == 'success' || steps.guard.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/migration-guard.mjs --post-comment /tmp/migration-guard-comment.md
