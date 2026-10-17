@@ -7,7 +7,7 @@
 // Same publisher may update their row; a different publisher gets 409 slug_taken.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifyMessage } from 'https://esm.sh/viem@2';
+import { verifyMessage } from 'https://esm.sh/viem@2.53.1';
 import {
   parseArticlePriceCents,
   usdcAtomicForCents,

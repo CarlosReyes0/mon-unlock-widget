@@ -992,6 +992,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
         publisher: parsed.publisher,
         monthlyPriceCents: parsed.monthlyPriceCents,
         allowALaCarte: parsed.allowALaCarte,
+        issuedAt: parsed.issuedAt,
         planSig: parsed.planSig,
       });
       return sendJson(res, 200, { plan });
@@ -1009,6 +1010,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
         articleId: parsed.articleId,
         publisher: parsed.publisher,
         allowALaCarte: parsed.allowALaCarte,
+        issuedAt: parsed.issuedAt,
         aLaCarteSig: parsed.aLaCarteSig,
       });
       return sendJson(res, 200, result);

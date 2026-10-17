@@ -21,8 +21,9 @@ import {
   supabaseConfigured,
 } from "./stripe.mjs";
 import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
+import { sha256Hex } from "./follow-core.mjs";
 import {
-  assertPublisherSignature,
+  assertWriterMutationSignature,
   buildALaCarteAuthMessage,
   buildPlanAuthMessage,
 } from "./writer-mutation-auth.mjs";
@@ -150,10 +151,37 @@ export async function getWriterPlan(publisherRaw) {
 }
 
 /**
+ * Insert sha256(signature) before the plan or à-la-carte write. A unique
+ * conflict is a replay. Any other store failure refuses the write.
+ * @param {{ signature: unknown, wallet: string, purpose: string }} input
+ */
+async function claimWriterSignature(input) {
+  const signature = typeof input.signature === "string" ? input.signature.trim() : "";
+  try {
+    await supabase("used_signatures", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: [
+        {
+          sig_hash: sha256Hex(signature),
+          wallet: input.wallet,
+          purpose: input.purpose,
+        },
+      ],
+    });
+  } catch (e) {
+    if (isUniqueViolation(e) || e?.status === 409) throw httpError("replayed_signature", 401);
+    if (e?.status === 503) throw e;
+    throw httpError("signature_store_unavailable", 503);
+  }
+}
+
+/**
  * @param {{
  *   publisher: string,
  *   monthlyPriceCents?: number,
  *   allowALaCarte?: boolean,
+ *   issuedAt?: string,
  *   planSig?: string,
  * }} input
  */
@@ -165,8 +193,19 @@ export async function upsertWriterPlan(input) {
     publisher,
     monthlyPriceCents: input.monthlyPriceCents,
     allowALaCarte: input.allowALaCarte,
+    issuedAt: input.issuedAt,
   });
-  await assertPublisherSignature(publisher, message, input.planSig);
+  await assertWriterMutationSignature({
+    publisher,
+    message,
+    signature: input.planSig,
+    issuedAt: input.issuedAt,
+  });
+  await claimWriterSignature({
+    signature: input.planSig,
+    wallet: publisher,
+    purpose: "plan",
+  });
   const cents = normalizeMonthlyCents(input.monthlyPriceCents);
   const allowALaCarte = input.allowALaCarte !== false;
   const rows = await supabase("writer_plans?on_conflict=publisher", {
@@ -736,7 +775,7 @@ export async function lapseExpiredCryptoSubscriptions({ now = new Date() } = {})
   return { lapsed: list.length };
 }
 
-export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, aLaCarteSig }) {
+export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, issuedAt, aLaCarteSig }) {
   const writer = normalizeAddress(publisher);
   const slug = String(articleId || "").trim();
   if (!writer) throw httpError("invalid_publisher");
@@ -748,8 +787,14 @@ export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, 
     articleId: slug,
     publisher: writer,
     allowALaCarte,
+    issuedAt,
   });
-  await assertPublisherSignature(writer, message, aLaCarteSig);
+  await assertWriterMutationSignature({
+    publisher: writer,
+    message,
+    signature: aLaCarteSig,
+    issuedAt,
+  });
 
   const found = await supabase(
     `articles?select=article_id,publisher&article_id=eq.${encodeURIComponent(slug)}&limit=1`
@@ -757,6 +802,12 @@ export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, 
   const existing = Array.isArray(found) ? found[0] : null;
   if (!existing) throw httpError("article_not_found", 404);
   if (normalizeAddress(existing.publisher) !== writer) throw httpError("forbidden", 403);
+
+  await claimWriterSignature({
+    signature: aLaCarteSig,
+    wallet: writer,
+    purpose: "a-la-carte",
+  });
 
   const rows = await supabase(
     `articles?article_id=eq.${encodeURIComponent(slug)}&publisher=eq.${encodeURIComponent(writer)}`,

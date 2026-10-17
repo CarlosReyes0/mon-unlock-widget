@@ -276,10 +276,12 @@ export function PublisherApp() {
     const cents = Math.round(Number(priceDollars) * 100);
     const allowALaCarte = allowBuy;
     try {
+      const issuedAt = new Date().toISOString();
       const message = buildPlanAuthMessage({
         publisher,
         monthlyPriceCents: cents,
         allowALaCarte,
+        issuedAt,
       });
       const account = publisher as Address;
       const walletClient = createWalletClient({
@@ -295,6 +297,7 @@ export function PublisherApp() {
           publisher,
           monthlyPriceCents: cents,
           allowALaCarte,
+          issuedAt,
           planSig,
         }),
       });

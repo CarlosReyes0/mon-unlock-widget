@@ -3,15 +3,17 @@
  *
  * Same EIP-191 pattern as update-listing ("Open Paywall listing v1") and
  * register-article ("Open Paywall publish v1"): a fixed prefix plus the fields
- * being changed. Plan and à la carte do not use a timestamp. A signature
- * authorizes only that exact payload, so it cannot be replayed onto a
- * different writer, article, price, or flag. Submitting the same payload
- * again is idempotent.
+ * being changed. A signature authorizes only that exact payload, so it cannot
+ * be replayed onto a different writer, article, price, or flag.
  *
- * Connect onboarding ("Open Paywall connect v1") adds issuedAt and reuses the
- * follower signature replay window (follow-core issuedAtFresh, 10 minutes).
- * Every failed check is 401. The shared helper's 403 for a wrong wallet is
- * mapped to 401 so a bad proof never continues into Stripe.
+ * Plan, à la carte, and Connect ("Open Paywall connect v1") include issuedAt
+ * and reuse the follower signature window (follow-core issuedAtFresh, 10
+ * minutes). A stale issuedAt is 401 stale_signature. Replay protection for
+ * plan and à la carte is the used_signatures row inserted by subscriptions.mjs
+ * before the write (unique conflict is 401 replayed_signature; a store
+ * failure is 503). Connect maps every failed check, including a wrong wallet,
+ * to 401. Plan and à la carte keep 403 for a readable signature from a
+ * different wallet.
  *
  * Keep buildPlanAuthMessage / buildALaCarteAuthMessage / buildConnectAuthMessage
  * identical to src/core/publish-auth.ts. The Railway image does not include
@@ -37,7 +39,7 @@ function listFlag(value) {
 }
 
 /**
- * @param {{ publisher: unknown, monthlyPriceCents: unknown, allowALaCarte?: unknown }} input
+ * @param {{ publisher: unknown, monthlyPriceCents: unknown, allowALaCarte?: unknown, issuedAt: unknown }} input
  */
 export function buildPlanAuthMessage(input) {
   return [
@@ -45,11 +47,12 @@ export function buildPlanAuthMessage(input) {
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `monthlyPriceCents:${asText(input.monthlyPriceCents).trim()}`,
     `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }
 
 /**
- * @param {{ articleId: unknown, publisher: unknown, allowALaCarte?: unknown }} input
+ * @param {{ articleId: unknown, publisher: unknown, allowALaCarte?: unknown, issuedAt: unknown }} input
  */
 export function buildALaCarteAuthMessage(input) {
   return [
@@ -57,6 +60,7 @@ export function buildALaCarteAuthMessage(input) {
     `article:${asText(input.articleId).trim()}`,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }
 
@@ -105,6 +109,21 @@ export async function assertPublisherSignature(publisher, message, signature) {
   if (String(recovered || "").toLowerCase() !== String(publisher || "").toLowerCase()) {
     throw httpError("forbidden", 403);
   }
+}
+
+/**
+ * Plan and à-la-carte proof. Missing signature is 401 unauthorized. A stale
+ * or future issuedAt is 401 stale_signature. A bad signature is 401. A
+ * different wallet is 403. Replay is not decided here: subscriptions.mjs
+ * inserts sha256(signature) into used_signatures before the write.
+ * @param {{ publisher: string, message: string, signature: unknown, issuedAt: unknown }} input
+ * @param {number} [now]
+ */
+export async function assertWriterMutationSignature(input, now = Date.now()) {
+  const signature = typeof input?.signature === "string" ? input.signature.trim() : "";
+  if (!signature) throw httpError("unauthorized", 401);
+  if (!issuedAtFresh(input?.issuedAt, now)) throw httpError("stale_signature", 401);
+  await assertPublisherSignature(input.publisher, input.message, signature);
 }
 
 /**
