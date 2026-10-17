@@ -54,6 +54,7 @@ COPY --from=builder /app/writer.html ./writer.html
 COPY --from=builder /app/follow-confirm.html ./follow-confirm.html
 COPY --from=builder /app/privacy.html ./privacy.html
 COPY --from=builder /app/admin-listings.html ./admin-listings.html
+COPY --from=builder /app/admin-usage.html ./admin-usage.html
 COPY --from=builder /app/embed-example.html ./embed-example.html
 COPY --from=builder /app/register.html ./register.html
 COPY --from=builder /app/agents.html ./agents.html
