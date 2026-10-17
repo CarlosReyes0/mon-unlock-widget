@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFundWallet, usePrivy, useWallets } from "@privy-io/react-auth";
-import { createPublicClient, formatEther, http, parseEther, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, formatEther, http, parseEther, type Address } from "viem";
 import { monad } from "viem/chains";
 import {
   CHECKOUT_MESSAGE_SOURCE,
@@ -12,6 +12,7 @@ import { monadMainnet } from "../core/chains.js";
 import { normalizePaymentAsset, type PaymentAsset } from "../core/payment-asset.js";
 import { ArticleNftMint } from "../publisher/ArticleNftMint.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
+import { gasDripFallbackCopy } from "../core/gas-drip.js";
 import {
   cardFundUsdcConfig,
   openCardBuy,
@@ -43,6 +44,8 @@ type Props = {
   onCloseWith: (message: CheckoutMessage) => void;
   /** Notify the article without closing — used so readers can mint a receipt first. */
   onUnlocked?: (message: CheckoutMessage) => void;
+  /** 429/503 from the gas drip. Parent should show card checkout. */
+  onGasFallback?: (status: number) => void;
   disabled?: boolean;
 };
 
@@ -56,6 +59,7 @@ export function CryptoPaySection({
   paymentAsset: paymentAssetProp = "mon",
   onCloseWith,
   onUnlocked,
+  onGasFallback,
   disabled = false,
 }: Props) {
   const settleUsdc = normalizePaymentAsset(paymentAssetProp) === "usdc";
@@ -73,6 +77,17 @@ export function CryptoPaySection({
 
   const embedded = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
   const address = embedded?.address ?? null;
+
+  const signGasMessage = async (message: string) => {
+    if (!embedded || !address) throw new Error("Sign in to add gas.");
+    const provider = await embedded.getEthereumProvider();
+    const walletClient = createWalletClient({
+      account: address as Address,
+      chain: monad,
+      transport: custom(provider),
+    });
+    return walletClient.signMessage({ account: address as Address, message });
+  };
 
   const priceUnits = settleUsdc ? parseUsdAmount(price) : parseMonAmount(price);
   const priceLabel = settleUsdc ? formatUsd(priceUnits) : formatMon(priceUnits);
@@ -100,6 +115,12 @@ export function CryptoPaySection({
     if (authenticated && address) void refreshBalances();
   }, [authenticated, address, refreshBalances]);
 
+  const reportGasFallback = (status: number) => {
+    onGasFallback?.(status);
+    setError(gasDripFallbackCopy(status));
+    setPhase("ready");
+  };
+
   const ensureGasMon = async (): Promise<boolean> => {
     if (!address) return false;
     const { mon } = await refreshBalances();
@@ -109,8 +130,12 @@ export function CryptoPaySection({
 
     // Same RELAYER_PRIVATE_KEY as writer registration. Do not open Coinbase for MON —
     // that is what showed "Buy Monad" on Pay with USDC.
-    const dripped = await requestGasDrip(address);
-    if (dripped) {
+    const drip = await requestGasDrip(address, signGasMessage, articleId);
+    if (drip.fallback) {
+      reportGasFallback(drip.status);
+      return false;
+    }
+    if (drip.ok) {
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 1500));
         const { mon: m } = await refreshBalances();
@@ -195,7 +220,11 @@ export function CryptoPaySection({
 
     if (usdc < usdcNeeded) {
       setPhase("funding");
-      void requestGasDrip(address);
+      const drip = await requestGasDrip(address, signGasMessage, articleId);
+      if (drip.fallback) {
+        reportGasFallback(drip.status);
+        return false;
+      }
       const amount = formatUsdc(usdcNeeded);
       const viaCoinbase = await openCardBuy(address, "USDC", amount);
       if (!viaCoinbase) {
@@ -337,8 +366,13 @@ export function CryptoPaySection({
       let { usdc } = await refreshBalances();
       if (usdc < priceUnits) {
         setPhase("funding");
-        // Drip gas in the background so Coinbase opens on USDC, not Monad.
-        void requestGasDrip(address);
+        // Drip gas before Coinbase so a cap or outage can switch to card
+        // instead of leaving the reader on a USDC buy that still needs MON.
+        const drip = await requestGasDrip(address, signGasMessage, articleId);
+        if (drip.fallback) {
+          reportGasFallback(drip.status);
+          return;
+        }
         const amount = formatUsd(priceUnits);
         const viaCoinbase = await openCardBuy(address, "USDC", amount);
         if (!viaCoinbase) {

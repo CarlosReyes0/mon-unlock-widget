@@ -16,6 +16,7 @@
  * different wallet.
  *
  * Keep buildPlanAuthMessage / buildALaCarteAuthMessage / buildConnectAuthMessage
+ * / buildGasAuthMessage / buildMediaAuthMessage / buildVoiceAuthMessage
  * identical to src/core/publish-auth.ts. The Railway image does not include
  * src/, and CI smoke starts the server before tsc, so this copy has to live
  * in server/.
@@ -26,6 +27,9 @@ import { issuedAtFresh } from "./follow-core.mjs";
 export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
 export const A_LA_CARTE_AUTH_PREFIX = "Open Paywall a-la-carte v1";
 export const CONNECT_AUTH_PREFIX = "Open Paywall connect v1";
+export const GAS_AUTH_PREFIX = "Open Paywall gas v1";
+export const MEDIA_AUTH_PREFIX = "Open Paywall media v1";
+export const VOICE_AUTH_PREFIX = "Open Paywall voice v1";
 
 function asText(value) {
   if (value == null) return "";
@@ -140,6 +144,59 @@ export async function assertConnectOnboardingAuth(input, now = Date.now()) {
   const message = buildConnectAuthMessage({ publisher, issuedAt });
   try {
     await assertPublisherSignature(publisher, message, input?.connectSig);
+  } catch {
+    throw httpError("unauthorized", 401);
+  }
+}
+
+/**
+ * Unlock-attempt proof. Line order matches src/core/publish-auth.ts.
+ * @param {{ articleId: unknown, address: unknown, issuedAt: unknown }} input
+ */
+export function buildGasAuthMessage(input) {
+  return [
+    GAS_AUTH_PREFIX,
+    `article:${asText(input.articleId).trim()}`,
+    `address:${asText(input.address).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
+
+/**
+ * @param {{ address: unknown, issuedAt: unknown }} input
+ */
+export function buildMediaAuthMessage(input) {
+  return [
+    MEDIA_AUTH_PREFIX,
+    `address:${asText(input.address).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
+
+/**
+ * @param {{ address: unknown, issuedAt: unknown }} input
+ */
+export function buildVoiceAuthMessage(input) {
+  return [
+    VOICE_AUTH_PREFIX,
+    `address:${asText(input.address).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
+
+/**
+ * EIP-191 proof with the same 10-minute issuedAt window as Connect onboarding.
+ * Missing, stale, unreadable, and wrong-wallet signatures are all 401.
+ * @param {{ address: unknown, issuedAt: unknown, signature: unknown, message: string }} input
+ * @param {number} [now]
+ */
+export async function assertRecentWalletSignature(input, now = Date.now()) {
+  const wallet = asText(input?.address).trim().toLowerCase();
+  const issuedAt = asText(input?.issuedAt).trim();
+  if (!/^0x[a-f0-9]{40}$/.test(wallet)) throw httpError("unauthorized", 401);
+  if (!issuedAtFresh(issuedAt, now)) throw httpError("unauthorized", 401);
+  try {
+    await assertPublisherSignature(wallet, input.message, input?.signature);
   } catch {
     throw httpError("unauthorized", 401);
   }

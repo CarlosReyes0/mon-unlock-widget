@@ -39,6 +39,9 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         "import.meta.env.VITE_PRIVY_APP_ID": JSON.stringify(env.VITE_PRIVY_APP_ID || ""),
+        "import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY": JSON.stringify(
+          env.VITE_STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || ""
+        ),
         "import.meta.env.VITE_RAMP_HOST_API_KEY": JSON.stringify(env.VITE_RAMP_HOST_API_KEY || ""),
       },
       build: {

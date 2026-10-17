@@ -1,5 +1,7 @@
 import type { FundWalletConfig } from "@privy-io/react-auth";
 import { monad } from "viem/chains";
+import { gasDripNeedsCardFallback } from "../core/gas-drip.js";
+import { buildGasAuthMessage } from "../core/publish-auth.js";
 
 const RAMP_HOST_API_KEY = (import.meta.env.VITE_RAMP_HOST_API_KEY as string | undefined)?.trim() ?? "";
 
@@ -135,23 +137,49 @@ export async function openCardBuy(
   return opened ? "coinbase" : null;
 }
 
+export type GasDripResult = {
+  ok: boolean;
+  status: number;
+  /** 429/503: stop waiting and show the card path. */
+  fallback: boolean;
+};
+
 /**
  * Same relayer as article registration: send ~0.05 MON so the reader can pay
- * approve/unlock gas. Coinbase is not used for this.
- * Returns true when funded, a drip was submitted, or rate-limited (in flight).
+ * approve/unlock gas. The signature is an unlock attempt for this article.
+ * Coinbase is not used for this. A cap (429) or outage (503) is fallback.
  */
-export async function requestGasDrip(address: string): Promise<boolean> {
+export async function requestGasDrip(
+  address: string,
+  signMessage?: (message: string) => Promise<string>,
+  articleId?: string
+): Promise<GasDripResult> {
+  const issuedAt = new Date().toISOString();
+  const id = String(articleId || "").trim();
+  if (!signMessage || !id) return { ok: false, status: 401, fallback: false };
+  let signature = "";
+  try {
+    signature = await signMessage(buildGasAuthMessage({ address, articleId: id, issuedAt }));
+  } catch {
+    return { ok: false, status: 401, fallback: false };
+  }
   try {
     const res = await fetch("/api/relay/gas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address }),
+      credentials: "same-origin",
+      body: JSON.stringify({ address, articleId: id, issuedAt, signature }),
     });
-    if (res.status === 429) return true;
-    if (!res.ok) return false;
-    const data = (await res.json()) as { ok?: boolean };
-    return data.ok === true;
+    let data: { ok?: boolean; fallback?: boolean } = {};
+    try {
+      data = (await res.json()) as { ok?: boolean; fallback?: boolean };
+    } catch {
+      data = {};
+    }
+    const fallback = data.fallback === true || gasDripNeedsCardFallback(res.status);
+    if (!res.ok) return { ok: false, status: res.status, fallback };
+    return { ok: data.ok === true, status: res.status, fallback: false };
   } catch {
-    return false;
+    return { ok: false, status: 503, fallback: true };
   }
 }

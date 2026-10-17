@@ -6,9 +6,9 @@
  * Supabase Edge Functions import this TypeScript source.
  * Message text is the signed payload — do not reorder lines.
  *
- * Plan, à la carte, and Connect onboarding messages are mirrored in
- * server/writer-mutation-auth.mjs (the Railway server cannot import this
- * TypeScript). Keep both copies identical, including the issuedAt line.
+ * Plan, à la carte, Connect onboarding, gas, media, and voice-draft messages
+ * are mirrored in server/writer-mutation-auth.mjs (the Railway server cannot
+ * import this TypeScript). Keep both copies identical, including the issuedAt line.
  */
 
 export const PUBLISH_AUTH_PREFIX = "Open Paywall publish v1";
@@ -16,6 +16,9 @@ export const LISTING_AUTH_PREFIX = "Open Paywall listing v1";
 export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
 export const A_LA_CARTE_AUTH_PREFIX = "Open Paywall a-la-carte v1";
 export const CONNECT_AUTH_PREFIX = "Open Paywall connect v1";
+export const GAS_AUTH_PREFIX = "Open Paywall gas v1";
+export const MEDIA_AUTH_PREFIX = "Open Paywall media v1";
+export const VOICE_AUTH_PREFIX = "Open Paywall voice v1";
 export const FOLLOWER_AUTH_PREFIX = "Open Paywall follower v1";
 export const FOLLOWERS_EXPORT_AUTH_PREFIX = "Open Paywall followers export v1";
 export const MONAD_CHAIN_ID = 143;
@@ -278,6 +281,46 @@ export function buildConnectAuthMessage(input: ConnectAuthFields): string {
   return [
     CONNECT_AUTH_PREFIX,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
+
+export type RecentWalletAuthFields = {
+  address: unknown;
+  issuedAt: unknown;
+};
+
+export type GasAuthFields = RecentWalletAuthFields & {
+  articleId: unknown;
+};
+
+/**
+ * Unlock-attempt proof for a gas drip. Binds one article, the reader address,
+ * and issuedAt. A registration or session signature is a different message.
+ */
+export function buildGasAuthMessage(input: GasAuthFields): string {
+  return [
+    GAS_AUTH_PREFIX,
+    `article:${asText(input.articleId).trim()}`,
+    `address:${asText(input.address).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
+
+/** Writer proof for POST /api/media. Do not reorder lines. */
+export function buildMediaAuthMessage(input: RecentWalletAuthFields): string {
+  return [
+    MEDIA_AUTH_PREFIX,
+    `address:${asText(input.address).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
+  ].join("\n");
+}
+
+/** Writer proof for POST /api/voice-drafts. Do not reorder lines. */
+export function buildVoiceAuthMessage(input: RecentWalletAuthFields): string {
+  return [
+    VOICE_AUTH_PREFIX,
+    `address:${asText(input.address).trim().toLowerCase()}`,
     `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }

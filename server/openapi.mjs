@@ -477,7 +477,7 @@ export function buildOpenApiDocument() {
           operationId: "voiceDraftGenerate",
           summary: "Draft 2–3 social posts in the writer's voice (never posts)",
           description:
-            "Returns editable draft cards from voice samples + the current article. LLM errors are HTTP 200 { ok: false }. Autopost / X write API is out of scope.",
+            "Requires a reader session or a fresh writer signature. Missing auth is HTTP 401 before the visibility flag is checked. Over the daily cap is HTTP 429. If the persistent counter cannot be updated, the route is HTTP 503 and does not call the model. LLM errors are HTTP 200 { ok: false }. Autopost / X write API is out of scope.",
           security: [],
           requestBody: {
             required: true,

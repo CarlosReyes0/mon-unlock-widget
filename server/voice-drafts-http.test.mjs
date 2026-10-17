@@ -9,12 +9,34 @@ import { once } from "node:events";
 import { test, after } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { privateKeyToAccount } from "viem/accounts";
+import { startMockRateLimitDb } from "./rate-limit-mock.mjs";
+import { buildVoiceAuthMessage } from "./writer-mutation-auth.mjs";
+
+const WRITER_KEY = "0xac0974bec39a17e36ba4a6b4d4aad435cce0e4c9335790421507b8a191e28881";
+const CAP_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const RESTART_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
+const writer = privateKeyToAccount(WRITER_KEY);
+const capWriter = privateKeyToAccount(CAP_KEY);
+const restartWriter = privateKeyToAccount(RESTART_KEY);
+
+async function signedDraftAs(account, extra = {}) {
+  const issuedAt = new Date().toISOString();
+  const message = buildVoiceAuthMessage({ address: account.address, issuedAt });
+  const signature = await account.signMessage({ message });
+  return { address: account.address, issuedAt, signature, ...extra };
+}
+
+async function signedDraft(extra = {}) {
+  return signedDraftAs(writer, extra);
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const APP_PORT = 18820;
 const OFF_PORT = 18822;
 const HIDDEN_PORT = 18823;
+const CAP_PORT = 18824;
 const MOCK_PORT = 18821;
 
 const seen = [];
@@ -64,13 +86,18 @@ const mock = http.createServer(async (req, res) => {
 });
 
 await new Promise((resolve) => mock.listen(MOCK_PORT, "127.0.0.1", resolve));
+const rateDb = await startMockRateLimitDb();
+const downDb = await startMockRateLimitDb();
+downDb.setFail(true);
 
 function spawnApp(port, extraEnv = {}) {
-  return spawn(process.execPath, ["server/index.mjs"], {
+  const child = spawn(process.execPath, ["server/index.mjs"], {
     cwd: ROOT,
     env: {
       ...process.env,
       PORT: String(port),
+      SUPABASE_URL: rateDb.url,
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
       VOICE_DRAFTS_VISIBLE: "true",
       VOICE_DRAFT_API_KEY: "sk-test-voice",
       VOICE_DRAFT_BASE_URL: `http://127.0.0.1:${MOCK_PORT}/v1`,
@@ -88,20 +115,26 @@ function spawnApp(port, extraEnv = {}) {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  children.push(child);
+  return child;
 }
 
-const app = spawnApp(APP_PORT);
+const children = [];
+
+const app = spawnApp(APP_PORT, { VOICE_DRAFT_DAILY_LIMIT: "20" });
 const off = spawnApp(OFF_PORT, { VOICE_DRAFT_API_KEY: "", OPENAI_API_KEY: "", ANTHROPIC_API_KEY: "" });
 const hidden = spawnApp(HIDDEN_PORT, { VOICE_DRAFTS_VISIBLE: "" });
+const capped = spawnApp(CAP_PORT, { VOICE_DRAFT_DAILY_LIMIT: "1" });
 await once(app.stdout, "data");
 await once(off.stdout, "data");
 await once(hidden.stdout, "data");
+await once(capped.stdout, "data");
 
 after(() => {
-  app.kill("SIGTERM");
-  off.kill("SIGTERM");
-  hidden.kill("SIGTERM");
+  for (const child of children) child.kill("SIGTERM");
   mock.close();
+  rateDb.server.close();
+  downDb.server.close();
 });
 
 const origin = `http://127.0.0.1:${APP_PORT}`;
@@ -133,12 +166,14 @@ test("POST /api/voice-drafts returns 2–3 drafts from the mocked LLM", async ()
   const res = await fetch(`${origin}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      samples: ["Walking home in the rain. That's the post."],
-      notes: "Dry. Short.",
-      title: "July rain walk",
-      body: "Walking home in the rain.\n---\nPaid rest.",
-    }),
+    body: JSON.stringify(
+      await signedDraft({
+        samples: ["Walking home in the rain. That's the post."],
+        notes: "Dry. Short.",
+        title: "July rain walk",
+        body: "Walking home in the rain.\n---\nPaid rest.",
+      })
+    ),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -159,7 +194,7 @@ test("POST /api/voice-drafts fail-softs when the LLM errors", async () => {
   const res = await fetch(`${origin}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ samples: ["sample"], title: "Hi" }),
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -169,7 +204,7 @@ test("POST /api/voice-drafts fail-softs when the LLM errors", async () => {
   mockMode = "ok";
 });
 
-test("hidden voice drafts do not call the model", async () => {
+test("hidden voice drafts still require auth before the flag", async () => {
   const before = seen.length;
   const status = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts/status`);
   const statusBody = await status.json();
@@ -177,10 +212,20 @@ test("hidden voice drafts do not call the model", async () => {
   assert.equal(statusBody.enabled, false);
   assert.equal(statusBody.provider, null);
 
-  const res = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts`, {
+  const unsigned = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ samples: ["sample"], title: "Hi" }),
+  });
+  assert.equal(unsigned.status, 401);
+  const denied = await unsigned.json();
+  assert.equal(denied.code, "unauthorized");
+  assert.equal(seen.length, before);
+
+  const res = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -191,16 +236,89 @@ test("hidden voice drafts do not call the model", async () => {
 });
 
 test("POST /api/voice-drafts without a key is HTTP 200 missing_api_key", async () => {
-  const res = await fetch(`${offOrigin}/api/voice-drafts`, {
+  const unsigned = await fetch(`${offOrigin}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ samples: ["sample"], title: "Hi" }),
+  });
+  assert.equal(unsigned.status, 401);
+  const res = await fetch(`${offOrigin}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.ok, false);
   assert.equal(body.code, "missing_api_key");
   assert.equal(body.autopost, false);
+});
+
+test("POST /api/voice-drafts returns 429 over the daily cap", async () => {
+  const first = await fetch(`http://127.0.0.1:${CAP_PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraftAs(capWriter, { samples: ["sample"], title: "Hi" })),
+  });
+  assert.equal(first.status, 200);
+  const second = await fetch(`http://127.0.0.1:${CAP_PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      await signedDraftAs(capWriter, { samples: ["sample"], title: "cap-second-should-not-call" })
+    ),
+  });
+  assert.equal(second.status, 429);
+  const body = await second.json();
+  assert.equal(body.code, "rate_limited");
+  assert.equal(body.autopost, false);
+  assert.equal(seen.filter((entry) => entry.body.includes("cap-second-should-not-call")).length, 0);
+});
+
+test("voice daily cap holds after a new process uses the same database", async () => {
+  const marker = "restart-second-should-not-call";
+  const first = spawnApp(18840, { VOICE_DRAFT_DAILY_LIMIT: "1" });
+  await once(first.stdout, "data");
+  const ok = await fetch("http://127.0.0.1:18840/api/voice-drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraftAs(restartWriter, { samples: ["sample"], title: "First life" })),
+  });
+  assert.equal(ok.status, 200);
+  first.kill("SIGTERM");
+  await once(first, "exit");
+
+  const second = spawnApp(18841, { VOICE_DRAFT_DAILY_LIMIT: "1" });
+  await once(second.stdout, "data");
+  const limited = await fetch("http://127.0.0.1:18841/api/voice-drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraftAs(restartWriter, { samples: ["sample"], title: marker })),
+  });
+  assert.equal(limited.status, 429);
+  const body = await limited.json();
+  assert.equal(body.code, "rate_limited");
+  assert.equal(seen.filter((entry) => entry.body.includes(marker)).length, 0);
+  second.kill("SIGTERM");
+  await once(second, "exit");
+});
+
+test("POST /api/voice-drafts returns 503 and skips the model when the database errors", async () => {
+  const marker = "db-down-should-not-call";
+  const child = spawnApp(18842, { SUPABASE_URL: downDb.url, VOICE_DRAFT_DAILY_LIMIT: "8" });
+  await once(child.stdout, "data");
+  const res = await fetch("http://127.0.0.1:18842/api/voice-drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: marker })),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.code, "rate_limit_unavailable");
+  assert.equal(body.autopost, false);
+  assert.equal(seen.filter((entry) => entry.body.includes(marker)).length, 0);
+  child.kill("SIGTERM");
+  await once(child, "exit");
 });
 
 test("GET /api/voice-drafts/status without a key is disabled", async () => {

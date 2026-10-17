@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   identifyMedia,
   MEDIA_LIMITS,
@@ -12,13 +15,45 @@ import {
   resolveHostedMediaPath,
   storeMedia,
   tryHandleMediaRequest,
+  useDiskMediaForTests,
 } from "./media-host.mjs";
+import { startMockRateLimitDb } from "./rate-limit-mock.mjs";
+import { signReaderSessionToken } from "./reader-session.mjs";
+import { buildMediaAuthMessage } from "./writer-mutation-auth.mjs";
+
+const WRITER_KEY = "0xac0974bec39a17e36ba4a6b4d4aad435cce0e4c9335790421507b8a191e28881";
+const CAP_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const RESTART_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
+const writer = privateKeyToAccount(WRITER_KEY);
+const capWriter = privateKeyToAccount(CAP_KEY);
+const restartWriter = privateKeyToAccount(RESTART_KEY);
+process.env.READER_SESSION_SECRET = "test-reader-secret";
+
+async function headersFor(account) {
+  const issuedAt = new Date().toISOString();
+  const message = buildMediaAuthMessage({ address: account.address, issuedAt });
+  const signature = await account.signMessage({ message });
+  return {
+    "X-Writer-Address": account.address,
+    "X-Writer-Issued-At": issuedAt,
+    "X-Writer-Signature": signature,
+  };
+}
+
+async function writerHeaders() {
+  return headersFor(writer);
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MEDIA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "op-media-"));
+const rateDb = await startMockRateLimitDb();
+const restartDb = await startMockRateLimitDb();
+const downDb = await startMockRateLimitDb();
+downDb.setFail(true);
 process.env.MEDIA_DIR = MEDIA_DIR;
-process.env.SUPABASE_URL = "";
-process.env.SUPABASE_SERVICE_ROLE_KEY = "";
+process.env.SUPABASE_URL = rateDb.url;
+process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test";
+useDiskMediaForTests(MEDIA_DIR);
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -46,10 +81,44 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const address = server.address();
 const base = `http://127.0.0.1:${address.port}`;
 
+const children = [];
+
 after(() => {
   server.close();
+  rateDb.server.close();
+  restartDb.server.close();
+  downDb.server.close();
+  for (const child of children) child.kill("SIGTERM");
   fs.rmSync(MEDIA_DIR, { recursive: true, force: true });
 });
+
+function spawnMediaApp(port, extraEnv = {}) {
+  const child = spawn(process.execPath, ["server/index.mjs"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SUPABASE_URL: restartDb.url,
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+      MEDIA_UPLOAD_DAILY_LIMIT: "1",
+      MEDIA_DIR,
+      VOICE_DRAFTS_VISIBLE: "",
+      VOICE_DRAFT_API_KEY: "",
+      OPENAI_API_KEY: "",
+      ANTHROPIC_API_KEY: "",
+      CDP_API_KEY_ID: "",
+      CDP_API_KEY_SECRET: "",
+      STRIPE_SECRET_KEY: "",
+      MPP_SECRET_KEY: "",
+      MPP_TEMPO_RECIPIENT: "",
+      RELAYER_PRIVATE_KEY: "",
+      ...extraEnv,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  children.push(child);
+  return child;
+}
 
 test("sniffs photos, audio, video, and rejects HEIC and HTML", () => {
   assert.equal(identifyMedia(PNG, "image/png", "dot.png").kind, "image");
@@ -95,11 +164,23 @@ test("refuses media paths that escape the host directory", () => {
   assert.equal(located?.full, path.join(MEDIA_DIR, "2026", "09", id));
 });
 
-test("POST /api/media stores a png and serves a byte range", async () => {
+test("POST /api/media rejects an unsigned upload", async () => {
   resetMediaHostForTests();
   const res = await fetch(`${base}/api/media`, {
     method: "POST",
     headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png" },
+    body: PNG,
+  });
+  assert.equal(res.status, 401);
+  const body = await res.json();
+  assert.equal(body.error, "unauthorized");
+});
+
+test("POST /api/media stores a png and serves a byte range", async () => {
+  resetMediaHostForTests();
+  const res = await fetch(`${base}/api/media`, {
+    method: "POST",
+    headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...(await writerHeaders()) },
     body: PNG,
   });
   assert.equal(res.status, 201);
@@ -120,16 +201,79 @@ test("POST /api/media stores a png and serves a byte range", async () => {
   assert.deepEqual(Buffer.from(await range.arrayBuffer()), PNG.subarray(0, 3));
 });
 
-test("POST /api/media rejects HTML disguised as an image", async () => {
+test("POST /api/media accepts a reader session and still rejects HTML", async () => {
   resetMediaHostForTests();
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const token = signReaderSessionToken(
+    {
+      address: writer.address.toLowerCase(),
+      domain: new URL(base).host,
+      issuedAt,
+      expiresAt: issuedAt + 3600,
+    },
+    "test-reader-secret"
+  );
   const res = await fetch(`${base}/api/media`, {
     method: "POST",
-    headers: { "Content-Type": "image/jpeg", "X-Media-Name": "photo.jpg" },
+    headers: {
+      "Content-Type": "image/jpeg",
+      "X-Media-Name": "photo.jpg",
+      "X-Reader-Session": token,
+    },
     body: Buffer.from("<!DOCTYPE html><script>alert(1)</script>"),
   });
   assert.equal(res.status, 415);
   const body = await res.json();
   assert.equal(body.error, "unsupported_type");
+});
+
+test("POST /api/media returns 413 over the size cap and 429 over the upload cap", async () => {
+  resetMediaHostForTests();
+  rateDb.reset();
+  const headers = await headersFor(capWriter);
+  const tooBig = await new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: address.port,
+        path: "/api/media",
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "video/mp4",
+          "Content-Length": String(MEDIA_LIMITS.video + 1),
+        },
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") });
+        });
+      }
+    );
+    req.on("error", reject);
+    req.end(PNG);
+  });
+  assert.equal(tooBig.status, 413);
+  assert.equal(JSON.parse(tooBig.body).error, "file_too_large");
+
+  resetMediaHostForTests();
+  for (let i = 0; i < 20; i++) {
+    const ok = await fetch(`${base}/api/media`, {
+      method: "POST",
+      headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...headers },
+      body: PNG,
+    });
+    assert.equal(ok.status, 201);
+  }
+  const limited = await fetch(`${base}/api/media`, {
+    method: "POST",
+    headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...headers },
+    body: PNG,
+  });
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).error, "rate_limited");
 });
 
 test("GET /api/media/status reports disk hosting without Supabase", async () => {
@@ -159,7 +303,6 @@ test("supabase upload returns the public object URL", async () => {
     origin: "http://127.0.0.1",
     fetchImpl,
     now: Date.UTC(2026, 8, 27),
-    ip: "203.0.113.9",
   });
   assert.equal(stored.persistent, true);
   assert.match(
@@ -170,6 +313,53 @@ test("supabase upload returns the public object URL", async () => {
   assert.match(calls[0].url, /\/storage\/v1\/bucket$/);
   assert.match(calls[1].url, /\/storage\/v1\/object\/article-media\/2026\/09\//);
   assert.equal(calls[1].method, "POST");
+});
+
+test("media upload cap holds in a new process against the same database", async () => {
+  const headers = await headersFor(restartWriter);
+  const first = spawnMediaApp(18832);
+  await once(first.stdout, "data");
+  const ok = await fetch("http://127.0.0.1:18832/api/media", {
+    method: "POST",
+    headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...headers },
+    body: PNG,
+  });
+  assert.equal(ok.status, 201);
+  first.kill("SIGTERM");
+  await once(first, "exit");
+
+  const second = spawnMediaApp(18834);
+  await once(second.stdout, "data");
+  const limited = await fetch("http://127.0.0.1:18834/api/media", {
+    method: "POST",
+    headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...headers },
+    body: PNG,
+  });
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).error, "rate_limited");
+  second.kill("SIGTERM");
+  await once(second, "exit");
+});
+
+test("POST /api/media returns 503 when the rate-limit database errors", async () => {
+  const headers = await writerHeaders();
+  downDb.calls.length = 0;
+  const child = spawnMediaApp(18836, {
+    SUPABASE_URL: downDb.url,
+    MEDIA_UPLOAD_DAILY_LIMIT: "20",
+  });
+  await once(child.stdout, "data");
+  const res = await fetch("http://127.0.0.1:18836/api/media", {
+    method: "POST",
+    headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...headers },
+    body: PNG,
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "rate_limit_unavailable");
+  assert.equal(downDb.calls.some((call) => call.path.startsWith("/storage/")), false);
+  child.kill("SIGTERM");
+  await once(child, "exit");
 });
 
 test("server and vite both mount media hosting", () => {

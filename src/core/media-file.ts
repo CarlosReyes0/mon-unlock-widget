@@ -2,7 +2,10 @@
  * Client checks before POST /api/media. The server sniffs the bytes again.
  * Size numbers match server/media-host.mjs.
  */
+import { createWalletClient, custom } from "viem";
+import { monadMainnet } from "./chains.js";
 import { buildMediaSnippet, type MediaKind } from "./media-url.js";
+import { buildMediaAuthMessage } from "./publish-auth.js";
 
 export const MEDIA_LIMITS = {
   image: 8 * 1024 * 1024,
@@ -130,12 +133,39 @@ export type HostedMedia = {
   message?: string;
 };
 
+async function writerUploadHeaders(): Promise<Record<string, string>> {
+  if (typeof window === "undefined") return {};
+  const host = window as Window & {
+    __monPublisherAddress?: string;
+    __monPublisherProvider?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+  };
+  const address = String(host.__monPublisherAddress || "").trim();
+  const provider = host.__monPublisherProvider;
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address) || !provider) return {};
+  const issuedAt = new Date().toISOString();
+  const message = buildMediaAuthMessage({ address, issuedAt });
+  const wallet = createWalletClient({
+    account: address as `0x${string}`,
+    chain: monadMainnet,
+    transport: custom(provider),
+  });
+  const signature = await wallet.signMessage({ account: address as `0x${string}`, message });
+  return {
+    "X-Writer-Address": address,
+    "X-Writer-Issued-At": issuedAt,
+    "X-Writer-Signature": signature,
+  };
+}
+
 export async function uploadHostedMedia(file: Blob, contentType: string, name: string): Promise<HostedMedia> {
+  const proof = await writerUploadHeaders();
   const res = await fetch("/api/media", {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": contentType,
       "X-Media-Name": String(name || "upload").slice(0, 120),
+      ...proof,
     },
     body: file,
   });

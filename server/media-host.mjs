@@ -8,12 +8,22 @@
  * Persistent store: Supabase Storage bucket `article-media` when
  * SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set (created on first upload).
  * Otherwise files go to MEDIA_DIR (local disk; lost on a Railway restart).
+ *
+ * Each uploader may store MEDIA_UPLOAD_DAILY_LIMIT files per UTC day (default
+ * 20). The count is public.rate_limit_counters. If that call fails, the upload
+ * is HTTP 503 and the file is not saved.
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { publicOrigin } from "./article-og.mjs";
+import { takePersistentRateLimit } from "./rate-limit.mjs";
+import { resolveRequestReaderSession } from "./reader-session.mjs";
+import {
+  assertRecentWalletSignature,
+  buildMediaAuthMessage,
+} from "./writer-mutation-auth.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MEDIA_DIR = path.join(__dirname, "data", "media");
@@ -26,11 +36,8 @@ export const MEDIA_LIMITS = {
   video: 45 * 1024 * 1024,
 };
 
-const PER_IP_MAX_FILES = 20;
-const PER_IP_MAX_BYTES = 100 * 1024 * 1024;
-const GLOBAL_MAX_FILES = 40;
-const GLOBAL_MAX_BYTES = 400 * 1024 * 1024;
-const RATE_WINDOW_MS = 60 * 60 * 1000;
+const DEFAULT_MEDIA_DAILY_FILES = 20;
+const MEDIA_UPLOAD_BUCKET = "media_upload";
 
 const KINDS = {
   "image/jpeg": { kind: "image", ext: "jpg" },
@@ -65,11 +72,21 @@ const EXT_TYPE = {
   ogg: "audio/ogg",
 };
 
-const rateBuckets = new Map();
 let bucketReady = null;
+let diskOverride = "";
+
+export function mediaUploadDailyLimit(env = process.env) {
+  const n = Number(env.MEDIA_UPLOAD_DAILY_LIMIT);
+  if (Number.isFinite(n) && n >= 1) return Math.floor(n);
+  return DEFAULT_MEDIA_DAILY_FILES;
+}
+
+/** Tests keep files on disk while the rate-limit RPC uses Supabase. */
+export function useDiskMediaForTests(dir) {
+  diskOverride = String(dir || "");
+}
 
 export function resetMediaHostForTests() {
-  rateBuckets.clear();
   bucketReady = null;
 }
 
@@ -87,6 +104,7 @@ function tooLargeMessage(kind) {
 }
 
 export function mediaBackend() {
+  if (diskOverride) return { type: "disk", dir: diskOverride };
   const url = String(process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
   const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   if (url && key) return { type: "supabase", url, key };
@@ -192,35 +210,6 @@ export function identifyMedia(buf, hintedMime, filename) {
   return { contentType, kind: meta.kind, ext: meta.ext };
 }
 
-function chargeRate(ip, bytes, now) {
-  const cutoff = now - RATE_WINDOW_MS;
-  function tally(key, maxFiles, maxBytes) {
-    const prev = rateBuckets.get(key) || [];
-    const events = prev.filter((e) => e.t >= cutoff);
-    const files = events.length;
-    const used = events.reduce((sum, e) => sum + e.n, 0);
-    if (files >= maxFiles || used + bytes > maxBytes) {
-      throw mediaError(
-        "rate_limited",
-        429,
-        "Too many uploads from this network. Wait a little and try again."
-      );
-    }
-    events.push({ t: now, n: bytes });
-    rateBuckets.set(key, events);
-  }
-  tally(ip || "unknown", PER_IP_MAX_FILES, PER_IP_MAX_BYTES);
-  tally("__global__", GLOBAL_MAX_FILES, GLOBAL_MAX_BYTES);
-}
-
-function clientIp(req) {
-  const forwarded = req?.headers?.["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0].trim();
-  const real = req?.headers?.["x-real-ip"];
-  if (typeof real === "string" && real.trim()) return real.trim();
-  return req?.socket?.remoteAddress || "127.0.0.1";
-}
-
 function readBinary(req, limit) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -320,9 +309,8 @@ async function putDisk(buf, identified, backend, origin, now) {
   };
 }
 
-export async function storeMedia(buf, { hintedMime, filename, backend, origin, fetchImpl, now, ip }) {
+export async function storeMedia(buf, { hintedMime, filename, backend, origin, fetchImpl, now }) {
   const identified = identifyMedia(buf, hintedMime, filename);
-  chargeRate(ip, buf.length, now);
   const stored =
     backend.type === "supabase"
       ? await putSupabase(buf, identified, backend, fetchImpl, now)
@@ -377,15 +365,49 @@ function parseByteRange(rangeHeader, size) {
   return { start, end };
 }
 
+function headerValue(req, name) {
+  const raw = req?.headers?.[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return String(value || "").trim();
+}
+
 function sendJson(res, status, body) {
   if (res.writableEnded) return;
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, X-Media-Name",
+    "Access-Control-Allow-Headers":
+      "Content-Type, X-Media-Name, X-Writer-Address, X-Writer-Issued-At, X-Writer-Signature, X-Reader-Session",
   });
   res.end(JSON.stringify(body));
+}
+
+/**
+ * A signed-in reader session, or a writer signature inside the issuedAt window.
+ * Checked before the file is stored.
+ */
+async function authorizeMediaUpload(req) {
+  const address = headerValue(req, "x-writer-address");
+  const issuedAt = headerValue(req, "x-writer-issued-at");
+  const signature = headerValue(req, "x-writer-signature");
+  if (signature || issuedAt || address) {
+    const message = buildMediaAuthMessage({ address, issuedAt });
+    try {
+      await assertRecentWalletSignature({ address, issuedAt, signature, message });
+    } catch {
+      throw mediaError("unauthorized", 401, "Sign in to upload.");
+    }
+    return address.toLowerCase();
+  }
+  let session = null;
+  try {
+    session = resolveRequestReaderSession(req);
+  } catch {
+    throw mediaError("unauthorized", 401, "Sign in to upload.");
+  }
+  if (!session?.address) throw mediaError("unauthorized", 401, "Sign in to upload.");
+  return session.address;
 }
 
 function serveDiskFile(req, res, filePath, contentType) {
@@ -484,8 +506,21 @@ export async function tryHandleMediaRequest(req, res) {
   }
 
   if (method === "POST" && pathOnly === "/api/media") {
+    let uploader = "";
+    try {
+      uploader = await authorizeMediaUpload(req);
+    } catch (e) {
+      if (typeof req.resume === "function") req.resume();
+      sendJson(res, e?.status || 401, {
+        ok: false,
+        error: e?.message || "unauthorized",
+        message: e?.publicMessage || "Sign in to upload.",
+      });
+      return true;
+    }
     const declared = Number(req.headers?.["content-length"] || 0);
     if (declared > MEDIA_LIMITS.video) {
+      if (typeof req.resume === "function") req.resume();
       sendJson(res, 413, {
         ok: false,
         error: "file_too_large",
@@ -495,14 +530,33 @@ export async function tryHandleMediaRequest(req, res) {
     }
     try {
       const buf = await readBinary(req, MEDIA_LIMITS.video);
+      const hintedMime = req.headers?.["content-type"];
+      const filename = filenameFromReq(req);
+      identifyMedia(buf, hintedMime, filename);
+      let used = 0;
+      try {
+        used = await takePersistentRateLimit({ bucket: MEDIA_UPLOAD_BUCKET, key: uploader });
+      } catch {
+        throw mediaError(
+          "rate_limit_unavailable",
+          503,
+          "Uploads are paused. Try again in a moment."
+        );
+      }
+      if (used > mediaUploadDailyLimit()) {
+        throw mediaError(
+          "rate_limited",
+          429,
+          "Too many uploads from this account. Wait until tomorrow and try again."
+        );
+      }
       const stored = await storeMedia(buf, {
-        hintedMime: req.headers?.["content-type"],
-        filename: filenameFromReq(req),
+        hintedMime,
+        filename,
         backend: mediaBackend(),
         origin: publicOrigin(req),
         fetchImpl: globalThis.fetch,
         now: Date.now(),
-        ip: clientIp(req),
       });
       sendJson(res, 201, stored);
     } catch (e) {
