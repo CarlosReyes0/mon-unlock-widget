@@ -1030,17 +1030,31 @@ ${teaser}
           btn.disabled = true;
           btn.textContent = "Opening Stripe…";
         }
-        if (status) status.textContent = "";
+        if (status) {
+          status.textContent = "Approve the payout signature…";
+          status.style.color = "#6b7280";
+        }
         try {
           const returnUrl = new URL("/dashboard.html", window.location.origin);
           returnUrl.searchParams.set("stripe_onboard", "return");
           const refreshUrl = new URL("/dashboard.html", window.location.origin);
           refreshUrl.searchParams.set("stripe_onboard", "refresh");
+          const { buildConnectAuthMessage } = await import("/dist/core/publish-auth.js");
+          const issuedAt = new Date().toISOString();
+          const connectMessage = buildConnectAuthMessage({
+            publisher: currentWallet,
+            issuedAt,
+          });
+          const eth = getInjectedProvider();
+          if (!eth) throw new Error("Connect a wallet to set up payouts.");
+          const connectSig = await signPlainMessage(eth, currentWallet, connectMessage);
           const res = await fetch("/api/stripe/connect/onboard", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               publisher: currentWallet,
+              issuedAt,
+              connectSig,
               returnUrl: returnUrl.toString(),
               refreshUrl: refreshUrl.toString(),
             }),

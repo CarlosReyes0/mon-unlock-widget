@@ -19,6 +19,7 @@ import { keccak256, toBytes } from "viem";
 import { authorizeFiatUnlock } from "./embed-signature.mjs";
 import { resolveUnlockChargeCents } from "./article-price.mjs";
 import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
+import { assertConnectOnboardingAuth } from "./writer-mutation-auth.mjs";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
@@ -37,6 +38,29 @@ export function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
 }
 
+/**
+ * Test-only loopback override. Production leaves this unset and talks to
+ * api.stripe.com. A non-loopback value is ignored so the key cannot be
+ * pointed at another host.
+ */
+function loopbackStripeConfig() {
+  const raw = (process.env.STRIPE_MOCK_BASE_URL || "").trim();
+  if (!raw) return null;
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:") return null;
+  if (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "localhost") return null;
+  return {
+    host: parsed.hostname,
+    port: parsed.port || "80",
+    protocol: "http",
+  };
+}
+
 export function getStripe() {
   if (!STRIPE_SECRET_KEY) {
     const err = new Error("stripe_not_configured");
@@ -44,7 +68,8 @@ export function getStripe() {
     throw err;
   }
   if (!stripeSingleton) {
-    stripeSingleton = new Stripe(STRIPE_SECRET_KEY);
+    const mock = loopbackStripeConfig();
+    stripeSingleton = mock ? new Stripe(STRIPE_SECRET_KEY, mock) : new Stripe(STRIPE_SECRET_KEY);
   }
   return stripeSingleton;
 }
@@ -612,9 +637,17 @@ export async function handleStripeWebhook(rawBody, signature) {
 /**
  * Create / reuse Connect Express account and return onboarding link.
  * Publisher links a wallet in Express for USDC stablecoin payouts (private preview).
- * @param {{ publisher: string, refreshUrl: string, returnUrl: string }} input
+ * Requires a fresh EIP-191 signature from that wallet. Auth runs before Stripe
+ * and before the publisher_accounts lookup, so a failed proof never returns a
+ * link or an existing account id.
+ * @param {{ publisher: string, refreshUrl: string, returnUrl: string, issuedAt?: string, connectSig?: string }} input
  */
 export async function createConnectOnboardingLink(input) {
+  await assertConnectOnboardingAuth({
+    publisher: input.publisher,
+    issuedAt: input.issuedAt,
+    connectSig: input.connectSig,
+  });
   const stripe = getStripe();
   const publisher = String(input.publisher || "").trim().toLowerCase();
   if (!/^0x[a-f0-9]{40}$/.test(publisher)) {
