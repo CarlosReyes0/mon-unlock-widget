@@ -41,31 +41,31 @@
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.59.0",
-    "@napi-rs/canvas": "^1.0.9",
+    "@napi-rs/canvas": "^1.0.11",
     "@privy-io/react-auth": "^3.50.0",
     "@stripe/react-stripe-js": "^6.7.0",
     "@stripe/stripe-js": "^9.9.0",
     "@walletconnect/ethereum-provider": "2.26.0",
-    "lean-qr": "^2.5.3",
+    "lean-qr": "^2.7.4",
     "lit": "^3.3.3",
-    "mppx": "^0.8.12",
+    "mppx": "^0.13.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "stripe": "^22.3.2",
     "viem": "2.57.7"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^25.9.1",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@types/stripe-v3": "^3.1.33",
-    "@vitejs/plugin-react": "^6.0.3",
+    "@vitejs/plugin-react": "^6.1.2",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14"
+    "vite": "^8.3.4"
   },
   "overrides": {
     "wagmi": "3.7.7",
