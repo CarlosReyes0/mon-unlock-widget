@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Shared helpers for the prod backup and the local restore drill.
-# These functions must not echo connection strings, keys, or SQL.
+# This repo is public. Stdout and stderr stay pass/fail: no connection
+# strings, no row counts, and no dump sizes. Sizes go in manifest.txt,
+# which is packed inside the encrypted archive.
 
 sanity_check_dump() {
   local dir="$1"
@@ -14,11 +16,11 @@ sanity_check_dump() {
   schema_bytes=$(wc -c < "$dir/schema.sql" | tr -d ' ')
   data_bytes=$(wc -c < "$dir/data.sql" | tr -d ' ')
   if (( schema_bytes < 1000 )); then
-    echo "sanity check failed: schema.sql is only ${schema_bytes} bytes" >&2
+    echo "sanity check failed: schema.sql is too small" >&2
     return 1
   fi
   if (( data_bytes < 200 )); then
-    echo "sanity check failed: data.sql is only ${data_bytes} bytes" >&2
+    echo "sanity check failed: data.sql is too small" >&2
     return 1
   fi
   for table in writer_plans used_signatures; do
@@ -31,7 +33,7 @@ sanity_check_dump() {
       return 1
     fi
   done
-  echo "sanity check passed (writer_plans, used_signatures present)"
+  echo "sanity check passed"
 }
 
 write_manifest() {
@@ -47,7 +49,6 @@ schema_bytes=${schema}
 data_bytes=${data}
 sanity_tables=writer_plans,used_signatures
 EOF
-  echo "plaintext bytes: roles=${roles} schema=${schema} data=${data}"
 }
 
 encrypt_dump_dir() {
@@ -68,7 +69,6 @@ encrypt_dump_dir() {
     return 1
   fi
   chmod 600 "$out"
-  echo "ciphertext bytes: $(wc -c < "$out" | tr -d ' ')"
 }
 
 decrypt_archive() {

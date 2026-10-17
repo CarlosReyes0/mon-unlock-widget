@@ -58,13 +58,12 @@ supabase db dump --db-url "$SUPABASE_DB_URL" --data-only --use-copy \
 chmod 600 "$dump/roles.sql" "$dump/schema.sql" "$dump/data.sql"
 
 sanity_check_dump "$dump"
-sizes=$(write_manifest "$dump")
-echo "$sizes"
+# Byte sizes stay in manifest.txt inside the encrypted archive.
+write_manifest "$dump"
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 archive="$work/openpaywall-${stamp}.tar.gz.age"
-cipher=$(encrypt_dump_dir "$dump" "$archive")
-echo "$cipher"
+encrypt_dump_dir "$dump" "$archive"
 # Plaintext is gone before the archive is published.
 rm -rf "$dump"
 
@@ -73,10 +72,7 @@ scripts/backup/publish.sh "$archive"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Prod database backup"
-    echo "- archive: \`openpaywall-${stamp}.tar.gz.age\`"
-    echo "- ${sizes}"
-    echo "- ${cipher}"
-    echo "- branch: \`backups\` (single orphan commit, newest files only)"
+    echo "Sanity check passed. Encrypted archive published to branch \`backups\`."
   } >> "$GITHUB_STEP_SUMMARY"
 fi
-echo "backup published openpaywall-${stamp}.tar.gz.age"
+echo "backup published"

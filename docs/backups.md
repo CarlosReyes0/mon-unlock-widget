@@ -14,7 +14,7 @@ Three SQL files, packed into one `openpaywall-YYYYMMDDTHHMMSSZ.tar.gz` and encry
 | `schema.sql` | `supabase db dump` | App schema, including `public`. Managed schemas such as `auth`, `storage`, `vault`, and `cron` are left out on purpose. |
 | `data.sql` | `supabase db dump --data-only --use-copy` | Rows for `public`, and for `auth` and `storage`. `vault` is left out. `storage.buckets_vectors` and `storage.vector_indexes` are excluded because Supabase's own restore guide excludes them. |
 
-`manifest.txt` inside the archive records the byte size of each SQL file. The Actions log records those sizes and the ciphertext size. The git repo stores ciphertext plus `SHA256SUMS` of the ciphertext.
+`manifest.txt` inside the archive records the byte size of each SQL file. That file is encrypted with the dump. The Actions log on this public repo says only whether the sanity check passed or failed. It does not print row counts or dump sizes. The private backups repo stores ciphertext plus `SHA256SUMS` of the ciphertext.
 
 Not in the backup:
 
@@ -23,7 +23,9 @@ Not in the backup:
 - Vault secrets (`indexer_secret`, `follow_notify_secret`). The CLI excludes the `vault` schema. Recreate them on a restored project with `vault.create_secret`.
 - The Supabase Vault / pgsodium root key. Backup files never contain it. You only need it if you must decrypt data that was encrypted with that key.
 
-Each run checks that `roles.sql`, `schema.sql`, and `data.sql` are non-empty, that the schema and data files are larger than a trivial stub, and that both mention `writer_plans` and `used_signatures`. An empty `used_signatures` table still counts: the dump names the table even when it has no rows. A failed check fails the job and does not publish.
+Each run checks that `roles.sql`, `schema.sql`, and `data.sql` are non-empty, that the schema and data files are larger than a trivial stub, and that both mention `writer_plans` and `used_signatures`. An empty `used_signatures` table still passes: the dump names the table even when it has no rows. A failed check fails the job and does not publish. The public log line is `sanity check passed` or `sanity check failed`.
+
+This repository is public. Do not paste a connection string, a dump size, or a table count into an issue, a pull request, or an Actions log. Compare counts on your machine during a restore drill.
 
 ## How the workflow runs
 
@@ -207,7 +209,7 @@ A production archive is not the same shape as that local dump. `supabase db dump
 
 Do this once a quarter. Write down the date.
 
-- [ ] Actions → **prod-db-backup** → Run workflow. The run is green and the log shows plaintext sizes and a ciphertext size.
+- [ ] Actions → **prod-db-backup** → Run workflow. The run is green and the log says the sanity check passed. Open sizes only after you decrypt `manifest.txt` on your machine.
 - [ ] The private backups repo's `backups` branch has the new `openpaywall-*.tar.gz.age` file, and it does not have more than `BACKUP_KEEP` (default 8) of those files.
 - [ ] `SHA256SUMS` on that branch matches `sha256sum` of the file you downloaded.
 - [ ] Create a throwaway Supabase project. Decrypt with the age identity from the password manager. Restore with the `psql` command above.

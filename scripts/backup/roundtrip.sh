@@ -268,7 +268,6 @@ src_counts=$(psql_as "$src_sock" "$src_port" "$USER" openpaywall -tA -c "$count_
 expected=$'articles=0\nused_signatures=3\nwriter_plans=2'
 if [[ "$src_counts" != "$expected" ]]; then
   echo "source counts were not the seeded rows" >&2
-  printf '%s\n' "$src_counts" >&2
   exit 1
 fi
 
@@ -285,8 +284,7 @@ mkdir -p "$dump"
   -f "$dump/data.sql"
 chmod 600 "$dump"/*.sql
 sanity_check_dump "$dump"
-sizes=$(write_manifest "$dump")
-echo "$sizes"
+write_manifest "$dump"
 
 identity="$root/identity.txt"
 age-keygen -o "$identity" >/dev/null 2>&1
@@ -307,6 +305,12 @@ if ! grep -q '^sanity_tables=writer_plans,used_signatures$' "$plain/manifest.txt
   echo "decrypted manifest is missing the sanity line" >&2
   exit 1
 fi
+for key in roles_bytes schema_bytes data_bytes; do
+  if ! grep -q "^${key}=" "$plain/manifest.txt"; then
+    echo "decrypted manifest is missing ${key}" >&2
+    exit 1
+  fi
+done
 # pg_dumpall records GRANTED BY the source superuser. A second cluster's
 # superuser cannot execute that clause. Dropping it does not change table data.
 sed -i -E 's/ GRANTED BY "[^"]+"//' "$plain/roles.sql"
@@ -326,12 +330,7 @@ fi
 dst_counts=$(psql_as "$dst_sock" "$dst_port" restoreadmin openpaywall -tA -c "$count_sql")
 if [[ "$dst_counts" != "$src_counts" ]]; then
   echo "restored counts do not match the source" >&2
-  echo "source:" >&2
-  printf '%s\n' "$src_counts" >&2
-  echo "restored:" >&2
-  printf '%s\n' "$dst_counts" >&2
   exit 1
 fi
 
-echo "roundtrip ok writer_plans=2 used_signatures=3 articles=0"
-echo "$sizes"
+echo "roundtrip ok"
