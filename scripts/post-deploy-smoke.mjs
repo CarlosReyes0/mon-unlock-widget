@@ -5,7 +5,8 @@
  * `/` healthcheck. This still polls GET /api/agents/health, because the
  * site does not publish a git SHA, then runs the existing smoke twice
  * before giving up. Smoke is HTTP-only (the same command as
- * `BASE_URL=https://openpaywall.app npm run smoke`).
+ * `BASE_URL=https://openpaywall.app npm run smoke`). Stdout is check names
+ * and status codes only. The smoke process output is discarded.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -39,12 +40,6 @@ export async function runPostDeploy(options = {}) {
   const healthDelayMs = options.healthDelayMs ?? 10_000;
   const smokeDelayMs = options.smokeDelayMs ?? 20_000;
   const lines = [];
-  if (options.deploySha) {
-    lines.push(`Railway reported success for ${options.deploySha}.`);
-    lines.push(
-      "The site does not publish a git SHA. Waiting until GET /api/agents/health returns ok, then running scripts/smoke.mjs."
-    );
-  }
 
   let healthy = false;
   for (let attempt = 1; attempt <= healthAttempts; attempt += 1) {
@@ -57,14 +52,14 @@ export async function runPostDeploy(options = {}) {
       } catch {
         ok = false;
       }
+      const code = ok ? "200" : res.status && res.status !== 200 ? res.status : "fail";
+      lines.push(`health status=${code}`);
       if (ok) {
         healthy = true;
-        lines.push(`health ok on attempt ${attempt}`);
         break;
       }
-      lines.push(`health attempt ${attempt}: HTTP ${res.status}`);
-    } catch (err) {
-      lines.push(`health attempt ${attempt}: ${err?.message || err}`);
+    } catch {
+      lines.push("health status=fail");
     }
     if (attempt < healthAttempts) await sleep(healthDelayMs);
   }
@@ -76,9 +71,8 @@ export async function runPostDeploy(options = {}) {
   let passed = false;
   for (let attempt = 1; attempt <= smokeAttempts; attempt += 1) {
     const result = await spawnImpl({ attempt, baseUrl: base });
-    const output = String(result.log || "").trim();
-    lines.push(`smoke attempt ${attempt} exit ${result.status}`);
-    if (output) lines.push(output.slice(-8000));
+    const status = result.status == null ? "fail" : result.status;
+    lines.push(`smoke status=${status}`);
     if (result.status === 0) {
       passed = true;
       break;
@@ -91,7 +85,6 @@ export async function runPostDeploy(options = {}) {
 async function main() {
   const result = await runPostDeploy({
     baseUrl: process.env.BASE_URL,
-    deploySha: process.env.DEPLOY_SHA || "",
   });
   const log = `${result.log}\n`;
   if (process.env.POST_DEPLOY_LOG) fs.writeFileSync(process.env.POST_DEPLOY_LOG, log);
@@ -101,8 +94,10 @@ async function main() {
 
 const direct = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (direct) {
-  main().catch((err) => {
-    console.error(err?.message || err);
+  main().catch(() => {
+    const log = "post-deploy status=fail\n";
+    if (process.env.POST_DEPLOY_LOG) fs.writeFileSync(process.env.POST_DEPLOY_LOG, log);
+    process.stderr.write(log);
     process.exit(1);
   });
 }

@@ -5,6 +5,7 @@ import {
   cspProblems,
   ONE_MON_WEI,
   parseLowBalanceWei,
+  renderReport,
   runUptimeChecks,
 } from "./uptime-check.mjs";
 
@@ -85,8 +86,14 @@ test("a healthy site passes, retries a blip, and only reads balance", async () =
     retryMs: 0,
     sleep: noSleep,
   });
-  assert.equal(result.ok, true, JSON.stringify(result.checks));
+  assert.equal(result.ok, true);
   assert.equal(result.checks.find((check) => check.name === "home").attempts, 2);
+  const report = renderReport(result);
+  assert.match(report, /home status=200/);
+  assert.match(report, /feed status=200/);
+  assert.match(report, /article status=200/);
+  assert.match(report, /relayer-balance status=200/);
+  assert.doesNotMatch(report, /hello-post|MON|0x/);
   const methods = calls.map((call) => call.method);
   assert.ok(methods.includes("GET"));
   const posts = calls.filter((call) => call.method !== "GET");
@@ -123,7 +130,11 @@ test("a wallet under 1 MON fails only after retries", async () => {
   assert.equal(result.ok, false);
   const balance = result.checks.find((check) => check.name === "relayer-balance");
   assert.match(balance.detail, /below 1\.0000 MON/);
+  assert.equal(balance.code, "low");
   assert.equal(balance.attempts, 2);
+  const report = renderReport(result);
+  assert.match(report, /relayer-balance status=low/);
+  assert.doesNotMatch(report, /MON|0x|below/);
 });
 
 test("a connection error keeps the check name after retries", async () => {
@@ -143,6 +154,9 @@ test("a connection error keeps the check name after retries", async () => {
   );
   assert.match(result.checks[0].detail, /fetch failed/);
   assert.equal(result.checks[0].attempts, 2);
+  const report = renderReport(result);
+  assert.match(report, /home status=fail/);
+  assert.doesNotMatch(report, /fetch failed|127\.0\.0\.1/);
 });
 
 test("an unusable address is not echoed back", async () => {
@@ -158,6 +172,7 @@ test("an unusable address is not echoed back", async () => {
   const balance = result.checks.find((check) => check.name === "relayer-balance");
   assert.equal(balance.ok, false);
   assert.equal(balance.detail.includes(secret), false);
+  assert.equal(renderReport(result).includes(secret), false);
 });
 
 test("the workflow does not hardcode an address and skips prod on pull requests", () => {
@@ -169,5 +184,12 @@ test("the workflow does not hardcode an address and skips prod on pull requests"
   assert.match(workflow, /vars\.RELAYER_ADDRESS \|\| secrets\.RELAYER_ADDRESS/);
   assert.match(workflow, /if: github\.event_name == 'pull_request'/);
   assert.match(workflow, /if: github\.event_name != 'pull_request'/);
-  assert.match(workflow, /--key uptime/);
+  assert.match(workflow, /UPTIME_ATTEMPTS: "3"/);
+  assert.match(workflow, /scripts\/private-alert\.mjs/);
+  assert.match(workflow, /secrets\.RESEND_API_KEY/);
+  assert.match(workflow, /secrets\.ALERT_EMAIL_TO/);
+  assert.match(workflow, /settings\/notifications/);
+  assert.doesNotMatch(workflow, /prod-alert/);
+  assert.doesNotMatch(workflow, /issues:\s*write/);
+  assert.doesNotMatch(workflow, /issue create|issue close/);
 });

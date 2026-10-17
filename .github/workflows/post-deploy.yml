@@ -10,11 +10,30 @@
 # Success: poll GET /api/agents/health, then run scripts/smoke.mjs up to
 # twice. The app does not expose a git SHA, so "live" means Railway reported
 # success (its `/` healthcheck passed) and the public health endpoint is ok.
-# Failure or error: do not smoke a deploy that never went live; alert instead.
+# Failure or error: do not smoke a deploy that never went live.
 # inactive / in_progress are ignored.
 #
-# On failure the job prints rollback instructions and opens or updates one
-# issue labeled prod-alert (key post-deploy). A later success closes it.
+# This repository is public, so a failure must not open a GitHub issue.
+# Health and smoke are retried first. A confirmed failure fails this job,
+# which is the private signal, and prints the rollback command. deployment_status
+# is triggered by Railway, so GitHub's "you triggered this run" mail may not
+# reach the repo owner. Scheduled-workflow mail (the uptime workflow) goes to
+# the user who last changed that workflow's cron, or who last re-enabled it.
+#
+# Carlos: https://github.com/settings/notifications → System → Actions →
+# Email. "Only notify for failed workflows" is enough. Watch this repository
+# so Actions mail includes runs you did not click yourself.
+#
+# Optional private email, skipped unless both secrets are set
+# (Resend is not set up yet):
+#   Secret RESEND_API_KEY
+#   Secret ALERT_EMAIL_TO
+# From address is posts@mail.openpaywall.app, the same default as follow mail.
+# The job still fails when the check fails, whether or not that mail is sent.
+#
+# Actions logs are public. They print check names and status codes only.
+# The rollback step prints the public dashboard URL and the command name.
+# It does not print RAILWAY_TOKEN.
 #
 # Auto-rollback is off unless BOTH are set:
 #   Secret   RAILWAY_TOKEN            Railway account or project token
@@ -54,7 +73,7 @@ jobs:
         with:
           node-version: "22"
       - name: Post-deploy unit tests
-        run: node --test scripts/post-deploy-smoke.test.mjs scripts/railway-rollback.test.mjs scripts/prod-alert.test.mjs
+        run: node --test scripts/post-deploy-smoke.test.mjs scripts/railway-rollback.test.mjs scripts/private-alert.test.mjs
 
   smoke:
     name: smoke
@@ -71,9 +90,6 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
-      issues: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -83,11 +99,12 @@ jobs:
       - name: Railway marked the deploy failed
         if: github.event_name == 'deployment_status' && (github.event.deployment_status.state == 'failure' || github.event.deployment_status.state == 'error')
         run: |
-          {
-            echo "Railway reported ${{ github.event.deployment_status.state }} for ${{ github.event.deployment.sha }}."
-            echo "Environment: ${{ github.event.deployment.environment }}"
-            echo "Smoke was not run. A failed healthcheck does not replace the live deployment."
-          } | tee /tmp/post-deploy-log.txt
+          state="${{ github.event.deployment_status.state }}"
+          case "$state" in
+            failure|error) ;;
+            *) state=fail ;;
+          esac
+          echo "railway status=${state}" | tee /tmp/post-deploy-log.txt
           exit 1
 
       - name: Smoke the live site
@@ -95,7 +112,6 @@ jobs:
         env:
           BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.base_url || 'https://openpaywall.app' }}
           POST_DEPLOY_LOG: /tmp/post-deploy-log.txt
-          DEPLOY_SHA: ${{ github.event.deployment.sha }}
         run: node scripts/post-deploy-smoke.mjs
 
       - name: Print rollback instructions
@@ -106,23 +122,14 @@ jobs:
           RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
         run: node scripts/railway-rollback.mjs | tee /tmp/rollback.txt
 
-      - name: Open or update the prod-alert issue
+      - name: Email the failure when Resend is configured
         if: failure()
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          {
-            echo "Post-deploy check failed."
-            echo
-            if [ -f /tmp/post-deploy-log.txt ]; then cat /tmp/post-deploy-log.txt; fi
-            echo
-            echo "## Rollback"
-            if [ -f /tmp/rollback.txt ]; then cat /tmp/rollback.txt; fi
-            echo
-            echo "Auto-rollback runs only when secret RAILWAY_TOKEN is set and variable PROD_AUTO_ROLLBACK is true. The default is off."
-          } > /tmp/alert.md
-          node scripts/prod-alert.mjs --key post-deploy --failing true --title "[prod-alert] production smoke" --body-file /tmp/alert.md
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          ALERT_KEY: post-deploy
+          ALERT_SUMMARY_FILE: /tmp/post-deploy-log.txt
+        run: node scripts/private-alert.mjs
 
       - name: Auto-rollback
         if: failure() && vars.PROD_AUTO_ROLLBACK == 'true'
@@ -138,10 +145,3 @@ jobs:
             exit 0
           fi
           node scripts/railway-rollback.mjs --execute
-
-      - name: Close the prod-alert issue after a good deploy
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node scripts/prod-alert.mjs --key post-deploy --failing false --title "[prod-alert] production smoke" --body "Production smoke passed."
