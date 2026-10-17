@@ -251,13 +251,13 @@ async function checkBalance(request, { relayerAddress, rpcUrl, threshold }) {
   };
 }
 
-async function withRetries(fn, { attempts, retryMs, sleep }) {
-  let last;
+async function withRetries(name, fn, { attempts, retryMs, sleep }) {
+  let last = { name, ok: false, detail: "not run" };
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      last = await fn();
+      last = { name, ...(await fn()) };
     } catch (err) {
-      last = { ok: false, detail: err?.message || String(err) };
+      last = { name, ok: false, detail: err?.message || String(err) };
     }
     if (last.ok || attempt === attempts) {
       return { ...last, attempts: attempt };
@@ -307,12 +307,12 @@ export async function runUptimeChecks(options = {}) {
     });
   }
 
-  const retry = (fn) => withRetries(fn, { attempts, retryMs, sleep });
-  const home = await retry(() => checkHome(base, request));
-  const feed = await retry(() => checkFeed(base, request));
-  const article = await retry(() => checkArticle(base, request, feed.slug || ""));
-  const health = await retry(() => checkHealth(base, request));
-  const balance = await retry(() =>
+  const retry = (name, fn) => withRetries(name, fn, { attempts, retryMs, sleep });
+  const home = await retry("home", () => checkHome(base, request));
+  const feed = await retry("feed", () => checkFeed(base, request));
+  const article = await retry("article", () => checkArticle(base, request, feed.slug || ""));
+  const health = await retry("health", () => checkHealth(base, request));
+  const balance = await retry("relayer-balance", () =>
     checkBalance(request, { relayerAddress, rpcUrl, threshold })
   );
   const checks = [home, feed, article, health, balance];

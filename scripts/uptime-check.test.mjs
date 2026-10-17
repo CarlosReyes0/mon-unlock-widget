@@ -126,6 +126,25 @@ test("a wallet under 1 MON fails only after retries", async () => {
   assert.equal(balance.attempts, 2);
 });
 
+test("a connection error keeps the check name after retries", async () => {
+  const result = await runUptimeChecks({
+    baseUrl: "http://127.0.0.1:9",
+    fetchImpl: async () => {
+      throw new Error("fetch failed");
+    },
+    attempts: 2,
+    retryMs: 0,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.checks.map((check) => check.name),
+    ["home", "feed", "article", "health", "relayer-balance"]
+  );
+  assert.match(result.checks[0].detail, /fetch failed/);
+  assert.equal(result.checks[0].attempts, 2);
+});
+
 test("an unusable address is not echoed back", async () => {
   const secret = `0x${"ab".repeat(32)}`;
   const { fetchImpl } = healthyFetch();
