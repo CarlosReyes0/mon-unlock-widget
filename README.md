@@ -49,6 +49,7 @@ Pages:
 - `/account.html` – Publisher account (email / Google / wallet)
 - `/dashboard.html` – Writer dashboard + Stripe payouts + listing controls
 - `/admin-listings.html` – Moderator hide (requires `LISTING_ADMIN_SECRET`)
+- `/admin-usage.html` – Paid unlocks per week (same `LISTING_ADMIN_SECRET`). SQL: `supabase/usage/paid_unlocks_per_week.sql`
 - `/agents` · `/agents.md` · `/llms.txt` · `/skill.md` – Agent discovery
 - `/openapi.json` – Machine-readable agent API
 - `/embed-example.html` – Clean copy-paste embed reference

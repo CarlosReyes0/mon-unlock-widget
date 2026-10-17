@@ -55,6 +55,7 @@ import {
   listingsSupabaseConfigured,
   listingAdminConfigured,
 } from "./listings-api.mjs";
+import { paidUnlocksResponse } from "./usage-stats.mjs";
 import {
   cancelWriterSubscription,
   confirmCryptoSubscription,
@@ -1247,6 +1248,16 @@ const server = http.createServer(guardRequest(async (req, res) => {
       supabaseConfigured: listingsSupabaseConfigured(),
       adminConfigured: listingAdminConfigured(),
     });
+  }
+
+  if (method === "GET" && url.pathname === "/api/usage/paid-unlocks") {
+    try {
+      const body = await paidUnlocksResponse({ authorization: req.headers.authorization });
+      return sendJson(res, 200, body);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "usage_failed" });
+    }
   }
 
   if (method === "POST" && url.pathname === "/api/listings/hide") {

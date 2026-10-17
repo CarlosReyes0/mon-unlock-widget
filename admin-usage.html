@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Paid unlocks — Open Paywall</title>
+    <style>
+      body {
+        font-family: "DM Sans", system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 3rem;
+        color: #111827;
+        background: #fff;
+      }
+      h1 { font-family: Georgia, serif; font-weight: 600; margin: 0.2rem 0 0.4rem; }
+      label { display: block; font-size: 0.875rem; font-weight: 600; margin: 1rem 0 0.35rem; }
+      input {
+        width: 100%;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        font: inherit;
+        box-sizing: border-box;
+      }
+      .btn {
+        margin-top: 1rem;
+        padding: 0.6rem 1.1rem;
+        border: none;
+        border-radius: 999px;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .hint, .note { font-size: 0.8rem; color: #6b7280; }
+      .example {
+        background: #fef3c7;
+        border: 1px solid #d97706;
+        color: #92400e;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        font-weight: 700;
+      }
+      .kicker {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #0f766e;
+        margin: 1.5rem 0 0;
+      }
+      .number {
+        font-family: Georgia, serif;
+        font-size: 4.5rem;
+        line-height: 1;
+        margin: 0.25rem 0;
+      }
+      table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+      th, td { text-align: left; padding: 0.45rem 0.2rem; border-bottom: 1px solid #e5e7eb; font-size: 0.92rem; }
+      th { font-size: 0.75rem; color: #6b7280; }
+      .msg { margin-top: 1rem; }
+      .msg.err { color: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <p class="kicker">Admin</p>
+    <h1>Paid unlocks per week</h1>
+    <p class="hint">
+      Same <code>LISTING_ADMIN_SECRET</code> as Hide a listing. The SQL editor query is
+      <code>supabase/usage/paid_unlocks_per_week.sql</code>. The secret stays in this tab only.
+    </p>
+    <label for="secret">Admin secret</label>
+    <input id="secret" type="password" autocomplete="off" />
+    <button class="btn" id="showBtn" type="button">Show this week</button>
+    <p class="msg" id="msg"></p>
+    <div id="report" hidden>
+      <p class="example" id="example" hidden></p>
+      <p class="kicker">This week</p>
+      <p class="number" id="count">0</p>
+      <p class="hint" id="week"></p>
+      <table>
+        <thead>
+          <tr><th>Method</th><th>Unlocks</th><th>Revenue</th></tr>
+        </thead>
+        <tbody id="methods"></tbody>
+      </table>
+      <p class="kicker">Earlier weeks</p>
+      <table>
+        <thead>
+          <tr><th>Week of</th><th>Unlocks</th><th>Revenue</th></tr>
+        </thead>
+        <tbody id="weeks"></tbody>
+      </table>
+      <p class="hint" id="allTime"></p>
+      <ul class="note" id="notes"></ul>
+    </div>
+    <script>
+      const secretEl = document.getElementById("secret");
+      const msg = document.getElementById("msg");
+      const report = document.getElementById("report");
+      secretEl.value = sessionStorage.getItem("listingAdminSecret") || "";
+
+      function revenueLine(byMethod) {
+        return byMethod
+          .filter((row) => row.unlocks > 0)
+          .map((row) => row.revenue)
+          .join(" · ") || "—";
+      }
+
+      function render(body) {
+        const example = document.getElementById("example");
+        example.hidden = !body.example;
+        example.textContent = body.label || "Example / test data — not production";
+        document.getElementById("count").textContent = String(body.thisWeek.unlocks);
+        document.getElementById("week").textContent =
+          "Week of " + body.thisWeek.week + " (UTC, Monday start)";
+        document.getElementById("methods").replaceChildren(
+          ...body.thisWeek.byMethod.map((row) => {
+            const tr = document.createElement("tr");
+            for (const text of [row.label, String(row.unlocks), row.revenue]) {
+              const td = document.createElement("td");
+              td.textContent = text;
+              tr.append(td);
+            }
+            return tr;
+          })
+        );
+        const earlier = body.weeks.filter((week) => week.week !== body.thisWeek.week);
+        document.getElementById("weeks").replaceChildren(
+          ...earlier.map((week) => {
+            const tr = document.createElement("tr");
+            for (const text of [week.week, String(week.unlocks), revenueLine(week.byMethod)]) {
+              const td = document.createElement("td");
+              td.textContent = text;
+              tr.append(td);
+            }
+            return tr;
+          })
+        );
+        document.getElementById("allTime").textContent =
+          "All time: " + body.allTime.unlocks + " paid unlocks";
+        document.getElementById("notes").replaceChildren(
+          ...body.notes.map((text) => {
+            const li = document.createElement("li");
+            li.textContent = text;
+            return li;
+          })
+        );
+        report.hidden = false;
+      }
+
+      document.getElementById("showBtn").onclick = async () => {
+        const secret = secretEl.value.trim();
+        sessionStorage.setItem("listingAdminSecret", secret);
+        msg.className = "msg";
+        msg.textContent = "Loading…";
+        report.hidden = true;
+        try {
+          const res = await fetch("/api/usage/paid-unlocks", {
+            headers: { Authorization: "Bearer " + secret },
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.error || "http_" + res.status);
+          msg.textContent = "";
+          render(body);
+        } catch (e) {
+          msg.className = "msg err";
+          msg.textContent = e.message || "Failed";
+        }
+      };
+    </script>
+  </body>
+</html>
