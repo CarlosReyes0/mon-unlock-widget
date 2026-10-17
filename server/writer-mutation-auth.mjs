@@ -8,11 +8,12 @@
  *
  * Plan, à la carte, and Connect ("Open Paywall connect v1") include issuedAt
  * and reuse the follower signature window (follow-core issuedAtFresh, 10
- * minutes). A stale issuedAt is 401 stale_signature. A second use of the same
- * signed message inside that window is 401 replayed_signature (in-memory; a
- * new issuedAt is a new signature and still saves). Connect maps every failed
- * check, including a wrong wallet, to 401. Plan and à la carte keep 403 for a
- * readable signature from a different wallet.
+ * minutes). A stale issuedAt is 401 stale_signature. Replay protection for
+ * plan and à la carte is the used_signatures row inserted by subscriptions.mjs
+ * before the write (unique conflict is 401 replayed_signature; a store
+ * failure is 503). Connect maps every failed check, including a wrong wallet,
+ * to 401. Plan and à la carte keep 403 for a readable signature from a
+ * different wallet.
  *
  * Keep buildPlanAuthMessage / buildALaCarteAuthMessage / buildConnectAuthMessage
  * identical to src/core/publish-auth.ts. The Railway image does not include
@@ -20,7 +21,7 @@
  * in server/.
  */
 import { recoverMessageAddress } from "viem";
-import { ISSUED_AT_WINDOW_MS, issuedAtFresh } from "./follow-core.mjs";
+import { issuedAtFresh } from "./follow-core.mjs";
 
 export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
 export const A_LA_CARTE_AUTH_PREFIX = "Open Paywall a-la-carte v1";
@@ -110,23 +111,11 @@ export async function assertPublisherSignature(publisher, message, signature) {
   }
 }
 
-/** Signed plan / à-la-carte messages accepted inside the freshness window. */
-const seenWriterMessages = new Map();
-
-function rememberWriterMessage(message, now) {
-  for (const [key, expiresAt] of seenWriterMessages) {
-    if (expiresAt <= now) seenWriterMessages.delete(key);
-  }
-  if (seenWriterMessages.has(message)) return false;
-  seenWriterMessages.set(message, now + ISSUED_AT_WINDOW_MS);
-  return true;
-}
-
 /**
  * Plan and à-la-carte proof. Missing signature is 401 unauthorized. A stale
  * or future issuedAt is 401 stale_signature. A bad signature is 401. A
- * different wallet is 403. Reusing a message already accepted in this process
- * is 401 replayed_signature. Call before any Supabase read or write.
+ * different wallet is 403. Replay is not decided here: subscriptions.mjs
+ * inserts sha256(signature) into used_signatures before the write.
  * @param {{ publisher: string, message: string, signature: unknown, issuedAt: unknown }} input
  * @param {number} [now]
  */
@@ -135,7 +124,6 @@ export async function assertWriterMutationSignature(input, now = Date.now()) {
   if (!signature) throw httpError("unauthorized", 401);
   if (!issuedAtFresh(input?.issuedAt, now)) throw httpError("stale_signature", 401);
   await assertPublisherSignature(input.publisher, input.message, signature);
-  if (!rememberWriterMessage(input.message, now)) throw httpError("replayed_signature", 401);
 }
 
 /**

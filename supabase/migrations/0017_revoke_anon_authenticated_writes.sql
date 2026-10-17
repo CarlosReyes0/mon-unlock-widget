@@ -41,6 +41,47 @@ from anon, authenticated;
 revoke execute on function public.enqueue_follow_notification()
   from public, anon, authenticated;
 
+-- Replay log for plan and à-la-carte signatures. The Railway server inserts
+-- sha256(signature) with the service role before it writes the plan or flag.
+-- A primary-key conflict is a replay. No policies: anon and authenticated
+-- cannot read or write. service_role bypasses RLS.
+--
+-- Rows older than an hour are useless (the signed issuedAt window is 10
+-- minutes). pg_cron is already used by 0005 and 0016, so cleanup is a job
+-- rather than a delete on each insert.
+
+create table if not exists public.used_signatures (
+  sig_hash text primary key,
+  wallet text,
+  purpose text,
+  used_at timestamptz not null default now()
+);
+
+alter table public.used_signatures enable row level security;
+
+revoke all on table public.used_signatures from public, anon, authenticated;
+
+grant insert on table public.used_signatures to service_role;
+
+create index if not exists used_signatures_used_at
+  on public.used_signatures (used_at);
+
+do $$
+begin
+  perform cron.unschedule('open-paywall-used-signatures-cleanup');
+exception
+  when others then null;
+end $$;
+
+select cron.schedule(
+  'open-paywall-used-signatures-cleanup',
+  '*/15 * * * *',
+  $cleanup$
+  delete from public.used_signatures
+  where used_at < now() - interval '1 hour'
+  $cleanup$
+);
+
 do $$
 declare
   fn regprocedure;

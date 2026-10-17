@@ -33,6 +33,7 @@ const TABLES = [
   "email_suppressions",
   "follow_notifications",
   "follow_deliveries",
+  "used_signatures",
 ];
 
 function read(rel) {
@@ -64,7 +65,19 @@ test("revoke migration names the audited tables and trigger functions", () => {
   assert.match(code, /revoke execute on function %s from public, anon, authenticated/i);
   assert.doesNotMatch(code, /revoke select/i);
   assert.doesNotMatch(code, /from service_role/i);
-  assert.doesNotMatch(code, /grant\s+(insert|update|delete|truncate|all)/i);
+  assert.doesNotMatch(code, /grant\s+(update|delete|truncate|all)\b/i);
+  assert.match(code, /create table if not exists public\.used_signatures/i);
+  assert.match(code, /sig_hash text primary key/i);
+  assert.match(code, /wallet text/i);
+  assert.match(code, /purpose text/i);
+  assert.match(code, /used_at timestamptz not null default now\(\)/i);
+  assert.match(code, /alter table public\.used_signatures enable row level security/i);
+  assert.doesNotMatch(code, /create policy/i);
+  assert.match(code, /revoke all on table public\.used_signatures from public, anon, authenticated/i);
+  assert.match(code, /grant insert on table public\.used_signatures to service_role/i);
+  assert.doesNotMatch(code, /grant\s+insert\b[^;]*\bto\s+(anon|authenticated|public)\b/i);
+  assert.match(code, /open-paywall-used-signatures-cleanup/);
+  assert.match(code, /interval '1 hour'/i);
 });
 
 test("browser supabase client only reads; writes use the service role", () => {
@@ -243,6 +256,44 @@ test("repo migrations apply and anon writes are denied", async (t) => {
          has_function_privilege('service_role', 'public.enqueue_follow_notification()', 'EXECUTE') as service_fn`
     ).stdout;
     assert.match(reads, /t\|f\|t\|f\|f\|f\|t/);
+
+    const sigMeta = sql(
+      `select
+         has_table_privilege('anon', 'public.used_signatures', 'SELECT'),
+         has_table_privilege('anon', 'public.used_signatures', 'INSERT'),
+         has_table_privilege('authenticated', 'public.used_signatures', 'INSERT'),
+         has_table_privilege('service_role', 'public.used_signatures', 'INSERT'),
+         c.relrowsecurity,
+         (select count(*) from pg_policies where schemaname = 'public' and tablename = 'used_signatures')
+       from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relname = 'used_signatures'`
+    ).stdout;
+    assert.match(sigMeta, /^f\|f\|f\|t\|t\|0/);
+
+    const deniedSig = sql(
+      `set role anon;
+       insert into public.used_signatures (sig_hash, wallet, purpose)
+       values ('abc', '0x1111111111111111111111111111111111111111', 'plan');`,
+      { allowFail: true }
+    );
+    assert.notEqual(deniedSig.status, 0);
+    assert.match(`${deniedSig.stderr}\n${deniedSig.stdout}`, /permission denied for table used_signatures/i);
+
+    sql(
+      `set role service_role;
+       insert into public.used_signatures (sig_hash, wallet, purpose)
+       values ('deadbeef', '0x1111111111111111111111111111111111111111', 'plan');
+       reset role;`
+    );
+    const replayedSig = sql(
+      `set role service_role;
+       insert into public.used_signatures (sig_hash, wallet, purpose)
+       values ('deadbeef', '0x1111111111111111111111111111111111111111', 'plan');`,
+      { allowFail: true }
+    );
+    assert.notEqual(replayedSig.status, 0);
+    assert.match(`${replayedSig.stderr}\n${replayedSig.stdout}`, /duplicate key value violates unique constraint/i);
 
     const denied = sql(
       `set role anon;
