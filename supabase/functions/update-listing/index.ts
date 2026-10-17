@@ -5,7 +5,7 @@
 // for an article they own. Auto-list when listOnOpenPaywall=true; hide is admin-only.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifyMessage } from 'https://esm.sh/viem@2';
+import { verifyMessage } from 'https://esm.sh/viem@2.53.1';
 import { parseArticlePriceCents, usdcAtomicForCents } from '../../../src/core/article-price.ts';
 import {
   buildListingAuthMessage,

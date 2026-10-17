@@ -156,17 +156,19 @@ describe("listing signature", () => {
 });
 
 describe("plan signature", () => {
-  it("binds publisher, price, and allow-a-la-carte so another change does not verify", async () => {
+  it("binds publisher, price, allow-a-la-carte, and issuedAt", async () => {
     const fields = {
       publisher: account.address.toUpperCase(),
       monthlyPriceCents: 500,
       allowALaCarte: false,
+      issuedAt: "2026-10-17T03:10:00.000Z",
     };
     const message = buildPlanAuthMessage(fields);
     assert.ok(message.startsWith(PLAN_AUTH_PREFIX));
     assert.match(message, new RegExp(`publisher:${account.address.toLowerCase()}`));
     assert.match(message, /monthlyPriceCents:500/);
     assert.match(message, /allowALaCarte:false/);
+    assert.match(message, /issuedAt:2026-10-17T03:10:00.000Z/);
     const signature = await account.signMessage({ message });
     assert.equal(
       await verifyMessage({ address: account.address, message, signature }),
@@ -174,6 +176,7 @@ describe("plan signature", () => {
     );
     const otherPrice = buildPlanAuthMessage({ ...fields, monthlyPriceCents: 900 });
     const otherFlag = buildPlanAuthMessage({ ...fields, allowALaCarte: true });
+    const otherTime = buildPlanAuthMessage({ ...fields, issuedAt: "2026-10-17T03:20:00.000Z" });
     assert.equal(
       await verifyMessage({ address: account.address, message: otherPrice, signature }),
       false
@@ -182,20 +185,26 @@ describe("plan signature", () => {
       await verifyMessage({ address: account.address, message: otherFlag, signature }),
       false
     );
+    assert.equal(
+      await verifyMessage({ address: account.address, message: otherTime, signature }),
+      false
+    );
   });
 });
 
 describe("a-la-carte signature", () => {
-  it("binds article, publisher, and the flag being set", async () => {
+  it("binds article, publisher, the flag, and issuedAt", async () => {
     const fields = {
       articleId: "july-rain",
       publisher: account.address,
       allowALaCarte: false,
+      issuedAt: "2026-10-17T03:10:00.000Z",
     };
     const message = buildALaCarteAuthMessage(fields);
     assert.ok(message.startsWith(A_LA_CARTE_AUTH_PREFIX));
     assert.match(message, /article:july-rain/);
     assert.match(message, /allowALaCarte:false/);
+    assert.match(message, /issuedAt:2026-10-17T03:10:00.000Z/);
     const signature = await account.signMessage({ message });
     assert.equal(
       await verifyMessage({ address: account.address, message, signature }),
@@ -203,12 +212,17 @@ describe("a-la-carte signature", () => {
     );
     const otherArticle = buildALaCarteAuthMessage({ ...fields, articleId: "other-piece" });
     const otherFlag = buildALaCarteAuthMessage({ ...fields, allowALaCarte: true });
+    const otherTime = buildALaCarteAuthMessage({ ...fields, issuedAt: "2026-10-17T03:11:00.000Z" });
     assert.equal(
       await verifyMessage({ address: account.address, message: otherArticle, signature }),
       false
     );
     assert.equal(
       await verifyMessage({ address: account.address, message: otherFlag, signature }),
+      false
+    );
+    assert.equal(
+      await verifyMessage({ address: account.address, message: otherTime, signature }),
       false
     );
   });

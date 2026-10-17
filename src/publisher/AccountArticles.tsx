@@ -200,10 +200,12 @@ export function AccountArticles({ wallet }: Props) {
         ...(nextCents != null ? { priceCents: nextCents } : {}),
       });
       const allowALaCarte = allowBuy;
+      const issuedAt = new Date().toISOString();
       const aLaCarteMessage = buildALaCarteAuthMessage({
         articleId: row.articleId,
         publisher: wallet,
         allowALaCarte,
+        issuedAt,
       });
       const account = wallet as Address;
       const walletClient = createWalletClient({
@@ -236,6 +238,7 @@ export function AccountArticles({ wallet }: Props) {
           articleId: row.articleId,
           publisher: wallet,
           allowALaCarte,
+          issuedAt,
           aLaCarteSig,
         }),
       });

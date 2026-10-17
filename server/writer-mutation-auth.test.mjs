@@ -1,9 +1,9 @@
 /**
  * POST /api/writers/plan and POST /api/articles/a-la-carte require the
- * owning publisher's EIP-191 signature. Rejected requests must not reach
- * Supabase. Publish and listing do not timestamp signatures, so a signature
- * is rejected when it is replayed onto a different change, and the same
- * signed payload can be submitted again.
+ * owning publisher's EIP-191 signature over the payload plus issuedAt.
+ * Rejected requests must not reach Supabase. A signature outside the
+ * 10-minute window is 401 stale_signature. The same signed message a second
+ * time is 401 replayed_signature. A new issuedAt is a new signature and saves.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -172,16 +172,34 @@ function writes() {
   return hits.filter((hit) => hit.method === "POST" || hit.method === "PATCH");
 }
 
+function freshIssuedAt(offsetMs = 0) {
+  return new Date(Date.now() + offsetMs).toISOString();
+}
+
+async function signedPlan(fields, signer = owner) {
+  const body = { issuedAt: freshIssuedAt(), ...fields };
+  const planSig = await signer.signMessage({ message: serverPlanMessage(body) });
+  return { ...body, planSig };
+}
+
+async function signedALaCarte(fields, signer = owner) {
+  const body = { issuedAt: freshIssuedAt(), ...fields };
+  const aLaCarteSig = await signer.signMessage({ message: serverALaCarteMessage(body) });
+  return { ...body, aLaCarteSig };
+}
+
 test("client and server sign the same plan and a-la-carte messages", () => {
   const plan = {
     publisher: owner.address.toUpperCase(),
     monthlyPriceCents: 500,
     allowALaCarte: false,
+    issuedAt: "2026-10-17T03:10:00.000Z",
   };
   const article = {
     articleId: SLUG,
     publisher: owner.address,
     allowALaCarte: true,
+    issuedAt: "2026-10-17T03:10:00.000Z",
   };
   const connect = {
     publisher: owner.address.toUpperCase(),
@@ -189,6 +207,8 @@ test("client and server sign the same plan and a-la-carte messages", () => {
   };
   assert.equal(serverPlanMessage(plan), clientPlanMessage(plan));
   assert.equal(serverALaCarteMessage(article), clientALaCarteMessage(article));
+  assert.match(serverPlanMessage(plan), /issuedAt:2026-10-17T03:10:00\.000Z/);
+  assert.match(serverALaCarteMessage(article), /issuedAt:2026-10-17T03:10:00\.000Z/);
   assert.equal(serverConnectMessage(connect), clientConnectMessage(connect));
   assert.equal(
     serverConnectMessage(connect),
@@ -218,6 +238,13 @@ test("dashboard and account UI sign plan and a-la-carte updates", () => {
   assert.match(account, /issuedAt/);
   assert.match(articles, /buildALaCarteAuthMessage/);
   assert.match(articles, /aLaCarteSig/);
+  assert.match(articles, /issuedAt/);
+  const planSave = dashboard.split("async function saveWriterPlan")[1]?.split("async function ")[0] || "";
+  const listingSave = dashboard.split("async function saveListingFromDashboard")[1]?.split("async function ")[0] || "";
+  assert.match(planSave, /issuedAt/);
+  assert.match(planSave, /planSig/);
+  assert.match(listingSave, /aLaCarteIssuedAt/);
+  assert.match(listingSave, /aLaCarteSig/);
 });
 
 test("POST /api/writers/plan rejects an unauthenticated request without touching the DB", async () => {
@@ -238,6 +265,7 @@ test("POST /api/writers/plan rejects a bad signature without touching the DB", a
     publisher: owner.address,
     monthlyPriceCents: 500,
     allowALaCarte: false,
+    issuedAt: freshIssuedAt(),
     planSig: "not-a-signature",
   });
   assert.equal(res.status, 401);
@@ -247,18 +275,15 @@ test("POST /api/writers/plan rejects a bad signature without touching the DB", a
 
 test("POST /api/writers/plan rejects a signature from a different wallet", async () => {
   resetDb();
-  const message = serverPlanMessage({
-    publisher: owner.address,
-    monthlyPriceCents: 900,
-    allowALaCarte: false,
-  });
-  const planSig = await other.signMessage({ message });
-  const res = await post("/api/writers/plan", {
-    publisher: owner.address,
-    monthlyPriceCents: 900,
-    allowALaCarte: false,
-    planSig,
-  });
+  const body = await signedPlan(
+    {
+      publisher: owner.address,
+      monthlyPriceCents: 900,
+      allowALaCarte: false,
+    },
+    other
+  );
+  const res = await post("/api/writers/plan", body);
   assert.equal(res.status, 403);
   assert.equal(res.body.error, "forbidden");
   assert.equal(hits.length, 0);
@@ -266,44 +291,63 @@ test("POST /api/writers/plan rejects a signature from a different wallet", async
 
 test("POST /api/writers/plan rejects a signature replayed for a different price or flag", async () => {
   resetDb();
-  const message = serverPlanMessage({
+  const signed = await signedPlan({
     publisher: owner.address,
     monthlyPriceCents: 500,
     allowALaCarte: true,
   });
-  const planSig = await owner.signMessage({ message });
-  const otherPrice = await post("/api/writers/plan", {
-    publisher: owner.address,
-    monthlyPriceCents: 900,
-    allowALaCarte: true,
-    planSig,
-  });
-  const otherFlag = await post("/api/writers/plan", {
-    publisher: owner.address,
-    monthlyPriceCents: 500,
-    allowALaCarte: false,
-    planSig,
-  });
+  const otherPrice = await post("/api/writers/plan", { ...signed, monthlyPriceCents: 900 });
+  const otherFlag = await post("/api/writers/plan", { ...signed, allowALaCarte: false });
   assert.equal(otherPrice.status, 403);
   assert.equal(otherFlag.status, 403);
   assert.equal(hits.length, 0);
 });
 
-test("POST /api/writers/plan accepts the owning publisher signature and can be repeated", async () => {
+test("POST /api/writers/plan rejects a stale or future signature without touching the DB", async () => {
   resetDb();
-  const body = {
+  const stale = await signedPlan({
     publisher: owner.address,
     monthlyPriceCents: 900,
     allowALaCarte: false,
-  };
-  const planSig = await owner.signMessage({ message: serverPlanMessage(body) });
-  const first = await post("/api/writers/plan", { ...body, planSig });
+    issuedAt: freshIssuedAt(-11 * 60 * 1000),
+  });
+  const future = await signedPlan({
+    publisher: owner.address,
+    monthlyPriceCents: 900,
+    allowALaCarte: false,
+    issuedAt: freshIssuedAt(11 * 60 * 1000),
+  });
+  const staleRes = await post("/api/writers/plan", stale);
+  const futureRes = await post("/api/writers/plan", future);
+  assert.equal(staleRes.status, 401);
+  assert.equal(staleRes.body.error, "stale_signature");
+  assert.equal(futureRes.status, 401);
+  assert.equal(futureRes.body.error, "stale_signature");
+  assert.equal(hits.length, 0);
+});
+
+test("POST /api/writers/plan accepts a fresh signature and rejects a replay", async () => {
+  resetDb();
+  const body = await signedPlan({
+    publisher: owner.address,
+    monthlyPriceCents: 900,
+    allowALaCarte: false,
+  });
+  const first = await post("/api/writers/plan", body);
   assert.equal(first.status, 200, JSON.stringify(first.body));
   assert.equal(first.body.plan.allowALaCarte, false);
   assert.equal(first.body.plan.monthlyPriceCents, 900);
   assert.equal(first.body.plan.publisher, owner.address.toLowerCase());
-  const second = await post("/api/writers/plan", { ...body, planSig });
-  assert.equal(second.status, 200);
+  const replay = await post("/api/writers/plan", body);
+  assert.equal(replay.status, 401);
+  assert.equal(replay.body.error, "replayed_signature");
+  const again = await signedPlan({
+    publisher: owner.address,
+    monthlyPriceCents: 900,
+    allowALaCarte: false,
+  });
+  const second = await post("/api/writers/plan", again);
+  assert.equal(second.status, 200, JSON.stringify(second.body));
   assert.equal(writes().length, 2);
   assert.equal(writes()[0].path, "/rest/v1/writer_plans");
   assert.equal(writes()[0].body[0].allow_a_la_carte, false);
@@ -329,6 +373,7 @@ test("POST /api/articles/a-la-carte rejects a bad signature without touching the
     articleId: SLUG,
     publisher: owner.address,
     allowALaCarte: false,
+    issuedAt: freshIssuedAt(),
     aLaCarteSig: "not-a-signature",
   });
   assert.equal(res.status, 401);
@@ -337,18 +382,15 @@ test("POST /api/articles/a-la-carte rejects a bad signature without touching the
 
 test("POST /api/articles/a-la-carte rejects a signature from a different wallet", async () => {
   resetDb();
-  const message = serverALaCarteMessage({
-    articleId: SLUG,
-    publisher: owner.address,
-    allowALaCarte: false,
-  });
-  const aLaCarteSig = await other.signMessage({ message });
-  const res = await post("/api/articles/a-la-carte", {
-    articleId: SLUG,
-    publisher: owner.address,
-    allowALaCarte: false,
-    aLaCarteSig,
-  });
+  const body = await signedALaCarte(
+    {
+      articleId: SLUG,
+      publisher: owner.address,
+      allowALaCarte: false,
+    },
+    other
+  );
+  const res = await post("/api/articles/a-la-carte", body);
   assert.equal(res.status, 403);
   assert.equal(res.body.error, "forbidden");
   assert.equal(hits.length, 0);
@@ -356,40 +398,42 @@ test("POST /api/articles/a-la-carte rejects a signature from a different wallet"
 
 test("POST /api/articles/a-la-carte rejects a signature replayed for another article or flag", async () => {
   resetDb();
-  const message = serverALaCarteMessage({
+  const signed = await signedALaCarte({
     articleId: SLUG,
     publisher: owner.address,
     allowALaCarte: true,
   });
-  const aLaCarteSig = await owner.signMessage({ message });
-  const otherArticle = await post("/api/articles/a-la-carte", {
-    articleId: "other-piece",
-    publisher: owner.address,
-    allowALaCarte: true,
-    aLaCarteSig,
-  });
-  const otherFlag = await post("/api/articles/a-la-carte", {
-    articleId: SLUG,
-    publisher: owner.address,
-    allowALaCarte: false,
-    aLaCarteSig,
-  });
+  const otherArticle = await post("/api/articles/a-la-carte", { ...signed, articleId: "other-piece" });
+  const otherFlag = await post("/api/articles/a-la-carte", { ...signed, allowALaCarte: false });
   assert.equal(otherArticle.status, 403);
   assert.equal(otherFlag.status, 403);
   assert.equal(writes().length, 0);
   assert.equal(hits.length, 0);
 });
 
-test("POST /api/articles/a-la-carte rejects the signer when they do not own the article", async () => {
+test("POST /api/articles/a-la-carte rejects a stale signature without touching the DB", async () => {
   resetDb();
-  articlePublisher = other.address.toLowerCase();
-  const body = {
+  const body = await signedALaCarte({
     articleId: SLUG,
     publisher: owner.address,
     allowALaCarte: false,
-  };
-  const aLaCarteSig = await owner.signMessage({ message: serverALaCarteMessage(body) });
-  const res = await post("/api/articles/a-la-carte", { ...body, aLaCarteSig });
+    issuedAt: freshIssuedAt(-11 * 60 * 1000),
+  });
+  const res = await post("/api/articles/a-la-carte", body);
+  assert.equal(res.status, 401);
+  assert.equal(res.body.error, "stale_signature");
+  assert.equal(hits.length, 0);
+});
+
+test("POST /api/articles/a-la-carte rejects the signer when they do not own the article", async () => {
+  resetDb();
+  articlePublisher = other.address.toLowerCase();
+  const body = await signedALaCarte({
+    articleId: SLUG,
+    publisher: owner.address,
+    allowALaCarte: false,
+  });
+  const res = await post("/api/articles/a-la-carte", body);
   assert.equal(res.status, 403);
   assert.equal(res.body.error, "forbidden");
   assert.equal(writes().length, 0);
@@ -397,18 +441,20 @@ test("POST /api/articles/a-la-carte rejects the signer when they do not own the 
   assert.equal(hits[0].method, "GET");
 });
 
-test("POST /api/articles/a-la-carte accepts the owning publisher signature", async () => {
+test("POST /api/articles/a-la-carte accepts a fresh signature and rejects a replay", async () => {
   resetDb();
-  const body = {
+  const body = await signedALaCarte({
     articleId: SLUG,
     publisher: owner.address,
     allowALaCarte: false,
-  };
-  const aLaCarteSig = await owner.signMessage({ message: serverALaCarteMessage(body) });
-  const res = await post("/api/articles/a-la-carte", { ...body, aLaCarteSig });
+  });
+  const res = await post("/api/articles/a-la-carte", body);
   assert.equal(res.status, 200, `${JSON.stringify(res.body)}\n${serverLog}`);
   assert.equal(res.body.articleId, SLUG);
   assert.equal(res.body.allowALaCarte, false);
+  const replay = await post("/api/articles/a-la-carte", body);
+  assert.equal(replay.status, 401);
+  assert.equal(replay.body.error, "replayed_signature");
   assert.equal(writes().length, 1);
   assert.equal(writes()[0].method, "PATCH");
   assert.equal(writes()[0].body.allow_a_la_carte, false);

@@ -22,7 +22,7 @@ import {
 } from "./stripe.mjs";
 import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
 import {
-  assertPublisherSignature,
+  assertWriterMutationSignature,
   buildALaCarteAuthMessage,
   buildPlanAuthMessage,
 } from "./writer-mutation-auth.mjs";
@@ -154,6 +154,7 @@ export async function getWriterPlan(publisherRaw) {
  *   publisher: string,
  *   monthlyPriceCents?: number,
  *   allowALaCarte?: boolean,
+ *   issuedAt?: string,
  *   planSig?: string,
  * }} input
  */
@@ -165,8 +166,14 @@ export async function upsertWriterPlan(input) {
     publisher,
     monthlyPriceCents: input.monthlyPriceCents,
     allowALaCarte: input.allowALaCarte,
+    issuedAt: input.issuedAt,
   });
-  await assertPublisherSignature(publisher, message, input.planSig);
+  await assertWriterMutationSignature({
+    publisher,
+    message,
+    signature: input.planSig,
+    issuedAt: input.issuedAt,
+  });
   const cents = normalizeMonthlyCents(input.monthlyPriceCents);
   const allowALaCarte = input.allowALaCarte !== false;
   const rows = await supabase("writer_plans?on_conflict=publisher", {
@@ -736,7 +743,7 @@ export async function lapseExpiredCryptoSubscriptions({ now = new Date() } = {})
   return { lapsed: list.length };
 }
 
-export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, aLaCarteSig }) {
+export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, issuedAt, aLaCarteSig }) {
   const writer = normalizeAddress(publisher);
   const slug = String(articleId || "").trim();
   if (!writer) throw httpError("invalid_publisher");
@@ -748,8 +755,14 @@ export async function setArticleALaCarte({ articleId, publisher, allowALaCarte, 
     articleId: slug,
     publisher: writer,
     allowALaCarte,
+    issuedAt,
   });
-  await assertPublisherSignature(writer, message, aLaCarteSig);
+  await assertWriterMutationSignature({
+    publisher: writer,
+    message,
+    signature: aLaCarteSig,
+    issuedAt,
+  });
 
   const found = await supabase(
     `articles?select=article_id,publisher&article_id=eq.${encodeURIComponent(slug)}&limit=1`

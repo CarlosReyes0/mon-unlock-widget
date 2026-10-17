@@ -3,15 +3,16 @@
  *
  * Same EIP-191 pattern as update-listing ("Open Paywall listing v1") and
  * register-article ("Open Paywall publish v1"): a fixed prefix plus the fields
- * being changed. Plan and à la carte do not use a timestamp. A signature
- * authorizes only that exact payload, so it cannot be replayed onto a
- * different writer, article, price, or flag. Submitting the same payload
- * again is idempotent.
+ * being changed. A signature authorizes only that exact payload, so it cannot
+ * be replayed onto a different writer, article, price, or flag.
  *
- * Connect onboarding ("Open Paywall connect v1") adds issuedAt and reuses the
- * follower signature replay window (follow-core issuedAtFresh, 10 minutes).
- * Every failed check is 401. The shared helper's 403 for a wrong wallet is
- * mapped to 401 so a bad proof never continues into Stripe.
+ * Plan, à la carte, and Connect ("Open Paywall connect v1") include issuedAt
+ * and reuse the follower signature window (follow-core issuedAtFresh, 10
+ * minutes). A stale issuedAt is 401 stale_signature. A second use of the same
+ * signed message inside that window is 401 replayed_signature (in-memory; a
+ * new issuedAt is a new signature and still saves). Connect maps every failed
+ * check, including a wrong wallet, to 401. Plan and à la carte keep 403 for a
+ * readable signature from a different wallet.
  *
  * Keep buildPlanAuthMessage / buildALaCarteAuthMessage / buildConnectAuthMessage
  * identical to src/core/publish-auth.ts. The Railway image does not include
@@ -19,7 +20,7 @@
  * in server/.
  */
 import { recoverMessageAddress } from "viem";
-import { issuedAtFresh } from "./follow-core.mjs";
+import { ISSUED_AT_WINDOW_MS, issuedAtFresh } from "./follow-core.mjs";
 
 export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
 export const A_LA_CARTE_AUTH_PREFIX = "Open Paywall a-la-carte v1";
@@ -37,7 +38,7 @@ function listFlag(value) {
 }
 
 /**
- * @param {{ publisher: unknown, monthlyPriceCents: unknown, allowALaCarte?: unknown }} input
+ * @param {{ publisher: unknown, monthlyPriceCents: unknown, allowALaCarte?: unknown, issuedAt: unknown }} input
  */
 export function buildPlanAuthMessage(input) {
   return [
@@ -45,11 +46,12 @@ export function buildPlanAuthMessage(input) {
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `monthlyPriceCents:${asText(input.monthlyPriceCents).trim()}`,
     `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }
 
 /**
- * @param {{ articleId: unknown, publisher: unknown, allowALaCarte?: unknown }} input
+ * @param {{ articleId: unknown, publisher: unknown, allowALaCarte?: unknown, issuedAt: unknown }} input
  */
 export function buildALaCarteAuthMessage(input) {
   return [
@@ -57,6 +59,7 @@ export function buildALaCarteAuthMessage(input) {
     `article:${asText(input.articleId).trim()}`,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }
 
@@ -105,6 +108,34 @@ export async function assertPublisherSignature(publisher, message, signature) {
   if (String(recovered || "").toLowerCase() !== String(publisher || "").toLowerCase()) {
     throw httpError("forbidden", 403);
   }
+}
+
+/** Signed plan / à-la-carte messages accepted inside the freshness window. */
+const seenWriterMessages = new Map();
+
+function rememberWriterMessage(message, now) {
+  for (const [key, expiresAt] of seenWriterMessages) {
+    if (expiresAt <= now) seenWriterMessages.delete(key);
+  }
+  if (seenWriterMessages.has(message)) return false;
+  seenWriterMessages.set(message, now + ISSUED_AT_WINDOW_MS);
+  return true;
+}
+
+/**
+ * Plan and à-la-carte proof. Missing signature is 401 unauthorized. A stale
+ * or future issuedAt is 401 stale_signature. A bad signature is 401. A
+ * different wallet is 403. Reusing a message already accepted in this process
+ * is 401 replayed_signature. Call before any Supabase read or write.
+ * @param {{ publisher: string, message: string, signature: unknown, issuedAt: unknown }} input
+ * @param {number} [now]
+ */
+export async function assertWriterMutationSignature(input, now = Date.now()) {
+  const signature = typeof input?.signature === "string" ? input.signature.trim() : "";
+  if (!signature) throw httpError("unauthorized", 401);
+  if (!issuedAtFresh(input?.issuedAt, now)) throw httpError("stale_signature", 401);
+  await assertPublisherSignature(input.publisher, input.message, signature);
+  if (!rememberWriterMessage(input.message, now)) throw httpError("replayed_signature", 401);
 }
 
 /**

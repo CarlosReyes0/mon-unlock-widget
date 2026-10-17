@@ -8,7 +8,7 @@
  *
  * Plan, à la carte, and Connect onboarding messages are mirrored in
  * server/writer-mutation-auth.mjs (the Railway server cannot import this
- * TypeScript). Keep both copies identical.
+ * TypeScript). Keep both copies identical, including the issuedAt line.
  */
 
 export const PUBLISH_AUTH_PREFIX = "Open Paywall publish v1";
@@ -234,15 +234,18 @@ export type PlanAuthFields = {
   publisher: unknown;
   monthlyPriceCents: unknown;
   allowALaCarte?: unknown;
+  /** ISO-8601 timestamp. POST /api/writers/plan rejects it outside a 10-minute window. */
+  issuedAt: unknown;
 };
 
-/** Binds the writer and the plan fields that POST /api/writers/plan will store. */
+/** Binds the writer, the plan fields, and issuedAt that POST /api/writers/plan checks. */
 export function buildPlanAuthMessage(input: PlanAuthFields): string {
   return [
     PLAN_AUTH_PREFIX,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `monthlyPriceCents:${asText(input.monthlyPriceCents).trim()}`,
     `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }
 
@@ -250,15 +253,18 @@ export type ALaCarteAuthFields = {
   articleId: unknown;
   publisher: unknown;
   allowALaCarte?: unknown;
+  /** ISO-8601 timestamp. POST /api/articles/a-la-carte rejects it outside a 10-minute window. */
+  issuedAt: unknown;
 };
 
-/** Binds the article, its publisher, and the allow_a_la_carte flag being set. */
+/** Binds the article, its publisher, the flag, and issuedAt. */
 export function buildALaCarteAuthMessage(input: ALaCarteAuthFields): string {
   return [
     A_LA_CARTE_AUTH_PREFIX,
     `article:${asText(input.articleId).trim()}`,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }
 

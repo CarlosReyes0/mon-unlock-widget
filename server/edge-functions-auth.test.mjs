@@ -88,6 +88,22 @@ test("update-listing requires a listing signature or LISTING_ADMIN_SECRET", () =
   assert.match(read(".env.example"), /LISTING_ADMIN_SECRET=/);
 });
 
+test("edge functions pin viem to the lockfile version", () => {
+  const pinned = "https://esm.sh/viem@2.53.1";
+  for (const rel of [
+    "supabase/functions/indexer/index.ts",
+    "supabase/functions/article-body/index.ts",
+    "supabase/functions/register-article/index.ts",
+    "supabase/functions/update-listing/index.ts",
+  ]) {
+    const source = read(rel);
+    assert.match(source, new RegExp(pinned.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), rel);
+    assert.doesNotMatch(source, /esm\.sh\/viem@2['"]/, rel);
+  }
+  const lock = read("package-lock.json");
+  assert.match(lock, /"node_modules\/viem":\s*\{\s*"version": "2\.53\.1"/);
+});
+
 test("article-body ignores unlock contracts that are not on the allowlist", () => {
   const edge = read("supabase/functions/article-body/index.ts");
   assert.match(edge, /isAllowedUnlockContract/);

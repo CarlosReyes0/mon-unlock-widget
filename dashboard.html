@@ -612,12 +612,15 @@
           const allowBuy = document.getElementById("listingAllowBuy");
           const allowALaCarte = allowBuy ? Boolean(allowBuy.checked) : true;
           let aLaCarteSig = "";
+          let aLaCarteIssuedAt = "";
           if (allowBuy) {
             status.textContent = "Approve the pay-per-article signature…";
+            aLaCarteIssuedAt = new Date().toISOString();
             const aLaCarteMessage = buildALaCarteAuthMessage({
               articleId: listingEditorArticle.articleId,
               publisher: currentWallet,
               allowALaCarte,
+              issuedAt: aLaCarteIssuedAt,
             });
             aLaCarteSig = await signPlainMessage(eth, currentWallet, aLaCarteMessage);
           }
@@ -642,6 +645,7 @@
                 articleId: listingEditorArticle.articleId,
                 publisher: currentWallet,
                 allowALaCarte,
+                issuedAt: aLaCarteIssuedAt,
                 aLaCarteSig,
               }),
             });
@@ -842,10 +846,12 @@ ${teaser}
         status.style.color = "#6b7280";
         try {
           const { buildPlanAuthMessage } = await import("/dist/core/publish-auth.js");
+          const issuedAt = new Date().toISOString();
           const planMessage = buildPlanAuthMessage({
             publisher: currentWallet,
             monthlyPriceCents: cents,
             allowALaCarte,
+            issuedAt,
           });
           const eth = getInjectedProvider();
           if (!eth) throw new Error("Connect a wallet to save the plan.");
@@ -857,6 +863,7 @@ ${teaser}
               publisher: currentWallet,
               monthlyPriceCents: cents,
               allowALaCarte,
+              issuedAt,
               planSig,
             }),
           });
