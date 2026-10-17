@@ -1,5 +1,6 @@
 import type { FundWalletConfig } from "@privy-io/react-auth";
 import { monad } from "viem/chains";
+import { buildGasAuthMessage } from "../core/publish-auth.js";
 
 const RAMP_HOST_API_KEY = (import.meta.env.VITE_RAMP_HOST_API_KEY as string | undefined)?.trim() ?? "";
 
@@ -140,12 +141,22 @@ export async function openCardBuy(
  * approve/unlock gas. Coinbase is not used for this.
  * Returns true when funded, a drip was submitted, or rate-limited (in flight).
  */
-export async function requestGasDrip(address: string): Promise<boolean> {
+export async function requestGasDrip(
+  address: string,
+  signMessage?: (message: string) => Promise<string>
+): Promise<boolean> {
   try {
+    const issuedAt = new Date().toISOString();
+    const signature = signMessage
+      ? await signMessage(buildGasAuthMessage({ address, issuedAt }))
+      : "";
     const res = await fetch("/api/relay/gas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address }),
+      credentials: "same-origin",
+      body: JSON.stringify(
+        signature ? { address, issuedAt, signature } : { address }
+      ),
     });
     if (res.status === 429) return true;
     if (!res.ok) return false;

@@ -143,7 +143,7 @@ test("voice drafts are optional, drafts-only, and never post", () => {
   assert.match(voice, /openpaywall-voice-samples/);
   assert.doesNotMatch(voice, /Post to X/);
   assert.doesNotMatch(voice, /\/2\/tweets/);
-  assert.doesNotMatch(voice, /onPublish/);
+  assert.doesNotMatch(voice, /\bonPublish\b/);
   assert.match(docs, /Autopost is future work|out of scope/i);
   assert.match(docs, /VOICE_DRAFT_API_KEY/);
 });

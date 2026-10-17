@@ -14,6 +14,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { publicOrigin } from "./article-og.mjs";
+import { resolveRequestReaderSession } from "./reader-session.mjs";
+import {
+  assertRecentWalletSignature,
+  buildMediaAuthMessage,
+} from "./writer-mutation-auth.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MEDIA_DIR = path.join(__dirname, "data", "media");
@@ -377,15 +382,48 @@ function parseByteRange(rangeHeader, size) {
   return { start, end };
 }
 
+function headerValue(req, name) {
+  const raw = req?.headers?.[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return String(value || "").trim();
+}
+
 function sendJson(res, status, body) {
   if (res.writableEnded) return;
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, X-Media-Name",
+    "Access-Control-Allow-Headers":
+      "Content-Type, X-Media-Name, X-Writer-Address, X-Writer-Issued-At, X-Writer-Signature, X-Reader-Session",
   });
   res.end(JSON.stringify(body));
+}
+
+/**
+ * A signed-in reader session, or a writer signature inside the issuedAt window.
+ * Checked before the file is stored.
+ */
+async function authorizeMediaUpload(req) {
+  const address = headerValue(req, "x-writer-address");
+  const issuedAt = headerValue(req, "x-writer-issued-at");
+  const signature = headerValue(req, "x-writer-signature");
+  if (signature || issuedAt || address) {
+    const message = buildMediaAuthMessage({ address, issuedAt });
+    try {
+      await assertRecentWalletSignature({ address, issuedAt, signature, message });
+    } catch {
+      throw mediaError("unauthorized", 401, "Sign in to upload.");
+    }
+    return;
+  }
+  let session = null;
+  try {
+    session = resolveRequestReaderSession(req);
+  } catch {
+    throw mediaError("unauthorized", 401, "Sign in to upload.");
+  }
+  if (!session?.address) throw mediaError("unauthorized", 401, "Sign in to upload.");
 }
 
 function serveDiskFile(req, res, filePath, contentType) {
@@ -484,8 +522,20 @@ export async function tryHandleMediaRequest(req, res) {
   }
 
   if (method === "POST" && pathOnly === "/api/media") {
+    try {
+      await authorizeMediaUpload(req);
+    } catch (e) {
+      if (typeof req.resume === "function") req.resume();
+      sendJson(res, e?.status || 401, {
+        ok: false,
+        error: e?.message || "unauthorized",
+        message: e?.publicMessage || "Sign in to upload.",
+      });
+      return true;
+    }
     const declared = Number(req.headers?.["content-length"] || 0);
     if (declared > MEDIA_LIMITS.video) {
+      if (typeof req.resume === "function") req.resume();
       sendJson(res, 413, {
         ok: false,
         error: "file_too_large",

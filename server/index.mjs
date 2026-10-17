@@ -11,6 +11,8 @@
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
  *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
  *                                        and optional reader USDC-unlock gas drips
+ *   RELAYER_GAS_GLOBAL_DAILY_CAP       — gas drips per UTC day, default 8
+ *   VOICE_DRAFT_DAILY_LIMIT            — voice-draft calls per address per UTC day, default 8
  *   ARTICLE_NFT_CONTRACT               — optional ERC-1155; writers/readers mint (they pay gas)
  *   MONAD_RPC_URL                      — optional, defaults to https://rpc.monad.xyz
  *   PORT                               — listen port (Railway sets this)
@@ -1137,7 +1139,17 @@ const server = http.createServer(guardRequest(async (req, res) => {
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
-      const result = await relayGasDrip(parsed, { ip: clientIp(req) });
+      const hasProof = Boolean(
+        String(parsed?.signature || parsed?.sig || "").trim() ||
+          String(parsed?.issuedAt || "").trim()
+      );
+      let readerSession = null;
+      try {
+        readerSession = resolveRequestReaderSession(req);
+      } catch (e) {
+        if (!hasProof) throw e;
+      }
+      const result = await relayGasDrip(parsed, { ip: clientIp(req), readerSession });
       return sendJson(res, 200, result);
     } catch (e) {
       if (e?.message === "body_too_large") {

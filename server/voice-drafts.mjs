@@ -18,6 +18,69 @@
  * Publish / unlock must not call this module.
  */
 import { ARTICLE_BODY_LIMIT, readLimitedBody } from "./body-limit.mjs";
+import { resolveRequestReaderSession } from "./reader-session.mjs";
+import {
+  assertRecentWalletSignature,
+  buildVoiceAuthMessage,
+} from "./writer-mutation-auth.mjs";
+
+const DEFAULT_VOICE_DAILY_LIMIT = 8;
+/** @type {Map<string, number>} */
+const voiceHits = new Map();
+
+export function resetVoiceDraftLimitsForTests() {
+  voiceHits.clear();
+}
+
+function voiceDailyLimit(env = process.env) {
+  const n = Number(env.VOICE_DRAFT_DAILY_LIMIT);
+  if (Number.isFinite(n) && n >= 1) return Math.floor(n);
+  return DEFAULT_VOICE_DAILY_LIMIT;
+}
+
+function takeVoiceDraftSlot(address, now = Date.now()) {
+  const day = new Date(now).toISOString().slice(0, 10);
+  const key = `${String(address || "").toLowerCase()}:${day}`;
+  const used = voiceHits.get(key) || 0;
+  if (used >= voiceDailyLimit()) return false;
+  voiceHits.set(key, used + 1);
+  return true;
+}
+
+function headerValue(req, name) {
+  const raw = req?.headers?.[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return String(value || "").trim();
+}
+
+/**
+ * Reader session or a fresh writer signature. Runs before the visibility flag.
+ * @returns {Promise<string>} lowercase address
+ */
+async function authorizeVoiceDraft(req, parsed) {
+  const address = String(parsed?.address || parsed?.writer || headerValue(req, "x-writer-address") || "").trim();
+  const issuedAt = String(parsed?.issuedAt || headerValue(req, "x-writer-issued-at") || "").trim();
+  const signature = String(parsed?.signature || parsed?.sig || headerValue(req, "x-writer-signature") || "").trim();
+  if (signature || issuedAt || address) {
+    const message = buildVoiceAuthMessage({ address, issuedAt });
+    await assertRecentWalletSignature({ address, issuedAt, signature, message });
+    return address.toLowerCase();
+  }
+  let session = null;
+  try {
+    session = resolveRequestReaderSession(req);
+  } catch (e) {
+    const err = new Error("unauthorized");
+    err.status = e?.status === 401 ? 401 : 401;
+    throw err;
+  }
+  if (!session?.address) {
+    const err = new Error("unauthorized");
+    err.status = 401;
+    throw err;
+  }
+  return session.address;
+}
 
 export const MISSING_KEY_MESSAGE =
   "Voice drafts are off until an LLM key is set. Add VOICE_DRAFT_API_KEY on Railway (or OPENAI_API_KEY / ANTHROPIC_API_KEY). Drafts still never auto-post.";
@@ -66,7 +129,8 @@ function sendJson(res, status, body) {
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, Accept, X-Writer-Address, X-Writer-Issued-At, X-Writer-Signature, X-Reader-Session",
   });
   res.end(payload);
 }
@@ -503,6 +567,29 @@ export async function tryHandleVoiceDraftRequest(req, res) {
         draftsOnly: true,
         autopost: false,
         message: "Could not read the voice draft request. Nothing was posted.",
+      });
+      return true;
+    }
+    let signer = "";
+    try {
+      signer = await authorizeVoiceDraft(req, parsed);
+    } catch (e) {
+      sendJson(res, e?.status || 401, {
+        ok: false,
+        code: "unauthorized",
+        draftsOnly: true,
+        autopost: false,
+        message: "Sign in to draft posts. Nothing was posted.",
+      });
+      return true;
+    }
+    if (!takeVoiceDraftSlot(signer)) {
+      sendJson(res, 429, {
+        ok: false,
+        code: "rate_limited",
+        draftsOnly: true,
+        autopost: false,
+        message: "Too many draft requests. Nothing was posted.",
       });
       return true;
     }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFundWallet, usePrivy, useWallets } from "@privy-io/react-auth";
-import { createPublicClient, formatEther, http, parseEther, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, formatEther, http, parseEther, type Address } from "viem";
 import { monad } from "viem/chains";
 import {
   CHECKOUT_MESSAGE_SOURCE,
@@ -74,6 +74,17 @@ export function CryptoPaySection({
   const embedded = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
   const address = embedded?.address ?? null;
 
+  const signGasMessage = async (message: string) => {
+    if (!embedded || !address) throw new Error("Sign in to add gas.");
+    const provider = await embedded.getEthereumProvider();
+    const walletClient = createWalletClient({
+      account: address as Address,
+      chain: monad,
+      transport: custom(provider),
+    });
+    return walletClient.signMessage({ account: address as Address, message });
+  };
+
   const priceUnits = settleUsdc ? parseUsdAmount(price) : parseMonAmount(price);
   const priceLabel = settleUsdc ? formatUsd(priceUnits) : formatMon(priceUnits);
 
@@ -109,7 +120,7 @@ export function CryptoPaySection({
 
     // Same RELAYER_PRIVATE_KEY as writer registration. Do not open Coinbase for MON —
     // that is what showed "Buy Monad" on Pay with USDC.
-    const dripped = await requestGasDrip(address);
+    const dripped = await requestGasDrip(address, signGasMessage);
     if (dripped) {
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 1500));
@@ -195,7 +206,7 @@ export function CryptoPaySection({
 
     if (usdc < usdcNeeded) {
       setPhase("funding");
-      void requestGasDrip(address);
+      void requestGasDrip(address, signGasMessage);
       const amount = formatUsdc(usdcNeeded);
       const viaCoinbase = await openCardBuy(address, "USDC", amount);
       if (!viaCoinbase) {
@@ -338,7 +349,7 @@ export function CryptoPaySection({
       if (usdc < priceUnits) {
         setPhase("funding");
         // Drip gas in the background so Coinbase opens on USDC, not Monad.
-        void requestGasDrip(address);
+        void requestGasDrip(address, signGasMessage);
         const amount = formatUsd(priceUnits);
         const viaCoinbase = await openCardBuy(address, "USDC", amount);
         if (!viaCoinbase) {

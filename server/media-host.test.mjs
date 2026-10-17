@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   identifyMedia,
   MEDIA_LIMITS,
@@ -13,6 +14,23 @@ import {
   storeMedia,
   tryHandleMediaRequest,
 } from "./media-host.mjs";
+import { signReaderSessionToken } from "./reader-session.mjs";
+import { buildMediaAuthMessage } from "./writer-mutation-auth.mjs";
+
+const WRITER_KEY = "0xac0974bec39a17e36ba4a6b4d4aad435cce0e4c9335790421507b8a191e28881";
+const writer = privateKeyToAccount(WRITER_KEY);
+process.env.READER_SESSION_SECRET = "test-reader-secret";
+
+async function writerHeaders() {
+  const issuedAt = new Date().toISOString();
+  const message = buildMediaAuthMessage({ address: writer.address, issuedAt });
+  const signature = await writer.signMessage({ message });
+  return {
+    "X-Writer-Address": writer.address,
+    "X-Writer-Issued-At": issuedAt,
+    "X-Writer-Signature": signature,
+  };
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MEDIA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "op-media-"));
@@ -95,11 +113,23 @@ test("refuses media paths that escape the host directory", () => {
   assert.equal(located?.full, path.join(MEDIA_DIR, "2026", "09", id));
 });
 
-test("POST /api/media stores a png and serves a byte range", async () => {
+test("POST /api/media rejects an unsigned upload", async () => {
   resetMediaHostForTests();
   const res = await fetch(`${base}/api/media`, {
     method: "POST",
     headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png" },
+    body: PNG,
+  });
+  assert.equal(res.status, 401);
+  const body = await res.json();
+  assert.equal(body.error, "unauthorized");
+});
+
+test("POST /api/media stores a png and serves a byte range", async () => {
+  resetMediaHostForTests();
+  const res = await fetch(`${base}/api/media`, {
+    method: "POST",
+    headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...(await writerHeaders()) },
     body: PNG,
   });
   assert.equal(res.status, 201);
@@ -120,16 +150,78 @@ test("POST /api/media stores a png and serves a byte range", async () => {
   assert.deepEqual(Buffer.from(await range.arrayBuffer()), PNG.subarray(0, 3));
 });
 
-test("POST /api/media rejects HTML disguised as an image", async () => {
+test("POST /api/media accepts a reader session and still rejects HTML", async () => {
   resetMediaHostForTests();
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const token = signReaderSessionToken(
+    {
+      address: writer.address.toLowerCase(),
+      domain: new URL(base).host,
+      issuedAt,
+      expiresAt: issuedAt + 3600,
+    },
+    "test-reader-secret"
+  );
   const res = await fetch(`${base}/api/media`, {
     method: "POST",
-    headers: { "Content-Type": "image/jpeg", "X-Media-Name": "photo.jpg" },
+    headers: {
+      "Content-Type": "image/jpeg",
+      "X-Media-Name": "photo.jpg",
+      "X-Reader-Session": token,
+    },
     body: Buffer.from("<!DOCTYPE html><script>alert(1)</script>"),
   });
   assert.equal(res.status, 415);
   const body = await res.json();
   assert.equal(body.error, "unsupported_type");
+});
+
+test("POST /api/media returns 413 over the size cap and 429 over the upload cap", async () => {
+  resetMediaHostForTests();
+  const headers = await writerHeaders();
+  const tooBig = await new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: address.port,
+        path: "/api/media",
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "video/mp4",
+          "Content-Length": String(MEDIA_LIMITS.video + 1),
+        },
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") });
+        });
+      }
+    );
+    req.on("error", reject);
+    req.end(PNG);
+  });
+  assert.equal(tooBig.status, 413);
+  assert.equal(JSON.parse(tooBig.body).error, "file_too_large");
+
+  resetMediaHostForTests();
+  for (let i = 0; i < 20; i++) {
+    const ok = await fetch(`${base}/api/media`, {
+      method: "POST",
+      headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...headers },
+      body: PNG,
+    });
+    assert.equal(ok.status, 201);
+  }
+  const limited = await fetch(`${base}/api/media`, {
+    method: "POST",
+    headers: { "Content-Type": "image/png", "X-Media-Name": "dot.png", ...headers },
+    body: PNG,
+  });
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).error, "rate_limited");
 });
 
 test("GET /api/media/status reports disk hosting without Supabase", async () => {

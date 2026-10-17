@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createWalletClient, custom, type Address } from "viem";
+import { monadMainnet } from "../core/chains.js";
+import { buildVoiceAuthMessage } from "../core/publish-auth.js";
+import type { Eip1193Provider } from "../core/wallet.js";
 
 const STORAGE_BASE = "openpaywall-voice-samples";
 
@@ -148,13 +152,30 @@ export function VoiceDrafts({
     setNote("Sample file added. Still drafts only.");
   }, []);
 
+  async function writerProof() {
+    const address = String(writerId || "").trim();
+    const provider = (window as Window & { __monPublisherProvider?: Eip1193Provider }).__monPublisherProvider;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address) || !provider) return {};
+    const issuedAt = new Date().toISOString();
+    const message = buildVoiceAuthMessage({ address, issuedAt });
+    const wallet = createWalletClient({
+      account: address as Address,
+      chain: monadMainnet,
+      transport: custom(provider),
+    });
+    const signature = await wallet.signMessage({ account: address as Address, message });
+    return { address, issuedAt, signature };
+  }
+
   async function onGenerate() {
     setBusy(true);
     setError("");
     setNote("Drafting in your voice…");
     try {
+      const proof = await writerProof();
       const res = await fetch("/api/voice-drafts", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           samples,
@@ -162,6 +183,7 @@ export function VoiceDrafts({
           title,
           body,
           articleUrl: articleUrl.trim() || suggestedUrl,
+          ...proof,
         }),
       });
       const json = (await res.json()) as {

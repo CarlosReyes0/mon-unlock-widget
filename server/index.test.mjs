@@ -203,15 +203,15 @@ test("POST /api/relay/register returns 503 without relayer key", async () => {
   assert.equal(body.fallback, true);
 });
 
-test("POST /api/relay/gas returns 503 without relayer key", async () => {
+test("POST /api/relay/gas rejects an unsigned address", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/relay/gas`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ address: "0x1111111111111111111111111111111111111111" }),
   });
-  assert.equal(res.status, 503);
+  assert.equal(res.status, 401);
   const body = await res.json();
-  assert.equal(body.error, "relayer_not_configured");
+  assert.equal(body.error, "unauthorized");
 });
 
 test("GET /api/article-nfts/config is unconfigured without ARTICLE_NFT_CONTRACT", async () => {
@@ -689,8 +689,9 @@ test("article routes accept a ~100KB essay and still reject bodies over 512KB", 
       body: "a".repeat(100_000),
     }),
   });
-  assert.equal(voice.status, 200);
+  assert.equal(voice.status, 401);
   const voiceBody = await voice.json();
+  assert.equal(voiceBody.code, "unauthorized");
   assert.notEqual(voiceBody.error, "body_too_large");
 
   const preview = await fetch(`http://127.0.0.1:${PORT}/api/miroshark/preview`, {

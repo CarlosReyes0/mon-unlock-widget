@@ -9,12 +9,25 @@ import { once } from "node:events";
 import { test, after } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { privateKeyToAccount } from "viem/accounts";
+import { buildVoiceAuthMessage } from "./writer-mutation-auth.mjs";
+
+const WRITER_KEY = "0xac0974bec39a17e36ba4a6b4d4aad435cce0e4c9335790421507b8a191e28881";
+const writer = privateKeyToAccount(WRITER_KEY);
+
+async function signedDraft(extra = {}) {
+  const issuedAt = new Date().toISOString();
+  const message = buildVoiceAuthMessage({ address: writer.address, issuedAt });
+  const signature = await writer.signMessage({ message });
+  return { address: writer.address, issuedAt, signature, ...extra };
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const APP_PORT = 18820;
 const OFF_PORT = 18822;
 const HIDDEN_PORT = 18823;
+const CAP_PORT = 18824;
 const MOCK_PORT = 18821;
 
 const seen = [];
@@ -90,17 +103,20 @@ function spawnApp(port, extraEnv = {}) {
   });
 }
 
-const app = spawnApp(APP_PORT);
+const app = spawnApp(APP_PORT, { VOICE_DRAFT_DAILY_LIMIT: "20" });
 const off = spawnApp(OFF_PORT, { VOICE_DRAFT_API_KEY: "", OPENAI_API_KEY: "", ANTHROPIC_API_KEY: "" });
 const hidden = spawnApp(HIDDEN_PORT, { VOICE_DRAFTS_VISIBLE: "" });
+const capped = spawnApp(CAP_PORT, { VOICE_DRAFT_DAILY_LIMIT: "1" });
 await once(app.stdout, "data");
 await once(off.stdout, "data");
 await once(hidden.stdout, "data");
+await once(capped.stdout, "data");
 
 after(() => {
   app.kill("SIGTERM");
   off.kill("SIGTERM");
   hidden.kill("SIGTERM");
+  capped.kill("SIGTERM");
   mock.close();
 });
 
@@ -133,12 +149,14 @@ test("POST /api/voice-drafts returns 2–3 drafts from the mocked LLM", async ()
   const res = await fetch(`${origin}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      samples: ["Walking home in the rain. That's the post."],
-      notes: "Dry. Short.",
-      title: "July rain walk",
-      body: "Walking home in the rain.\n---\nPaid rest.",
-    }),
+    body: JSON.stringify(
+      await signedDraft({
+        samples: ["Walking home in the rain. That's the post."],
+        notes: "Dry. Short.",
+        title: "July rain walk",
+        body: "Walking home in the rain.\n---\nPaid rest.",
+      })
+    ),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -159,7 +177,7 @@ test("POST /api/voice-drafts fail-softs when the LLM errors", async () => {
   const res = await fetch(`${origin}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ samples: ["sample"], title: "Hi" }),
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -169,7 +187,7 @@ test("POST /api/voice-drafts fail-softs when the LLM errors", async () => {
   mockMode = "ok";
 });
 
-test("hidden voice drafts do not call the model", async () => {
+test("hidden voice drafts still require auth before the flag", async () => {
   const before = seen.length;
   const status = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts/status`);
   const statusBody = await status.json();
@@ -177,10 +195,20 @@ test("hidden voice drafts do not call the model", async () => {
   assert.equal(statusBody.enabled, false);
   assert.equal(statusBody.provider, null);
 
-  const res = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts`, {
+  const unsigned = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ samples: ["sample"], title: "Hi" }),
+  });
+  assert.equal(unsigned.status, 401);
+  const denied = await unsigned.json();
+  assert.equal(denied.code, "unauthorized");
+  assert.equal(seen.length, before);
+
+  const res = await fetch(`http://127.0.0.1:${HIDDEN_PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -191,15 +219,39 @@ test("hidden voice drafts do not call the model", async () => {
 });
 
 test("POST /api/voice-drafts without a key is HTTP 200 missing_api_key", async () => {
-  const res = await fetch(`${offOrigin}/api/voice-drafts`, {
+  const unsigned = await fetch(`${offOrigin}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ samples: ["sample"], title: "Hi" }),
+  });
+  assert.equal(unsigned.status, 401);
+  const res = await fetch(`${offOrigin}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.ok, false);
   assert.equal(body.code, "missing_api_key");
+  assert.equal(body.autopost, false);
+});
+
+test("POST /api/voice-drafts returns 429 over the daily cap", async () => {
+  const first = await fetch(`http://127.0.0.1:${CAP_PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
+  });
+  assert.equal(first.status, 200);
+  const second = await fetch(`http://127.0.0.1:${CAP_PORT}/api/voice-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Again" })),
+  });
+  assert.equal(second.status, 429);
+  const body = await second.json();
+  assert.equal(body.code, "rate_limited");
   assert.equal(body.autopost, false);
 });
 

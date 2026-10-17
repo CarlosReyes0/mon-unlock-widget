@@ -21,12 +21,18 @@ import { sha256Hex } from "./follow-core.mjs";
 import {
   buildALaCarteAuthMessage as serverALaCarteMessage,
   buildConnectAuthMessage as serverConnectMessage,
+  buildGasAuthMessage as serverGasMessage,
+  buildMediaAuthMessage as serverMediaMessage,
   buildPlanAuthMessage as serverPlanMessage,
+  buildVoiceAuthMessage as serverVoiceMessage,
 } from "./writer-mutation-auth.mjs";
 import {
   buildALaCarteAuthMessage as clientALaCarteMessage,
   buildConnectAuthMessage as clientConnectMessage,
+  buildGasAuthMessage as clientGasMessage,
+  buildMediaAuthMessage as clientMediaMessage,
   buildPlanAuthMessage as clientPlanMessage,
+  buildVoiceAuthMessage as clientVoiceMessage,
 } from "../dist/core/publish-auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -259,11 +265,26 @@ test("client and server sign the same plan and a-la-carte messages", () => {
     publisher: owner.address.toUpperCase(),
     issuedAt: "2026-10-17T02:16:00.000Z",
   };
+  const recent = {
+    address: owner.address.toUpperCase(),
+    issuedAt: "2026-10-17T03:10:00.000Z",
+  };
   assert.equal(serverPlanMessage(plan), clientPlanMessage(plan));
   assert.equal(serverALaCarteMessage(article), clientALaCarteMessage(article));
   assert.match(serverPlanMessage(plan), /issuedAt:2026-10-17T03:10:00\.000Z/);
   assert.match(serverALaCarteMessage(article), /issuedAt:2026-10-17T03:10:00\.000Z/);
   assert.equal(serverConnectMessage(connect), clientConnectMessage(connect));
+  assert.equal(serverGasMessage(recent), clientGasMessage(recent));
+  assert.equal(serverMediaMessage(recent), clientMediaMessage(recent));
+  assert.equal(serverVoiceMessage(recent), clientVoiceMessage(recent));
+  assert.equal(
+    serverGasMessage(recent),
+    [
+      "Open Paywall gas v1",
+      `address:${owner.address.toLowerCase()}`,
+      "issuedAt:2026-10-17T03:10:00.000Z",
+    ].join("\n")
+  );
   assert.equal(
     serverConnectMessage(connect),
     [

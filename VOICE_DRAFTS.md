@@ -1,6 +1,6 @@
 # Voice drafts (optional)
 
-**Hidden by default.** The /write panel stays off, and `POST /api/voice-drafts` does not call a model, unless `VOICE_DRAFTS_VISIBLE=true` on the web service.
+**Hidden by default.** The /write panel stays off, and an authenticated `POST /api/voice-drafts` does not call a model, unless `VOICE_DRAFTS_VISIBLE=true` on the web service. Unauthenticated posts are HTTP 401 before that flag is checked.
 
 Writer helper on **/write**: paste a few of your posts (or a short voice note), and Open Paywall drafts **2–3 X posts** in that voice for the current article.
 
@@ -25,7 +25,8 @@ The repo has no built-in LLM. Set **one** key on the Railway **web** service (sa
 | `VOICE_DRAFT_PROVIDER` | No | `openai` (default) or `anthropic`. |
 | `VOICE_DRAFT_MODEL` | No | Default `gpt-4o-mini` or `claude-3-5-haiku-latest`. |
 | `VOICE_DRAFT_BASE_URL` | No | Override API origin (tests use a mock). OpenAI default `https://api.openai.com/v1`. |
-| `VOICE_DRAFTS_VISIBLE` | No | `true` shows the panel and allows drafting. Unset or anything else hides it and spends nothing. |
+| `VOICE_DRAFTS_VISIBLE` | No | `true` shows the panel and allows drafting. Unset or anything else hides it and spends nothing. Auth is still required. |
+| `VOICE_DRAFT_DAILY_LIMIT` | No | Calls per address per UTC day. Default 8. Over the cap is HTTP 429. |
 
 If no key is set, the panel still renders with “drafts only” copy and generate fail-softs. CI never spends: tests mock the LLM.
 
@@ -38,6 +39,6 @@ If no key is set, the panel still renders with “drafts only” copy and genera
 ## API
 
 - `GET /api/voice-drafts/status` — `enabled`, `draftsOnly: true`, `autopost: false`. Never returns the key.
-- `POST /api/voice-drafts` `{ samples, notes, title, body, articleUrl }` — always HTTP 200 on model errors (`ok: false`). Success includes `drafts: [{ id, text }]`.
+- `POST /api/voice-drafts` `{ samples, notes, title, body, articleUrl }` plus a reader session or `{ address, issuedAt, signature }` — HTTP 401 with no auth, HTTP 429 over the daily cap, HTTP 200 on model errors (`ok: false`). Success includes `drafts: [{ id, text }]`.
 
 Publish does not call these endpoints.
