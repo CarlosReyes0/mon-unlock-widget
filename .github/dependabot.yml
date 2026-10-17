@@ -1,0 +1,75 @@
+# Monthly dependency PRs. Minor and patch updates are grouped so they do not
+# arrive as one PR per package. Major updates stay separate and still count
+# toward the open-PR limit.
+#
+# MetaMask login uses the injected EIP-1193 provider and WalletConnect
+# (pinned at 2.26.0, including the package.json overrides). @metamask/sdk
+# must stay uninstalled; server/supply-chain.test.mjs locks wagmi 3.7.7 /
+# connectors 8.2.0 / core 3.6.5 for that reason. Those packages are ignored.
+#
+# @privy-io/react-auth is ignored. Bump it by hand and confirm MetaMask
+# login (and email / Google) still works before merging.
+#
+# viem is ignored. It is pinned to 2.57.7 in package.json, in the overrides,
+# and in every Supabase edge function as https://esm.sh/viem@2.57.7
+# (server/edge-functions-auth.test.mjs). /vendor/viem.js is not committed;
+# scripts/build-vendor-viem.mjs rebuilds it from that same dependency during
+# the Docker image build. A viem bump has to change the esm.sh pin, the
+# lockfile, and the image together.
+#
+# The OpenClaw plugin (skills/mon-unlock-embed) has its own viem range and
+# is also ignored so a monthly PR does not move it on its own.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: viem
+      - dependency-name: "@privy-io/react-auth"
+      - dependency-name: "@walletconnect/ethereum-provider"
+      - dependency-name: "@walletconnect/core"
+      - dependency-name: "@walletconnect/sign-client"
+      - dependency-name: "@walletconnect/types"
+      - dependency-name: "@walletconnect/universal-provider"
+      - dependency-name: "@walletconnect/utils"
+      - dependency-name: wagmi
+      - dependency-name: "@wagmi/connectors"
+      - dependency-name: "@wagmi/core"
+
+  - package-ecosystem: npm
+    directory: /skills/mon-unlock-embed
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      openclaw-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: viem
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
