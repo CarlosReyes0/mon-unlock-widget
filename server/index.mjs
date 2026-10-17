@@ -12,7 +12,9 @@
  *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
  *                                        and optional reader USDC-unlock gas drips
  *   RELAYER_GAS_GLOBAL_DAILY_CAP       — gas drips per UTC day, default 8
- *   VOICE_DRAFT_DAILY_LIMIT            — voice-draft calls per address per UTC day, default 8
+ *   VOICE_DRAFT_DAILY_LIMIT            — voice drafts per address per UTC day, default 8
+ *                                        (public.rate_limit_counters; 503 if the database is down)
+ *   MEDIA_UPLOAD_DAILY_LIMIT           — media uploads per account per UTC day, default 20
  *   ARTICLE_NFT_CONTRACT               — optional ERC-1155; writers/readers mint (they pay gas)
  *   MONAD_RPC_URL                      — optional, defaults to https://rpc.monad.xyz
  *   PORT                               — listen port (Railway sets this)

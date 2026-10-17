@@ -10,16 +10,25 @@ import { test, after } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { privateKeyToAccount } from "viem/accounts";
+import { startMockRateLimitDb } from "./rate-limit-mock.mjs";
 import { buildVoiceAuthMessage } from "./writer-mutation-auth.mjs";
 
 const WRITER_KEY = "0xac0974bec39a17e36ba4a6b4d4aad435cce0e4c9335790421507b8a191e28881";
+const CAP_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const RESTART_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
 const writer = privateKeyToAccount(WRITER_KEY);
+const capWriter = privateKeyToAccount(CAP_KEY);
+const restartWriter = privateKeyToAccount(RESTART_KEY);
+
+async function signedDraftAs(account, extra = {}) {
+  const issuedAt = new Date().toISOString();
+  const message = buildVoiceAuthMessage({ address: account.address, issuedAt });
+  const signature = await account.signMessage({ message });
+  return { address: account.address, issuedAt, signature, ...extra };
+}
 
 async function signedDraft(extra = {}) {
-  const issuedAt = new Date().toISOString();
-  const message = buildVoiceAuthMessage({ address: writer.address, issuedAt });
-  const signature = await writer.signMessage({ message });
-  return { address: writer.address, issuedAt, signature, ...extra };
+  return signedDraftAs(writer, extra);
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -77,13 +86,18 @@ const mock = http.createServer(async (req, res) => {
 });
 
 await new Promise((resolve) => mock.listen(MOCK_PORT, "127.0.0.1", resolve));
+const rateDb = await startMockRateLimitDb();
+const downDb = await startMockRateLimitDb();
+downDb.setFail(true);
 
 function spawnApp(port, extraEnv = {}) {
-  return spawn(process.execPath, ["server/index.mjs"], {
+  const child = spawn(process.execPath, ["server/index.mjs"], {
     cwd: ROOT,
     env: {
       ...process.env,
       PORT: String(port),
+      SUPABASE_URL: rateDb.url,
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
       VOICE_DRAFTS_VISIBLE: "true",
       VOICE_DRAFT_API_KEY: "sk-test-voice",
       VOICE_DRAFT_BASE_URL: `http://127.0.0.1:${MOCK_PORT}/v1`,
@@ -101,7 +115,11 @@ function spawnApp(port, extraEnv = {}) {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  children.push(child);
+  return child;
 }
+
+const children = [];
 
 const app = spawnApp(APP_PORT, { VOICE_DRAFT_DAILY_LIMIT: "20" });
 const off = spawnApp(OFF_PORT, { VOICE_DRAFT_API_KEY: "", OPENAI_API_KEY: "", ANTHROPIC_API_KEY: "" });
@@ -113,11 +131,10 @@ await once(hidden.stdout, "data");
 await once(capped.stdout, "data");
 
 after(() => {
-  app.kill("SIGTERM");
-  off.kill("SIGTERM");
-  hidden.kill("SIGTERM");
-  capped.kill("SIGTERM");
+  for (const child of children) child.kill("SIGTERM");
   mock.close();
+  rateDb.server.close();
+  downDb.server.close();
 });
 
 const origin = `http://127.0.0.1:${APP_PORT}`;
@@ -241,18 +258,67 @@ test("POST /api/voice-drafts returns 429 over the daily cap", async () => {
   const first = await fetch(`http://127.0.0.1:${CAP_PORT}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Hi" })),
+    body: JSON.stringify(await signedDraftAs(capWriter, { samples: ["sample"], title: "Hi" })),
   });
   assert.equal(first.status, 200);
   const second = await fetch(`http://127.0.0.1:${CAP_PORT}/api/voice-drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: "Again" })),
+    body: JSON.stringify(
+      await signedDraftAs(capWriter, { samples: ["sample"], title: "cap-second-should-not-call" })
+    ),
   });
   assert.equal(second.status, 429);
   const body = await second.json();
   assert.equal(body.code, "rate_limited");
   assert.equal(body.autopost, false);
+  assert.equal(seen.filter((entry) => entry.body.includes("cap-second-should-not-call")).length, 0);
+});
+
+test("voice daily cap holds after a new process uses the same database", async () => {
+  const marker = "restart-second-should-not-call";
+  const first = spawnApp(18840, { VOICE_DRAFT_DAILY_LIMIT: "1" });
+  await once(first.stdout, "data");
+  const ok = await fetch("http://127.0.0.1:18840/api/voice-drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraftAs(restartWriter, { samples: ["sample"], title: "First life" })),
+  });
+  assert.equal(ok.status, 200);
+  first.kill("SIGTERM");
+  await once(first, "exit");
+
+  const second = spawnApp(18841, { VOICE_DRAFT_DAILY_LIMIT: "1" });
+  await once(second.stdout, "data");
+  const limited = await fetch("http://127.0.0.1:18841/api/voice-drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraftAs(restartWriter, { samples: ["sample"], title: marker })),
+  });
+  assert.equal(limited.status, 429);
+  const body = await limited.json();
+  assert.equal(body.code, "rate_limited");
+  assert.equal(seen.filter((entry) => entry.body.includes(marker)).length, 0);
+  second.kill("SIGTERM");
+  await once(second, "exit");
+});
+
+test("POST /api/voice-drafts returns 503 and skips the model when the database errors", async () => {
+  const marker = "db-down-should-not-call";
+  const child = spawnApp(18842, { SUPABASE_URL: downDb.url, VOICE_DRAFT_DAILY_LIMIT: "8" });
+  await once(child.stdout, "data");
+  const res = await fetch("http://127.0.0.1:18842/api/voice-drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(await signedDraft({ samples: ["sample"], title: marker })),
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.code, "rate_limit_unavailable");
+  assert.equal(body.autopost, false);
+  assert.equal(seen.filter((entry) => entry.body.includes(marker)).length, 0);
+  child.kill("SIGTERM");
+  await once(child, "exit");
 });
 
 test("GET /api/voice-drafts/status without a key is disabled", async () => {

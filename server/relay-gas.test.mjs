@@ -285,6 +285,21 @@ test("gas drip migration is idempotent, RLS on, and service role only", () => {
     code,
     /grant execute on function public\.claim_gas_drip\(text, timestamptz, integer\) to service_role/i
   );
+  assert.match(sql, /create table if not exists public\.rate_limit_counters/i);
+  assert.match(sql, /primary key \(bucket, key, day\)/i);
+  assert.match(sql, /alter table public\.rate_limit_counters enable row level security/i);
+  assert.match(code, /revoke all on table public\.rate_limit_counters from public, anon, authenticated/i);
+  assert.match(code, /grant select, insert, update on table public\.rate_limit_counters to service_role/i);
+  assert.match(code, /create or replace function public\.take_rate_limit/i);
+  assert.match(code, /on conflict \(bucket, key, day\)/i);
+  assert.match(
+    code,
+    /revoke all on function public\.take_rate_limit\(text, text, date\) from public, anon, authenticated/i
+  );
+  assert.match(
+    code,
+    /grant execute on function public\.take_rate_limit\(text, text, date\) to service_role/i
+  );
   assert.doesNotMatch(code, /create policy/i);
   assert.doesNotMatch(code, /security definer/i);
 });

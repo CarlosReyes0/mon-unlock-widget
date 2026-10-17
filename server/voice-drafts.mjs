@@ -14,10 +14,15 @@
  *   VOICE_DRAFT_BASE_URL    — optional API origin (tests inject a mock here)
  *   VOICE_DRAFTS_VISIBLE    — set to true to show the /write panel. Unset hides it
  *                             and never calls the model.
+ *   VOICE_DRAFT_DAILY_LIMIT — calls per address per UTC day, default 8.
+ *                             Counted in public.rate_limit_counters. If that
+ *                             database call fails, the handler returns 503
+ *                             and does not call the model.
  *
  * Publish / unlock must not call this module.
  */
 import { ARTICLE_BODY_LIMIT, readLimitedBody } from "./body-limit.mjs";
+import { takePersistentRateLimit } from "./rate-limit.mjs";
 import { resolveRequestReaderSession } from "./reader-session.mjs";
 import {
   assertRecentWalletSignature,
@@ -25,26 +30,12 @@ import {
 } from "./writer-mutation-auth.mjs";
 
 const DEFAULT_VOICE_DAILY_LIMIT = 8;
-/** @type {Map<string, number>} */
-const voiceHits = new Map();
-
-export function resetVoiceDraftLimitsForTests() {
-  voiceHits.clear();
-}
+const VOICE_DRAFT_BUCKET = "voice_draft";
 
 function voiceDailyLimit(env = process.env) {
   const n = Number(env.VOICE_DRAFT_DAILY_LIMIT);
   if (Number.isFinite(n) && n >= 1) return Math.floor(n);
   return DEFAULT_VOICE_DAILY_LIMIT;
-}
-
-function takeVoiceDraftSlot(address, now = Date.now()) {
-  const day = new Date(now).toISOString().slice(0, 10);
-  const key = `${String(address || "").toLowerCase()}:${day}`;
-  const used = voiceHits.get(key) || 0;
-  if (used >= voiceDailyLimit()) return false;
-  voiceHits.set(key, used + 1);
-  return true;
 }
 
 function headerValue(req, name) {
@@ -583,7 +574,20 @@ export async function tryHandleVoiceDraftRequest(req, res) {
       });
       return true;
     }
-    if (!takeVoiceDraftSlot(signer)) {
+    let used = 0;
+    try {
+      used = await takePersistentRateLimit({ bucket: VOICE_DRAFT_BUCKET, key: signer });
+    } catch {
+      sendJson(res, 503, {
+        ok: false,
+        code: "rate_limit_unavailable",
+        draftsOnly: true,
+        autopost: false,
+        message: "Voice drafts are paused. Nothing was posted.",
+      });
+      return true;
+    }
+    if (used > voiceDailyLimit()) {
       sendJson(res, 429, {
         ok: false,
         code: "rate_limited",
