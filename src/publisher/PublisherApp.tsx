@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createWalletClient, custom, type Address } from "viem";
 import { monadMainnet } from "../core/chains.js";
-import { buildPlanAuthMessage } from "../core/publish-auth.js";
+import { buildConnectAuthMessage, buildPlanAuthMessage } from "../core/publish-auth.js";
 import { establishReaderSession, READER_SESSION_HEADER } from "../core/reader-session.js";
 import { peekResumableDraft, type ResumableDraft } from "../core/write-drafts.js";
 import type { Eip1193Provider } from "../core/wallet.js";
@@ -219,19 +219,35 @@ export function PublisherApp() {
       setPayoutMsg("Sign in first.");
       return;
     }
+    const provider = window.__monPublisherProvider as Eip1193Provider | undefined;
+    if (!provider) {
+      setPayoutMsg("Connect a wallet to set up payouts.");
+      return;
+    }
     setPayoutBusy(true);
-    setPayoutMsg("");
+    setPayoutMsg("Approve the payout signature…");
     try {
       const returnUrl = new URL("/account.html", window.location.origin);
       returnUrl.searchParams.set("stripe_onboard", "return");
       const refreshUrl = new URL("/account.html", window.location.origin);
       refreshUrl.searchParams.set("stripe_onboard", "refresh");
+      const issuedAt = new Date().toISOString();
+      const message = buildConnectAuthMessage({ publisher, issuedAt });
+      const account = publisher as Address;
+      const walletClient = createWalletClient({
+        account,
+        chain: monadMainnet,
+        transport: custom(provider),
+      });
+      const connectSig = await walletClient.signMessage({ account, message });
 
       const res = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           publisher,
+          issuedAt,
+          connectSig,
           returnUrl: returnUrl.toString(),
           refreshUrl: refreshUrl.toString(),
         }),

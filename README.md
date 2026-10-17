@@ -52,8 +52,6 @@ Pages:
 - `/agents` · `/agents.md` · `/llms.txt` · `/skill.md` – Agent discovery
 - `/openapi.json` – Machine-readable agent API
 - `/embed-example.html` – Clean copy-paste embed reference
-- `/connect-demo.html` – Dev: Stripe Connect sample (not in main nav)
-- `/connect-store.html` – Dev: sample storefront
 
 Product nav is shared via `site-nav.js`: **Articles · Demo · Write · Account · Dashboard · Agents**.
 
@@ -88,22 +86,7 @@ Code alone cannot list you in Stripe Directory. After deploy:
 4. Register the MPP endpoint on [mpp.dev](https://mpp.dev)
 5. `stripe directory me` / `stripe directory search "embeddable paywall"`
 
-## Stripe Connect sample (Accounts v2)
-
-Self-contained demo of marketplace Connect: platform creates **recipient** connected accounts, onboard via V2 Account Links, create platform Products mapped to sellers, and sell via Checkout **destination charges** + application fee.
-
-1. Set `STRIPE_SECRET_KEY` (and optionally `STRIPE_PLATFORM_FEE_BPS`, default 10%).
-2. Open `/connect-demo.html` → create account → **Onboard to collect payments** → create a product.
-3. Open `/connect-store.html` → buy with hosted Checkout.
-4. Thin webhooks (optional): Dashboard → Developers → Webhooks → destination for **Connected accounts**, payload **Thin**, events `v2.core.account[requirements].updated` and `v2.core.account[configuration.recipient].capability_status_updated`. Set `STRIPE_CONNECT_WEBHOOK_SECRET` and point the destination at `/api/connect-sample/webhook`.
-
-Local CLI:
-
-```bash
-stripe listen --thin-events 'v2.core.account[requirements].updated,v2.core.account[configuration.recipient].capability_status_updated' --forward-thin-to localhost:8080/api/connect-sample/webhook
-```
-
-Implementation: `server/connect-sample.mjs` (commented step-by-step).
+Writer card payouts use the signed Account flow (`Connect payments` → `POST /api/stripe/connect/onboard`). The old unauthenticated Connect sample pages and `/api/connect-sample/*` routes are not served.
 
 Or run locally:
 

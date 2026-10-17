@@ -16,10 +16,12 @@ import { fileURLToPath } from "node:url";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   buildALaCarteAuthMessage as serverALaCarteMessage,
+  buildConnectAuthMessage as serverConnectMessage,
   buildPlanAuthMessage as serverPlanMessage,
 } from "./writer-mutation-auth.mjs";
 import {
   buildALaCarteAuthMessage as clientALaCarteMessage,
+  buildConnectAuthMessage as clientConnectMessage,
   buildPlanAuthMessage as clientPlanMessage,
 } from "../dist/core/publish-auth.js";
 
@@ -181,8 +183,21 @@ test("client and server sign the same plan and a-la-carte messages", () => {
     publisher: owner.address,
     allowALaCarte: true,
   };
+  const connect = {
+    publisher: owner.address.toUpperCase(),
+    issuedAt: "2026-10-17T02:16:00.000Z",
+  };
   assert.equal(serverPlanMessage(plan), clientPlanMessage(plan));
   assert.equal(serverALaCarteMessage(article), clientALaCarteMessage(article));
+  assert.equal(serverConnectMessage(connect), clientConnectMessage(connect));
+  assert.equal(
+    serverConnectMessage(connect),
+    [
+      "Open Paywall connect v1",
+      `publisher:${owner.address.toLowerCase()}`,
+      "issuedAt:2026-10-17T02:16:00.000Z",
+    ].join("\n")
+  );
 });
 
 test("dashboard and account UI sign plan and a-la-carte updates", () => {
@@ -193,8 +208,14 @@ test("dashboard and account UI sign plan and a-la-carte updates", () => {
   assert.match(dashboard, /planSig/);
   assert.match(dashboard, /buildALaCarteAuthMessage/);
   assert.match(dashboard, /aLaCarteSig/);
+  assert.match(dashboard, /buildConnectAuthMessage/);
+  assert.match(dashboard, /connectSig/);
+  assert.match(dashboard, /issuedAt/);
   assert.match(account, /buildPlanAuthMessage/);
   assert.match(account, /planSig/);
+  assert.match(account, /buildConnectAuthMessage/);
+  assert.match(account, /connectSig/);
+  assert.match(account, /issuedAt/);
   assert.match(articles, /buildALaCarteAuthMessage/);
   assert.match(articles, /aLaCarteSig/);
 });
