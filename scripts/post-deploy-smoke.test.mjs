@@ -43,8 +43,12 @@ test("health and smoke are retried before the deploy is called a failure", async
   assert.equal(result.ok, true);
   assert.equal(fake.healthHits(), 2);
   assert.equal(fake.smokeHits(), 2);
-  assert.match(result.log, /health ok on attempt 2/);
-  assert.match(result.log, /smoke attempt 2 exit 0/);
+  assert.match(result.log, /health status=503/);
+  assert.match(result.log, /health status=200/);
+  assert.match(result.log, /smoke status=1/);
+  assert.match(result.log, /smoke status=0/);
+  assert.equal(result.log.includes("smoke 1"), false);
+  assert.equal(result.log.includes("smoke 2"), false);
 });
 
 test("smoke does not run when the public health endpoint stays down", async () => {
@@ -81,4 +85,25 @@ test("the runner shells out to the existing smoke file", () => {
   const source = fs.readFileSync(new URL("./post-deploy-smoke.mjs", import.meta.url), "utf8");
   assert.match(source, /scripts\/smoke\.mjs/);
   assert.doesNotMatch(source, /eth_send|method:\s*"POST"/);
+  assert.doesNotMatch(source, /output\.slice|lines\.push\(output|lines\.push\(.*result\.log/);
+});
+
+test("public log omits the deploy sha, smoke output, and error text", async () => {
+  const result = await runPostDeploy({
+    baseUrl: "https://openpaywall.app",
+    deploySha: "0123456789abcdef",
+    fetchImpl: async () => {
+      throw new Error("https://user:secret@example.invalid/private");
+    },
+    spawnImpl: async () => ({ status: 1, log: "article slug hello-post body" }),
+    sleep: noSleep,
+    healthAttempts: 1,
+    smokeAttempts: 1,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.smoked, false);
+  assert.match(result.log, /health status=fail/);
+  assert.equal(result.log.includes("0123456789abcdef"), false);
+  assert.equal(result.log.includes("secret"), false);
+  assert.equal(result.log.includes("hello-post"), false);
 });

@@ -9,7 +9,8 @@
  * the same default as server/relay-gas.mjs).
  *
  * Each check retries before it is reported as a failure. Nothing is posted
- * to the app and no transaction is sent.
+ * to the app and no transaction is sent. Stdout is check names and status
+ * codes only (Actions logs on this public repo are public).
  *
  *   UPTIME_BASE_URL=https://openpaywall.app node scripts/uptime-check.mjs
  *
@@ -96,7 +97,8 @@ async function readResponse(res, base) {
   if (res.url && originOf(res.url) !== originOf(base)) {
     return {
       ok: false,
-      detail: `redirected off-origin to ${originOf(res.url)}`,
+      code: "fail",
+      detail: "redirected off-origin",
       text: "",
       res,
     };
@@ -118,74 +120,84 @@ function htmlProblems(res, text, { feed }) {
   return problems;
 }
 
+function httpCode(status, ok) {
+  if (ok) return "200";
+  if (status && status !== 200) return String(status);
+  return "fail";
+}
+
 async function checkHome(base, request) {
   const res = await request(`${base}/`, { method: "GET" });
   const read = await readResponse(res, base);
-  if (!read.ok) return { name: "home", ...read };
+  if (!read.ok) return { name: "home", ok: false, code: "fail", detail: "redirected off-origin" };
   const problems = htmlProblems(read.res, read.text, { feed: true });
+  const ok = problems.length === 0;
   return {
     name: "home",
-    ok: problems.length === 0,
-    detail: problems.length ? problems.join("; ") : "200 HTML, feed, CSP",
+    ok,
+    code: httpCode(read.res.status, ok),
+    detail: ok ? "200" : "fail",
   };
 }
 
 async function checkFeed(base, request) {
   const res = await request(`${base}/api/articles?limit=1`, { method: "GET" });
   const read = await readResponse(res, base);
-  if (!read.ok) return { name: "feed", ...read, slug: "" };
+  if (!read.ok) return { name: "feed", ok: false, code: "fail", detail: "redirected off-origin", slug: "" };
   if (read.res.status !== 200) {
-    return { name: "feed", ok: false, detail: `HTTP ${read.res.status}`, slug: "" };
+    return { name: "feed", ok: false, code: String(read.res.status), detail: "http", slug: "" };
   }
   let body;
   try {
     body = JSON.parse(read.text);
   } catch {
-    return { name: "feed", ok: false, detail: "response is not JSON", slug: "" };
+    return { name: "feed", ok: false, code: "fail", detail: "not-json", slug: "" };
   }
   const articles = body?.articles;
   if (!Array.isArray(articles) || articles.length === 0) {
-    return { name: "feed", ok: false, detail: "feed returned no articles", slug: "" };
+    return { name: "feed", ok: false, code: "fail", detail: "empty", slug: "" };
   }
   const slug = articles
     .map((article) => (article && typeof article.slug === "string" ? article.slug.trim() : ""))
     .find((value) => SLUG.test(value));
-  if (!slug) return { name: "feed", ok: false, detail: "first article has no usable slug", slug: "" };
-  return { name: "feed", ok: true, detail: "200 JSON with an article slug", slug };
+  if (!slug) return { name: "feed", ok: false, code: "fail", detail: "no-slug", slug: "" };
+  return { name: "feed", ok: true, code: "200", detail: "200", slug };
 }
 
 async function checkArticle(base, request, slug) {
   if (!slug) {
-    return { name: "article", ok: false, detail: "no article slug from the feed" };
+    return { name: "article", ok: false, code: "fail", detail: "no-slug" };
   }
   const res = await request(`${base}/articles/${encodeURIComponent(slug)}`, { method: "GET" });
   const read = await readResponse(res, base);
-  if (!read.ok) return { name: "article", ...read };
+  if (!read.ok) return { name: "article", ok: false, code: "fail", detail: "redirected off-origin" };
   const problems = htmlProblems(read.res, read.text, { feed: false });
+  const ok = problems.length === 0;
   return {
     name: "article",
-    ok: problems.length === 0,
-    detail: problems.length ? problems.join("; ") : `200 HTML ${slug}`,
+    ok,
+    code: httpCode(read.res.status, ok),
+    detail: ok ? "200" : "fail",
   };
 }
 
 async function checkHealth(base, request) {
   const res = await request(`${base}/api/agents/health`, { method: "GET" });
   const read = await readResponse(res, base);
-  if (!read.ok) return { name: "health", ...read };
+  if (!read.ok) return { name: "health", ok: false, code: "fail", detail: "redirected off-origin" };
   if (read.res.status !== 200) {
-    return { name: "health", ok: false, detail: `HTTP ${read.res.status}` };
+    return { name: "health", ok: false, code: String(read.res.status), detail: "http" };
   }
   let body;
   try {
     body = JSON.parse(read.text);
   } catch {
-    return { name: "health", ok: false, detail: "response is not JSON" };
+    return { name: "health", ok: false, code: "fail", detail: "not-json" };
   }
   if (body?.ok !== true || body?.product !== "Open Paywall") {
-    return { name: "health", ok: false, detail: "health JSON is missing ok:true or product" };
+    return { name: "health", ok: false, code: "fail", detail: "health-json" };
   }
-  return { name: "health", ok: true, detail: "200 ok" };
+  return { name: "health", ok: true, code: "200", detail: "200" };
 }
 
 async function checkBalance(request, { relayerAddress, rpcUrl, threshold }) {
@@ -194,14 +206,16 @@ async function checkBalance(request, { relayerAddress, rpcUrl, threshold }) {
       name: "relayer-balance",
       ok: true,
       skipped: true,
-      detail: "skipped: RELAYER_ADDRESS is not set (repository variable or secret)",
+      code: "skip",
+      detail: "skip",
     };
   }
   if (!ADDRESS.test(relayerAddress)) {
     return {
       name: "relayer-balance",
       ok: false,
-      detail: "RELAYER_ADDRESS is not a 0x-prefixed 20-byte address",
+      code: "fail",
+      detail: "address",
     };
   }
   const res = await request(rpcUrl, {
@@ -216,38 +230,41 @@ async function checkBalance(request, { relayerAddress, rpcUrl, threshold }) {
   });
   const text = await res.text();
   if (res.status !== 200) {
-    return { name: "relayer-balance", ok: false, detail: `RPC HTTP ${res.status}` };
+    return { name: "relayer-balance", ok: false, code: String(res.status), detail: "http" };
   }
   let payload;
   try {
     payload = JSON.parse(text);
   } catch {
-    return { name: "relayer-balance", ok: false, detail: "RPC response is not JSON" };
+    return { name: "relayer-balance", ok: false, code: "fail", detail: "not-json" };
   }
   if (payload.error) {
     return {
       name: "relayer-balance",
       ok: false,
-      detail: `RPC error ${payload.error.code || ""}`.trim(),
+      code: "fail",
+      detail: "rpc",
     };
   }
   let balance;
   try {
     balance = BigInt(payload.result);
   } catch {
-    return { name: "relayer-balance", ok: false, detail: "RPC result is not a wei quantity" };
+    return { name: "relayer-balance", ok: false, code: "fail", detail: "wei" };
   }
   if (balance < threshold) {
     return {
       name: "relayer-balance",
       ok: false,
+      code: "low",
       detail: `${formatMon(balance)} is below ${formatMon(threshold)}`,
     };
   }
   return {
     name: "relayer-balance",
     ok: true,
-    detail: `${formatMon(balance)} is at or above ${formatMon(threshold)}`,
+    code: "200",
+    detail: "200",
   };
 }
 
@@ -256,8 +273,8 @@ async function withRetries(name, fn, { attempts, retryMs, sleep }) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       last = { name, ...(await fn()) };
-    } catch (err) {
-      last = { name, ok: false, detail: err?.message || String(err) };
+    } catch {
+      last = { name, ok: false, code: "fail", detail: "fetch failed" };
     }
     if (last.ok || attempt === attempts) {
       return { ...last, attempts: attempt };
@@ -320,18 +337,12 @@ export async function runUptimeChecks(options = {}) {
   return { ok, checks, calls, baseUrl: base };
 }
 
+/** Public Actions log. Check name and status code only. */
 export function renderReport(result) {
-  const lines = [
-    `Uptime checks for ${result.baseUrl}: ${result.ok ? "passed" : "failed"}.`,
-    "",
-    ...result.checks.map((check) => {
-      const state = check.skipped ? "skip" : check.ok ? "ok" : "fail";
-      const attempts = check.attempts ? ` (attempt ${check.attempts})` : "";
-      return `- ${state} ${check.name}: ${check.detail}${attempts}`;
-    }),
-    "",
-    "Read-only: HTTP GET against the site, and eth_getBalance when a relayer address is configured. No production data is created.",
-  ];
+  const lines = result.checks.map((check) => {
+    const code = check.code || (check.ok ? "ok" : "fail");
+    return `${check.name} status=${code}`;
+  });
   return `${lines.join("\n")}\n`;
 }
 
@@ -354,10 +365,10 @@ async function main() {
 
 const direct = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (direct) {
-  main().catch((err) => {
-    const report = `Uptime checks failed before completing.\n\n${err?.message || err}\n`;
+  main().catch(() => {
+    const report = "uptime status=fail\n";
     if (process.env.UPTIME_REPORT_PATH) fs.writeFileSync(process.env.UPTIME_REPORT_PATH, report);
-    console.error(report);
+    process.stderr.write(report);
     process.exit(1);
   });
 }

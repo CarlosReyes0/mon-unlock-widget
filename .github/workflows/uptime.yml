@@ -2,8 +2,27 @@
 #
 # Every 15 minutes: homepage, public feed, one article page (CSP included),
 # agent health, and the gas-relayer MON balance. A check is tried 3 times
-# before it counts as a failure. Failure opens or updates one GitHub issue
-# labeled prod-alert. The next passing run closes that issue.
+# before it counts as a failure. A passing run exits 0 and sends nothing.
+#
+# This repository is public, so a failure must not open a GitHub issue.
+# After the retries, a confirmed failure fails this job. GitHub then emails
+# the user who last changed this scheduled workflow: the user who created it,
+# or the user who last edited the cron line under on.schedule, or the user
+# who last disabled and re-enabled the workflow. That email is private.
+#
+# Carlos: https://github.com/settings/notifications → System → Actions →
+# Email. "Only notify for failed workflows" is enough. If the mail is not
+# arriving, disable and re-enable "uptime" on the Actions tab while logged
+# in as yourself. That points the schedule notification at you.
+#
+# Optional second private email, skipped unless both secrets are set
+# (Resend is not set up yet):
+#   Secret RESEND_API_KEY
+#   Secret ALERT_EMAIL_TO
+# From address is posts@mail.openpaywall.app, the same default as follow mail.
+# The job still fails when the checks fail, whether or not that mail is sent.
+#
+# Actions logs are public. They print check names and status codes only.
 #
 # Carlos — add these in GitHub → Settings → Secrets and variables → Actions.
 # The workflow skips the balance check when the address is absent. It never
@@ -46,16 +65,13 @@ jobs:
         with:
           node-version: "22"
       - name: Uptime and alert unit tests
-        run: node --test scripts/uptime-check.test.mjs scripts/prod-alert.test.mjs
+        run: node --test scripts/uptime-check.test.mjs scripts/private-alert.test.mjs
 
   check:
     if: github.event_name != 'pull_request'
     name: check
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,15 +88,11 @@ jobs:
           UPTIME_RETRY_MS: "5000"
           UPTIME_REPORT_PATH: /tmp/uptime-report.md
         run: node scripts/uptime-check.mjs
-      - name: Open or update the prod-alert issue
+      - name: Email the failure when Resend is configured
         if: failure()
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node scripts/prod-alert.mjs --key uptime --failing true --title "[prod-alert] openpaywall.app uptime" --body-file /tmp/uptime-report.md
-      - name: Close the prod-alert issue after recovery
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node scripts/prod-alert.mjs --key uptime --failing false --title "[prod-alert] openpaywall.app uptime" --body "Checks passed."
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          ALERT_KEY: uptime
+          ALERT_SUMMARY_FILE: /tmp/uptime-report.md
+        run: node scripts/private-alert.mjs

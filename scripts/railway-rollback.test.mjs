@@ -94,6 +94,11 @@ test("the workflow gates --execute on the token and the opt-in variable", () => 
   assert.match(step, /PROD_AUTO_ROLLBACK" != "true"/);
   assert.match(step, /--execute/);
   assert.doesNotMatch(step, /secrets\.RAILWAY_TOKEN !=/);
+  assert.doesNotMatch(workflow, /prod-alert/);
+  assert.doesNotMatch(workflow, /issues:\s*write/);
+  assert.match(workflow, /scripts\/private-alert\.mjs/);
+  assert.match(workflow, /secrets\.RESEND_API_KEY/);
+  assert.match(workflow, /secrets\.ALERT_EMAIL_TO/);
 });
 
 test("instructions mention the dashboard when no token exists", () => {
