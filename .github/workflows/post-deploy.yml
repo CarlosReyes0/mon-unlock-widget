@@ -1,0 +1,147 @@
+# After Railway deploys the public site, run the existing HTTP smoke against
+# https://openpaywall.app.
+#
+# Railway already posts GitHub deployment_status events (in_progress, success,
+# failure, inactive). The site that owns openpaywall.app is environment
+# "sparkling-transformation / production" (service "mon widget dashboard").
+# empowering-surprise deploys the same commits and is ignored.
+# Variable PROD_DEPLOY_ENVIRONMENT overrides that name.
+#
+# Success: poll GET /api/agents/health, then run scripts/smoke.mjs up to
+# twice. The app does not expose a git SHA, so "live" means Railway reported
+# success (its `/` healthcheck passed) and the public health endpoint is ok.
+# Failure or error: do not smoke a deploy that never went live; alert instead.
+# inactive / in_progress are ignored.
+#
+# On failure the job prints rollback instructions and opens or updates one
+# issue labeled prod-alert (key post-deploy). A later success closes it.
+#
+# Auto-rollback is off unless BOTH are set:
+#   Secret   RAILWAY_TOKEN            Railway account or project token
+#   Variable PROD_AUTO_ROLLBACK=true
+# Optional, if the service is recreated:
+#   RAILWAY_PROJECT_ID, RAILWAY_SERVICE_ID, RAILWAY_ENVIRONMENT_ID
+#
+# Pull requests run the unit tests only.
+name: post-deploy
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Origin to smoke (no trailing slash)
+        required: false
+        default: https://openpaywall.app
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-deploy-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    if: github.event_name == 'pull_request'
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Post-deploy unit tests
+        run: node --test scripts/post-deploy-smoke.test.mjs scripts/railway-rollback.test.mjs scripts/prod-alert.test.mjs
+
+  smoke:
+    name: smoke
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'deployment_status' &&
+        github.event.deployment.environment == (vars.PROD_DEPLOY_ENVIRONMENT || 'sparkling-transformation / production') &&
+        (
+          github.event.deployment_status.state == 'success' ||
+          github.event.deployment_status.state == 'failure' ||
+          github.event.deployment_status.state == 'error'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Railway marked the deploy failed
+        if: github.event_name == 'deployment_status' && (github.event.deployment_status.state == 'failure' || github.event.deployment_status.state == 'error')
+        run: |
+          {
+            echo "Railway reported ${{ github.event.deployment_status.state }} for ${{ github.event.deployment.sha }}."
+            echo "Environment: ${{ github.event.deployment.environment }}"
+            echo "Smoke was not run. A failed healthcheck does not replace the live deployment."
+          } | tee /tmp/post-deploy-log.txt
+          exit 1
+
+      - name: Smoke the live site
+        if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+        env:
+          BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.base_url || 'https://openpaywall.app' }}
+          POST_DEPLOY_LOG: /tmp/post-deploy-log.txt
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+        run: node scripts/post-deploy-smoke.mjs
+
+      - name: Print rollback instructions
+        if: failure()
+        env:
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+        run: node scripts/railway-rollback.mjs | tee /tmp/rollback.txt
+
+      - name: Open or update the prod-alert issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          {
+            echo "Post-deploy check failed."
+            echo
+            if [ -f /tmp/post-deploy-log.txt ]; then cat /tmp/post-deploy-log.txt; fi
+            echo
+            echo "## Rollback"
+            if [ -f /tmp/rollback.txt ]; then cat /tmp/rollback.txt; fi
+            echo
+            echo "Auto-rollback runs only when secret RAILWAY_TOKEN is set and variable PROD_AUTO_ROLLBACK is true. The default is off."
+          } > /tmp/alert.md
+          node scripts/prod-alert.mjs --key post-deploy --failing true --title "[prod-alert] production smoke" --body-file /tmp/alert.md
+
+      - name: Auto-rollback
+        if: failure() && vars.PROD_AUTO_ROLLBACK == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          PROD_AUTO_ROLLBACK: ${{ vars.PROD_AUTO_ROLLBACK }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ "$PROD_AUTO_ROLLBACK" != "true" ]; then
+            echo "Auto-rollback stayed off. It needs secret RAILWAY_TOKEN and variable PROD_AUTO_ROLLBACK=true."
+            exit 0
+          fi
+          node scripts/railway-rollback.mjs --execute
+
+      - name: Close the prod-alert issue after a good deploy
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/prod-alert.mjs --key post-deploy --failing false --title "[prod-alert] production smoke" --body "Production smoke passed."
