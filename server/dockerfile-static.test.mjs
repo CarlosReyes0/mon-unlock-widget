@@ -72,6 +72,15 @@ test("Dockerfile copies generator-media.js so generator media validation loads",
   );
 });
 
+test("Dockerfile does not ship the removed Connect sample pages", () => {
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  for (const name of ["connect-demo.html", "connect-store.html", "connect-success.html"]) {
+    assert.equal(fs.existsSync(path.join(ROOT, name)), false, `${name} must stay out of the static root`);
+    assert.equal(dockerfile.includes(`/app/${name}`), false, `${name} must not be copied into the image`);
+  }
+  assert.equal(fs.existsSync(path.join(ROOT, "server/connect-sample.mjs")), false);
+});
+
 test("Dockerfile still excludes Vite-built publisher/checkout source HTML", () => {
   const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
   // Source account.html / write.html must not overwrite dist-publisher output.

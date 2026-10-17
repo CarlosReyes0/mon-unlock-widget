@@ -6,14 +6,16 @@
  * Supabase Edge Functions import this TypeScript source.
  * Message text is the signed payload — do not reorder lines.
  *
- * Plan and à la carte messages are mirrored in server/writer-mutation-auth.mjs
- * (the Railway server cannot import this TypeScript). Keep both copies identical.
+ * Plan, à la carte, and Connect onboarding messages are mirrored in
+ * server/writer-mutation-auth.mjs (the Railway server cannot import this
+ * TypeScript). Keep both copies identical.
  */
 
 export const PUBLISH_AUTH_PREFIX = "Open Paywall publish v1";
 export const LISTING_AUTH_PREFIX = "Open Paywall listing v1";
 export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
 export const A_LA_CARTE_AUTH_PREFIX = "Open Paywall a-la-carte v1";
+export const CONNECT_AUTH_PREFIX = "Open Paywall connect v1";
 export const FOLLOWER_AUTH_PREFIX = "Open Paywall follower v1";
 export const FOLLOWERS_EXPORT_AUTH_PREFIX = "Open Paywall followers export v1";
 export const MONAD_CHAIN_ID = 143;
@@ -257,6 +259,20 @@ export function buildALaCarteAuthMessage(input: ALaCarteAuthFields): string {
     `article:${asText(input.articleId).trim()}`,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `allowALaCarte:${listFlag(input.allowALaCarte)}`,
+  ].join("\n");
+}
+
+export type ConnectAuthFields = {
+  publisher: unknown;
+  issuedAt: unknown;
+};
+
+/** Binds the writer and the issuedAt that POST /api/stripe/connect/onboard checks. */
+export function buildConnectAuthMessage(input: ConnectAuthFields): string {
+  return [
+    CONNECT_AUTH_PREFIX,
+    `publisher:${asText(input.publisher).trim().toLowerCase()}`,
+    `issuedAt:${asText(input.issuedAt).trim()}`,
   ].join("\n");
 }
 

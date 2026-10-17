@@ -38,10 +38,6 @@ export function SiteFooter() {
   return (
     <footer className="mon-site-footer">
       Need HTML for your own site? <a href="/generator.html">Create embed</a>
-      <br />
-      <span className="mon-site-footer-note">Developer examples (not free demos):</span>{" "}
-      <a href="/connect-demo.html">Stripe Connect onboarding</a> ·{" "}
-      <a href="/connect-store.html">Connect marketplace</a>
     </footer>
   );
 }
