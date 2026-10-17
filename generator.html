@@ -1363,7 +1363,10 @@
         void renderMediaHealth(v.body);
       }
 
-      const SUPABASE_REGISTER_URL = 'https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article';
+      const opwConfig = window.__OPENPAYWALL_CONFIG || {};
+      const SUPABASE_REGISTER_URL = opwConfig.supabaseUrl
+        ? String(opwConfig.supabaseUrl).replace(/\/$/, '') + '/functions/v1/register-article'
+        : 'https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article';
       const publishSigCache = new Map();
 
       async function signPlainMessage(eth, account, message) {

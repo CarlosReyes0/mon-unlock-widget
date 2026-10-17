@@ -272,8 +272,10 @@
     <script src="/write-draft-resume.js"></script>
     <script>
       (function () {
-        const SUPABASE_URL = "https://flczjqljgntmkanipugo.supabase.co";
+        const opwConfig = window.__OPENPAYWALL_CONFIG || {};
+        const SUPABASE_URL = opwConfig.supabaseUrl || "https://flczjqljgntmkanipugo.supabase.co";
         const SUPABASE_ANON_KEY =
+          opwConfig.supabaseAnonKey ||
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
 
         function escapeHtml(str) {

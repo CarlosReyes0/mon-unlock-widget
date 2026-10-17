@@ -8,8 +8,11 @@
  *   CDP_API_KEY_ID / CDP_API_KEY       — Secret API Key ID (UUID)
  *   CDP_API_KEY_SECRET / CDP_API_SECRET — Secret (Ed25519 or EC PEM)
  *   STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
- *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
+ *   SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
+ *     Unset URL and anon key keep the production project. APP_ENV=staging
+ *     refuses to start if either one is production or a Stripe key is sk_live_/pk_live_.
  *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
+ *                                        Ignored when APP_ENV is staging or preview.
  *                                        and optional reader USDC-unlock gas drips
  *   RELAYER_GAS_GLOBAL_DAILY_CAP       — gas drips per UTC day, default 50
  *   RELAYER_LOW_BALANCE_WEI            — log relayer_low_balance below this, default 1 MON
@@ -100,6 +103,12 @@ import {
   normalizeOnrampAsset,
 } from "./coinbase-onramp.mjs";
 import { createCspNonce, baselineSecurityHeaders, htmlSecurityHeaders, httpsRedirectFor, secureHtmlDocument } from "./security-headers.mjs";
+import {
+  STAGING_ROBOTS_TXT,
+  assertStagingSafe,
+  decorateHtmlDocument,
+  isStagingApp,
+} from "./public-config.mjs";
 import { sameOriginRedirectUrl } from "./same-origin-redirect.mjs";
 import { ARTICLE_BODY_LIMIT, readLimitedBody as readBody } from "./body-limit.mjs";
 
@@ -171,6 +180,16 @@ function applyBaselineSecurityHeaders(res) {
   for (const [key, value] of Object.entries(baselineSecurityHeaders())) {
     res.setHeader(key, value);
   }
+  if (isStagingApp()) res.setHeader("X-Robots-Tag", "noindex, nofollow");
+}
+
+function rejectStagingCrypto(res) {
+  if (!isStagingApp()) return false;
+  sendJson(res, 403, {
+    error: "staging_crypto_disabled",
+    message: "This test site does not offer crypto payments. Card checkout still works.",
+  });
+  return true;
 }
 
 /**
@@ -193,7 +212,7 @@ function checkoutRedirectUrl(value, host, fallback) {
 
 /** HTML documents only. API and widget script responses keep their existing headers. */
 function sendSecuredHtml(req, res, status, html, extraHeaders = {}) {
-  const secured = secureHtmlDocument(html);
+  const secured = secureHtmlDocument(decorateHtmlDocument(html));
   const payload = Buffer.from(secured.body, "utf8");
   cors(res);
   res.writeHead(status, {
@@ -557,6 +576,10 @@ const server = http.createServer(guardRequest(async (req, res) => {
     return res.end();
   }
 
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/robots.txt" && isStagingApp()) {
+    return sendText(res, 200, STAGING_ROBOTS_TXT, { "Cache-Control": "no-store" }, method);
+  }
+
   // Unauthenticated Connect sample (accounts, products, checkouts) is removed.
   // 404 even if a leftover connect-*.html file is still on disk.
   if (
@@ -573,6 +596,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
   if (await tryHandleMediaRequest(req, res)) return;
 
   if (method === "POST" && url.pathname === "/api/coinbase/session-token") {
+    if (rejectStagingCrypto(res)) return;
     return handleSessionToken(req, res);
   }
 
@@ -1060,6 +1084,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
   }
 
   if (method === "POST" && url.pathname === "/api/subscriptions/crypto/confirm") {
+    if (rejectStagingCrypto(res)) return;
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
@@ -1095,6 +1120,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
   }
 
   if (method === "POST" && url.pathname === "/api/subscriptions/crypto/lapse") {
+    if (rejectStagingCrypto(res)) return;
     try {
       const cronSecret = (process.env.STRIPE_PAYOUT_CRON_SECRET || "").trim();
       if (cronSecret) {
@@ -1119,6 +1145,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
   }
 
   if (method === "POST" && url.pathname === "/api/relay/register") {
+    if (rejectStagingCrypto(res)) return;
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
@@ -1139,6 +1166,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
   }
 
   if (method === "POST" && url.pathname === "/api/relay/gas") {
+    if (rejectStagingCrypto(res)) return;
     try {
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
@@ -1351,8 +1379,10 @@ const server = http.createServer(guardRequest(async (req, res) => {
   res.end("Method not allowed");
 }));
 
+assertStagingSafe();
+
 server.listen(PORT, () => {
   console.log(
-    `[server] listening on :${PORT} (coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} x402=${x402Status().configured} miroshark=${mirosharkPublicStatus().enabled} voiceDrafts=${voiceDraftPublicStatus().enabled} relayer=${relayerConfigured()} media=${mediaStatus().persistent ? "supabase" : "disk"})`
+    `[server] listening on :${PORT} (env=${isStagingApp() ? "staging" : "production"} coinbase=${Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)} stripe=${stripeConfigured()} mpp=${mppStatus().configured} x402=${x402Status().configured} miroshark=${mirosharkPublicStatus().enabled} voiceDrafts=${voiceDraftPublicStatus().enabled} relayer=${relayerConfigured()} media=${mediaStatus().persistent ? "supabase" : "disk"})`
   );
 });

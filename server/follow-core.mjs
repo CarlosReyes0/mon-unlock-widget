@@ -5,6 +5,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { normalizeListingTitle } from "./listings.mjs";
 import { plainText } from "./article-og.mjs";
+import { configuredPublicHost, isStagingApp } from "./public-config.mjs";
 
 export const FOLLOWER_AUTH_PREFIX = "Open Paywall follower v1";
 export const FOLLOWERS_EXPORT_AUTH_PREFIX = "Open Paywall followers export v1";
@@ -84,8 +85,12 @@ export function issuedAtFresh(value, now = Date.now()) {
   return Math.abs(now - t) <= ISSUED_AT_WINDOW_MS;
 }
 
-export function originAllowed(origin) {
-  return FOLLOW_ORIGINS.has(String(origin || "").trim().toLowerCase());
+export function originAllowed(origin, env = process.env) {
+  const value = String(origin || "").trim().toLowerCase();
+  if (FOLLOW_ORIGINS.has(value)) return true;
+  if (!isStagingApp(env)) return false;
+  const host = configuredPublicHost(env);
+  return Boolean(host) && value === host;
 }
 
 export function sha256Hex(text) {

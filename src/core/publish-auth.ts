@@ -36,13 +36,26 @@ export const USDC_UNLOCK_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f"
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
 
+/**
+ * Hosted pages set window.__OPENPAYWALL_CONFIG from the server env.
+ * Edge functions and third-party bundles have no config and keep this constant.
+ */
+function browserSupabaseAnonKey(): string {
+  const scope = globalThis as {
+    window?: { __OPENPAYWALL_CONFIG?: { supabaseAnonKey?: string } };
+  };
+  const key = scope.window?.__OPENPAYWALL_CONFIG?.supabaseAnonKey?.trim();
+  return key || SUPABASE_ANON_KEY;
+}
+
 export function supabaseFunctionHeaders(
   extra?: Record<string, string>
 ): Record<string, string> {
+  const anonKey = browserSupabaseAnonKey();
   return {
     "Content-Type": "application/json",
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    apikey: anonKey,
+    Authorization: `Bearer ${anonKey}`,
     ...(extra || {}),
   };
 }

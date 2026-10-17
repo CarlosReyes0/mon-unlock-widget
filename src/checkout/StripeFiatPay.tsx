@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe, type Stripe, type StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
+import { readRuntimeConfig } from "../core/runtime-config.js";
 import { checkoutConfirmOptions, DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS } from "../core/stripe-confirm.js";
 import {
   BillingAddressElement,
@@ -9,19 +10,30 @@ import {
   useCheckoutElements,
 } from "@stripe/react-stripe-js/checkout";
 
-const publishableKey =
+const bakedPublishableKey =
   (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
 
+function activePublishableKey(): string {
+  const runtime = readRuntimeConfig().stripePublishableKey;
+  if (runtime.startsWith("pk_test_") || runtime.startsWith("pk_live_")) return runtime;
+  return bakedPublishableKey;
+}
+
 let stripePromise: Promise<Stripe | null> | null = null;
+let stripePromiseKey = "";
 
 function getStripePromise() {
-  if (!publishableKey) return null;
-  if (!stripePromise) stripePromise = loadStripe(publishableKey);
+  const key = activePublishableKey();
+  if (!key) return null;
+  if (!stripePromise || stripePromiseKey !== key) {
+    stripePromiseKey = key;
+    stripePromise = loadStripe(key);
+  }
   return stripePromise;
 }
 
 export function stripeFiatEnabled(): boolean {
-  return Boolean(publishableKey);
+  return Boolean(activePublishableKey());
 }
 
 type CreateCheckoutResult = {

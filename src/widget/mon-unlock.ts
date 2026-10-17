@@ -34,7 +34,37 @@ import {
 import { createWalletClient, custom, type Address } from "viem";
 import type { Eip1193Provider } from "../core/wallet.js";
 import { establishReaderSession, READER_SESSION_HEADER } from "../core/reader-session.js";
+import { widgetSupabaseTarget, type WidgetSupabaseTarget } from "../core/runtime-config.js";
 import "./styles.css";
+
+function widgetScriptSrc(): string {
+  if (typeof document === "undefined") return "";
+  const scripts = document.getElementsByTagName("script");
+  for (let i = 0; i < scripts.length; i++) {
+    const src = scripts[i].src || "";
+    if (
+      src.includes("/dist/mon-unlock.js") ||
+      src.includes("/dist/openpaywall.js") ||
+      src.includes("/mon-unlock.js")
+    ) {
+      return src;
+    }
+  }
+  return "";
+}
+
+/**
+ * Third-party embeds keep the production Edge Function. Hosted pages use the
+ * project the server injected. Crypto buttons hide only on that hosted page.
+ */
+function hostedWidgetTarget(): WidgetSupabaseTarget {
+  const pageOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  return widgetSupabaseTarget({
+    pageOrigin,
+    scriptSrc: widgetScriptSrc(),
+    config: typeof window !== "undefined" ? window.__OPENPAYWALL_CONFIG : null,
+  });
+}
 
 /**
  * Embeddable paywall — paste on any site, no JavaScript required.
@@ -698,9 +728,9 @@ export class MonUnlock extends LitElement {
     }
     if (!fiatSession && !sessionToken) return false;
 
-    const apiBase = "https://flczjqljgntmkanipugo.supabase.co/functions/v1";
-    const anonKey =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
+    const hosted = hostedWidgetTarget();
+    const apiBase = hosted.functionsBase;
+    const anonKey = hosted.anonKey;
 
     const params = new URLSearchParams({
       article_id: this.article.id,
@@ -955,14 +985,18 @@ export class MonUnlock extends LitElement {
           >
             ${this.subscriptionBusy ? "Working…" : "Subscribe with card"}
           </button>
-          <button
-            type="button"
-            class="mon-btn mon-btn-secondary"
-            ?disabled=${this.subscriptionBusy || this.loading}
-            @click=${() => this.subscribeWithUsdc()}
-          >
-            Subscribe with USDC
-          </button>
+          ${hostedWidgetTarget().hideCrypto
+            ? nothing
+            : html`
+                <button
+                  type="button"
+                  class="mon-btn mon-btn-secondary"
+                  ?disabled=${this.subscriptionBusy || this.loading}
+                  @click=${() => this.subscribeWithUsdc()}
+                >
+                  Subscribe with USDC
+                </button>
+              `}
         </div>
       </div>
     `;
@@ -1210,18 +1244,22 @@ export class MonUnlock extends LitElement {
                     : `Pay ${priceLabel}`}
               </button>
 
-              <button
-                type="button"
-                class="mon-btn mon-btn-secondary"
-                ?disabled=${this.loading || this.checkoutOpen}
-                @click=${() => this.startMetaMaskPath()}
-              >
-                Use MetaMask
-              </button>
+              ${hostedWidgetTarget().hideCrypto
+                ? nothing
+                : html`
+                    <button
+                      type="button"
+                      class="mon-btn mon-btn-secondary"
+                      ?disabled=${this.loading || this.checkoutOpen}
+                      @click=${() => this.startMetaMaskPath()}
+                    >
+                      Use MetaMask
+                    </button>
+                  `}
             `
           : nothing}
 
-        ${this.showMetaMaskHelp
+        ${this.showMetaMaskHelp && !hostedWidgetTarget().hideCrypto
           ? html`
               <div class="mon-metamask-hint mt-3">
                 <p class="text-sm font-medium text-stone-800 dark:text-stone-200">
