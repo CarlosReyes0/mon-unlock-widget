@@ -34,7 +34,7 @@ Workflow file: `.github/workflows/prod-db-backup.yml`.
 - Schedule: Sunday 09:00 UTC (`0 9 * * 0`). GitHub runs that only from the default branch, and it may start late when the repo has been quiet.
 - Manual: Actions → **prod-db-backup** → **Run workflow**.
 - If the required secret or the age public key is missing, the job prints `Backup skipped` and exits 0. That is so this file can be on `main` before setup is finished.
-- If the dump, the sanity check, or the publish fails, the job fails. It then opens or updates one GitHub issue labeled `prod-alert` (the same `scripts/prod-alert.mjs` helper the uptime check uses, with key `db-backup`). A later successful backup closes that issue. The job still fails, so GitHub also emails the repository's Actions failure recipients. The alert body does not include the connection string.
+- If the dump, the sanity check, or the publish fails, the job fails and stops there. This repo is public, so the workflow does not open a GitHub issue. GitHub emails the repository owner about the failed Actions run. That mail is private. Turn the notification on under GitHub → Settings → Notifications → Actions if it is off.
 
 The job's `GITHUB_TOKEN` cannot push anywhere. Checkout does not persist credentials. The database URL and the decoded password are registered with `::add-mask::` before the dump starts, and the scripts never echo them.
 

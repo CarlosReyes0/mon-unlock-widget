@@ -3,8 +3,8 @@
 # separate private repo. See docs/backups.md.
 #
 # A missing secret skips the job on purpose. A dump, sanity, or publish
-# failure fails the job and opens or updates one GitHub issue labeled
-# prod-alert (scripts/prod-alert.mjs, key db-backup). A later success closes it.
+# failure fails the job. This repo is public, so the workflow does not
+# open a GitHub issue. GitHub emails the owner about the failed run.
 name: prod-db-backup
 
 on:
@@ -25,9 +25,6 @@ jobs:
     name: backup
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    permissions:
-      contents: read
-      issues: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,26 +70,3 @@ jobs:
           BACKUP_ALLOW_DIRECT: ${{ vars.BACKUP_ALLOW_DIRECT }}
           SUPABASE_DB_MAJOR_VERSION: "17"
         run: bash scripts/backup/prod-backup.sh
-
-      - name: Open or update the prod-alert issue
-        if: failure() && steps.config.outputs.configured == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          cat > /tmp/backup-alert.md <<'EOF'
-          The production database backup failed.
-          The workflow only runs `supabase db dump`, so this job did not write to the database.
-          Open the failed Actions run for the error. Connection strings are masked.
-          Restore steps are in docs/backups.md.
-          EOF
-          node scripts/prod-alert.mjs --key db-backup --failing true \
-            --title "[prod-alert] production database backup" \
-            --body-file /tmp/backup-alert.md
-
-      - name: Close the prod-alert issue after a good backup
-        if: success() && steps.config.outputs.configured == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node scripts/prod-alert.mjs --key db-backup --failing false --title "[prod-alert] production database backup" --body "Backup published."
