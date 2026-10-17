@@ -319,9 +319,10 @@
       // === Supabase Loader (Fast path via Edge Function Indexer) ===
       // The heavy lifting (RPC scanning) is done by the Supabase Edge Function `indexer`.
       // The dashboard just reads the aggregated data from the `articles` and `unlocks` tables.
-      const SUPABASE_URL = 'https://flczjqljgntmkanipugo.supabase.co';
-      // Get the anon key from Supabase Dashboard → Project Settings → API → Project API keys → "anon" (public)
-      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4';
+      const opwConfig = window.__OPENPAYWALL_CONFIG || {};
+      const SUPABASE_URL = opwConfig.supabaseUrl || 'https://flczjqljgntmkanipugo.supabase.co';
+      // Public anon key. The server injects the staging project; otherwise this is production.
+      const SUPABASE_ANON_KEY = opwConfig.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4';
       let supabaseClient = null;
 
       function getSupabase() {
@@ -496,7 +497,7 @@
       }
 
       let listingEditorArticle = null;
-      const UPDATE_LISTING_URL = "https://flczjqljgntmkanipugo.supabase.co/functions/v1/update-listing";
+      const UPDATE_LISTING_URL = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/update-listing";
 
       function openListingEditor(article) {
         listingEditorArticle = article;

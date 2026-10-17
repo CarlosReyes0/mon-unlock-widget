@@ -17,10 +17,9 @@ import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
 import { monadMainnet } from "../core/chains.js";
 import { publishAuthor } from "../core/publish-author.js";
 import { cleanTitle, nextPublishSlug, splitPost } from "../core/split-post.js";
+import { registerArticleUrl } from "../core/runtime-config.js";
 import { mapWalletSendToEthSend, type Eip1193Provider } from "../core/wallet.js";
 
-const REGISTER_ARTICLE_URL =
-  "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
 const ZERO = "0x0000000000000000000000000000000000000000";
 /** registerArticle is free except gas; dust below this cannot pay the Monad fee. */
 const MIN_MON_FOR_GAS = parseEther("0.001");
@@ -146,7 +145,7 @@ async function sendRegisterArticle(
 }
 
 async function syncMetadata(payload: Record<string, unknown>): Promise<ReserveResult> {
-  const res = await fetch(REGISTER_ARTICLE_URL, {
+  const res = await fetch(registerArticleUrl(), {
     method: "POST",
     headers: supabaseFunctionHeaders(),
     body: JSON.stringify(payload),

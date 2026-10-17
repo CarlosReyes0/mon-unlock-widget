@@ -125,8 +125,10 @@
       const CDN_BASE = "https://openpaywall.app";
       const WIDGET_VERSION = "20240714";
       const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
-      const SUPABASE_REGISTER_URL =
-        "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
+      const opwConfig = window.__OPENPAYWALL_CONFIG || {};
+      const SUPABASE_REGISTER_URL = opwConfig.supabaseUrl
+        ? String(opwConfig.supabaseUrl).replace(/\/$/, "") + "/functions/v1/register-article"
+        : "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
       const RELAY_REGISTER_URL = `${location.origin}/api/relay/register`;
 
       async function tryRelayRegister({ slug, articleIdHash, priceWei, publisher, embedSig, paymentAsset, contract }) {

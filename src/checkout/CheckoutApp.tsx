@@ -12,6 +12,7 @@ import { resolvePaymentAsset } from "../core/payment-asset.js";
 import { estimateUsdcForMon, formatUsdc } from "../core/swap-usdc-to-mon.js";
 import { gasDripFallbackCopy } from "../core/gas-drip.js";
 import { StripeFiatPay, stripeFiatEnabled } from "./StripeFiatPay.js";
+import { readRuntimeConfig } from "../core/runtime-config.js";
 import { CryptoPaySection, cryptoPrivyConfigured } from "./CryptoPaySection.js";
 import { cardUnlockNftCopy } from "../core/article-nft.js";
 
@@ -162,9 +163,10 @@ export function CheckoutApp() {
   const [usdEstimate, setUsdEstimate] = useState<string | null>(null);
   const [fiatBusy, setFiatBusy] = useState(false);
   const [phaseDone, setPhaseDone] = useState(false);
+  const cryptoPayEnabled = readRuntimeConfig().cryptoPay;
   const gasPreset = readGasFallbackPreset();
   const [showCrypto, setShowCrypto] = useState(
-    gasPreset && stripeFiatEnabled() ? false : !stripeFiatEnabled()
+    cryptoPayEnabled && (gasPreset && stripeFiatEnabled() ? false : !stripeFiatEnabled())
   );
   const [gasNote, setGasNote] = useState<string | null>(
     gasPreset ? gasDripFallbackCopy(gasPreset) : null
@@ -187,7 +189,7 @@ export function CheckoutApp() {
       ? formatUsd(priceWei)
       : formatMon(priceWei)
     : "—";
-  const hasPrivy = cryptoPrivyConfigured();
+  const hasPrivy = cryptoPayEnabled && cryptoPrivyConfigured();
 
   useEffect(() => {
     if (!query || priceWei <= 0n) {
@@ -355,7 +357,11 @@ export function CheckoutApp() {
           />
         ) : null}
 
-        {showCrypto && !hasPrivy && !stripeFiatEnabled() ? (
+        {!cryptoPayEnabled && !stripeFiatEnabled() ? (
+          <p className="checkout-copy">Card checkout is not configured on this test site.</p>
+        ) : null}
+
+        {cryptoPayEnabled && showCrypto && !hasPrivy && !stripeFiatEnabled() ? (
           <p className="checkout-copy">Crypto checkout is not configured.</p>
         ) : null}
 

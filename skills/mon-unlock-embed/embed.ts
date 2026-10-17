@@ -20,6 +20,17 @@ export const WIDGET_VERSION = "20240714";
 export const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
 export const REGISTER_ARTICLE_URL =
   "https://flczjqljgntmkanipugo.supabase.co/functions/v1/register-article";
+
+/** Production URL unless SUPABASE_URL or REGISTER_ARTICLE_URL is set in this process. */
+export function registerArticleEndpoint(): string {
+  const explicit =
+    typeof process !== "undefined" ? process.env.REGISTER_ARTICLE_URL?.trim() : "";
+  if (explicit) return explicit;
+  const base =
+    typeof process !== "undefined" ? process.env.SUPABASE_URL?.trim().replace(/\/$/, "") : "";
+  if (base) return `${base}/functions/v1/register-article`;
+  return REGISTER_ARTICLE_URL;
+}
 export const MONAD_RPC = "https://rpc.monad.xyz";
 
 export const MONAD_CHAIN = {
@@ -289,6 +300,7 @@ export async function syncMetadataToSupabase(
     const anonKey =
       (typeof process !== "undefined" && process.env.SUPABASE_ANON_KEY?.trim()) ||
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3pqcWxqZ250bWthbmlwdWdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTUwNjQsImV4cCI6MjA5NzQ5MTA2NH0.ZKcFJ_4ZI4oK4hyZtR72vqC_JCdwttZSQQw82uTMEb4";
+    const registerUrl = registerArticleEndpoint();
     const publishSecret =
       (typeof process !== "undefined" && process.env.REGISTER_PUBLISH_SECRET?.trim()) || "";
     const headers: Record<string, string> = {
@@ -315,7 +327,7 @@ export async function syncMetadataToSupabase(
         message: await buildPublishAuthMessage(payload),
       });
     }
-    const res = await fetch(REGISTER_ARTICLE_URL, {
+    const res = await fetch(registerUrl, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),

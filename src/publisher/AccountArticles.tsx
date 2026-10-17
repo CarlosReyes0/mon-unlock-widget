@@ -11,10 +11,12 @@ import {
   buildListingAuthMessage,
   supabaseFunctionHeaders,
 } from "../core/publish-auth.js";
+import { supabaseProjectUrl } from "../core/runtime-config.js";
 import type { Eip1193Provider } from "../core/wallet.js";
 
-const SUPABASE_URL = "https://flczjqljgntmkanipugo.supabase.co";
-const UPDATE_LISTING_URL = `${SUPABASE_URL}/functions/v1/update-listing`;
+function updateListingUrl(): string {
+  return `${supabaseProjectUrl()}/functions/v1/update-listing`;
+}
 
 type ArticleRow = {
   articleId: string;
@@ -80,7 +82,7 @@ export function AccountArticles({ wallet }: Props) {
     setStatus("Loading your articles…");
     try {
       const articleRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/articles?select=article_id,article_id_hash,publisher,price_wei,price_cents,payment_asset,title,author,listing_status,allow_a_la_carte,external_url&publisher=eq.${encodeURIComponent(publisher)}`,
+        `${supabaseProjectUrl()}/rest/v1/articles?select=article_id,article_id_hash,publisher,price_wei,price_cents,payment_asset,title,author,listing_status,allow_a_la_carte,external_url&publisher=eq.${encodeURIComponent(publisher)}`,
         { headers: supabaseFunctionHeaders() }
       );
       if (!articleRes.ok) throw new Error("articles_" + articleRes.status);
@@ -91,7 +93,7 @@ export function AccountArticles({ wallet }: Props) {
       const stats = new Map<string, { count: number; revenue: bigint }>();
       if (hashes.length) {
         const unlockRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/unlocks?select=article_id_hash,amount_wei&article_id_hash=in.(${hashes.map(encodeURIComponent).join(",")})`,
+          `${supabaseProjectUrl()}/rest/v1/unlocks?select=article_id_hash,amount_wei&article_id_hash=in.(${hashes.map(encodeURIComponent).join(",")})`,
           { headers: supabaseFunctionHeaders() }
         );
         if (unlockRes.ok) {
@@ -216,7 +218,7 @@ export function AccountArticles({ wallet }: Props) {
       const listingSig = await walletClient.signMessage({ account, message });
       setSaveMsg("Approve the pay-per-article signature…");
       const aLaCarteSig = await walletClient.signMessage({ account, message: aLaCarteMessage });
-      const res = await fetch(UPDATE_LISTING_URL, {
+      const res = await fetch(updateListingUrl(), {
         method: "POST",
         headers: supabaseFunctionHeaders(),
         body: JSON.stringify({

@@ -32,9 +32,13 @@ function read(rel) {
 
 function embeddedAnonConfig() {
   const html = read("article.html");
-  const url = html.match(/const SUPABASE_URL = "([^"]+)"/)?.[1];
-  const key = html.match(/const SUPABASE_ANON_KEY =\s*"([^"]+)"/)?.[1];
-  assert.ok(url && key, "article.html must embed SUPABASE_URL and SUPABASE_ANON_KEY");
+  const url = "https://flczjqljgntmkanipugo.supabase.co";
+  const key = html.match(
+    /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/
+  )?.[0];
+  assert.ok(html.includes(url), "article.html must keep the production Supabase URL as the fallback");
+  assert.ok(key, "article.html must keep the production anon key as the fallback");
+  assert.match(html, /__OPENPAYWALL_CONFIG/);
   return { url, key };
 }
 

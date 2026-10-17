@@ -32,6 +32,7 @@ import {
   listingsSupabaseConfigured,
   markArticleRegistered,
 } from "./listings-api.mjs";
+import { isStagingApp } from "./public-config.mjs";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -83,14 +84,15 @@ export function resetRelayRateLimits() {
   rateBuckets.clear();
 }
 
-export function relayerPrivateKey() {
-  const raw = (process.env.RELAYER_PRIVATE_KEY || "").trim();
+export function relayerPrivateKey(env = process.env) {
+  const raw = String(env.RELAYER_PRIVATE_KEY || "").trim();
   if (!raw) return "";
   return raw.startsWith("0x") ? raw : `0x${raw}`;
 }
 
-export function relayerConfigured() {
-  const key = relayerPrivateKey();
+export function relayerConfigured(env = process.env) {
+  if (isStagingApp(env)) return false;
+  const key = relayerPrivateKey(env);
   return /^0x[a-fA-F0-9]{64}$/.test(key);
 }
 
