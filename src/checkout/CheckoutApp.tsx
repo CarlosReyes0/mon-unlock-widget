@@ -3,6 +3,7 @@ import type { Address } from "viem";
 import {
   CHECKOUT_MESSAGE_SOURCE,
   buildArticleReturnUrl,
+  checkoutReturnTarget,
   postCheckoutMessage,
   type CheckoutMessage,
 } from "../core/checkout-protocol.js";
@@ -72,7 +73,15 @@ function notifyParent(parentOrigin: string, message: CheckoutMessage) {
   postCheckoutMessage(window.opener ?? window.parent, parentOrigin, message);
 }
 
-/** Finish checkout: notify opener when possible; always send mobile/same-tab users back to the article. */
+function safeArticleReturn(query: CheckoutQuery): string | null {
+  return checkoutReturnTarget(query.returnUrl, {
+    pageOrigin: window.location.origin,
+    parentOrigin: query.parentOrigin,
+    referrer: document.referrer,
+  });
+}
+
+/** Finish checkout: notify opener when possible; send the reader back only to an allowed origin. */
 function finishCheckout(
   query: CheckoutQuery,
   message: CheckoutMessage,
@@ -85,16 +94,18 @@ function finishCheckout(
 
   const fiatSession =
     message.type === "mon:unlocked" && message.fiatSession ? message.fiatSession : null;
+  const returnUrl = safeArticleReturn(query);
 
-  // Same-tab / mobile: no reliable opener — bounce back to the article with the session.
+  // Same-tab / mobile: no reliable opener — bounce back only when the return URL is ours
+  // or the embed parent the browser actually came from.
   const shouldRedirect =
-    Boolean(query.returnUrl) &&
+    Boolean(returnUrl) &&
     (opts?.preferRedirect || !openerAlive || message.type === "mon:checkout-closed");
 
-  if (shouldRedirect && query.returnUrl) {
+  if (shouldRedirect && returnUrl) {
     if (fiatSession) {
       window.location.replace(
-        buildArticleReturnUrl(query.returnUrl, {
+        buildArticleReturnUrl(returnUrl, {
           articleId: query.articleId,
           fiatSession,
         })
@@ -102,7 +113,7 @@ function finishCheckout(
       return;
     }
     // Cancel / closed — return to article without unlock params.
-    window.location.replace(query.returnUrl);
+    window.location.replace(returnUrl);
     return;
   }
 
@@ -113,19 +124,19 @@ function finishCheckout(
       /* ignore */
     }
     // iOS often ignores window.close(); fall back to article redirect.
-    if (fiatSession && query.returnUrl) {
+    if (fiatSession && returnUrl) {
       window.setTimeout(() => {
         window.location.replace(
-          buildArticleReturnUrl(query.returnUrl!, {
+          buildArticleReturnUrl(returnUrl, {
             articleId: query.articleId,
             fiatSession,
           })
         );
       }, 400);
     }
-  } else if (fiatSession && query.returnUrl) {
+  } else if (fiatSession && returnUrl) {
     window.location.replace(
-      buildArticleReturnUrl(query.returnUrl, {
+      buildArticleReturnUrl(returnUrl, {
         articleId: query.articleId,
         fiatSession,
       })
@@ -141,6 +152,7 @@ export function CheckoutApp() {
   const [phaseDone, setPhaseDone] = useState(false);
   const [showCrypto, setShowCrypto] = useState(!stripeFiatEnabled());
 
+  const articleReturn = query ? safeArticleReturn(query) : null;
   const settleUsdc = query?.paymentAsset === "usdc";
   const priceWei = query
     ? settleUsdc
@@ -265,7 +277,9 @@ export function CheckoutApp() {
             {error ? <p className="checkout-error">{error}</p> : null}
             {phaseDone ? (
               <>
-                <p className="checkout-status ok">Unlocked — returning to article…</p>
+                <p className="checkout-status ok">
+                  {articleReturn ? "Unlocked — returning to article…" : "Unlocked."}
+                </p>
                 <p className="checkout-copy">{cardUnlockNftCopy()}</p>
               </>
             ) : (

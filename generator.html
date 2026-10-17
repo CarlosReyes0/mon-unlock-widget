@@ -945,8 +945,8 @@
       }
 
       async function buildMetaPayload(v) {
-        const { keccak256, toBytes } = await import("https://esm.sh/viem@2");
-        const priceWei = await parsePriceUnits(v.price || "0.50", selectedAsset(), await import("https://esm.sh/viem@2"));
+        const { keccak256, toBytes } = await import("/vendor/viem.js");
+        const priceWei = await parsePriceUnits(v.price || "0.50", selectedAsset(), await import("/vendor/viem.js"));
         const payload = {
           slug: v.articleId,
           articleIdHash: keccak256(toBytes(v.articleId)),
@@ -972,7 +972,7 @@
       async function isArticleRegisteredByWallet(articleId) {
         if (!connectedWallet || !articleId) return false;
         try {
-          const { keccak256, toBytes, createPublicClient, http } = await import("https://esm.sh/viem@2");
+          const { keccak256, toBytes, createPublicClient, http } = await import("/vendor/viem.js");
           const articleIdBytes = keccak256(toBytes(articleId));
           const publicClient = createPublicClient({
             chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
@@ -1367,7 +1367,7 @@
       const publishSigCache = new Map();
 
       async function signPlainMessage(eth, account, message) {
-        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const { createWalletClient, custom } = await import("/vendor/viem.js");
         const walletClient = createWalletClient({
           account,
           chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
@@ -1466,7 +1466,7 @@
       }
 
       async function signEmbed(eth, account, articleId, priceWei) {
-        const { createWalletClient, custom } = await import("https://esm.sh/viem@2");
+        const { createWalletClient, custom } = await import("/vendor/viem.js");
         const walletClient = createWalletClient({
           account,
           chain: { id: 143, name: "Monad", nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } } },
@@ -1606,11 +1606,11 @@ ${teaserEsc}
               const eth = getInjectedProvider();
               if (!eth) throw new Error("Wallet connection lost. Please reconnect.");
 
-              const { keccak256, toBytes, createWalletClient, custom, parseEther, createPublicClient, http } = await import("https://esm.sh/viem@2");
+              const { keccak256, toBytes, createWalletClient, custom, parseEther, createPublicClient, http } = await import("/vendor/viem.js");
 
               const articleIdBytes = keccak256(toBytes(v.articleId));
               const priceWei = selectedAsset() === "usdc"
-                ? (await import("https://esm.sh/viem@2")).parseUnits(v.price || "0.50", 6)
+                ? (await import("/vendor/viem.js")).parseUnits(v.price || "0.50", 6)
                 : parseEther(v.price || "1");
 
               status.textContent = "Saving draft…";
@@ -1961,12 +1961,12 @@ ${teaserEsc}
                 metaStatus.textContent = "Syncing metadata…";
                 metaStatus.style.color = "#6b7280";
               }
-              const { keccak256, toBytes, parseEther } = await import("https://esm.sh/viem@2");
+              const { keccak256, toBytes, parseEther } = await import("/vendor/viem.js");
               const metaPayload = {
                 slug: v.articleId,
                 articleIdHash: keccak256(toBytes(v.articleId)),
                 priceWei: (selectedAsset() === "usdc"
-                  ? (await import("https://esm.sh/viem@2")).parseUnits(v.price || "0.50", 6)
+                  ? (await import("/vendor/viem.js")).parseUnits(v.price || "0.50", 6)
                   : parseEther(v.price || "1")).toString(),
                 publisher: connectedWallet,
                 teaser: v.teaser,

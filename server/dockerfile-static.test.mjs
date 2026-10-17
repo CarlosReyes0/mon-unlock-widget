@@ -61,6 +61,13 @@ test("Dockerfile copies write-draft-resume.js so resume banners work in producti
   assert.match(dockerfile, /write-draft-resume\.js/);
 });
 
+test("Dockerfile copies the self-hosted viem bundle", () => {
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  assert.match(dockerfile, /COPY --from=builder \/app\/vendor\/viem\.js \.\/vendor\/viem\.js/);
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.match(pkg.scripts.build, /scripts\/build-vendor-viem\.mjs/);
+});
+
 test("Dockerfile copies generator-media.js so generator media validation loads", () => {
   const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
   const generator = fs.readFileSync(path.join(ROOT, "generator.html"), "utf8");

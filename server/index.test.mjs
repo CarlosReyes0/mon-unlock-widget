@@ -825,6 +825,143 @@ test("API and widget script responses do not get document CSP headers", async ()
   assert.equal(js.headers.get("x-frame-options"), null);
 });
 
+function assertBaselineHeaders(headers) {
+  assert.equal(headers.get("strict-transport-security"), "max-age=31536000; includeSubDomains");
+  assert.equal(/preload/i.test(headers.get("strict-transport-security") || ""), false);
+  assert.equal(headers.get("x-content-type-options"), "nosniff");
+  assert.equal(headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+  const policy = headers.get("permissions-policy") || "";
+  assert.match(policy, /clipboard-write=\(self/);
+  assert.match(policy, /camera=\(\)/);
+}
+
+test("baseline security headers are on HTML, API, and static responses", async () => {
+  const page = await fetch(`http://127.0.0.1:${PORT}/articles`, { method: "HEAD" });
+  assert.equal(page.status, 200);
+  assertBaselineHeaders(page.headers);
+  const csp = page.headers.get("content-security-policy") || "";
+  assert.match(csp, /script-src/);
+  assert.equal(csp.includes("'unsafe-eval'"), false);
+  assert.doesNotMatch(csp, /esm\.sh|cdn\.jsdelivr\.net/);
+
+  const api = await fetch(`http://127.0.0.1:${PORT}/api/coinbase/health`);
+  assert.equal(api.status, 200);
+  assertBaselineHeaders(api.headers);
+  assert.equal(api.headers.get("content-security-policy"), null);
+
+  const js = await fetch(`http://127.0.0.1:${PORT}/site-nav.js`, { method: "HEAD" });
+  assert.equal(js.status, 200);
+  assertBaselineHeaders(js.headers);
+  assert.equal(js.headers.get("content-security-policy"), null);
+});
+
+test("x-forwarded-proto http redirects to https except the Railway health check", async () => {
+  const upgraded = await fetch(`http://127.0.0.1:${PORT}/write?from=http`, {
+    method: "HEAD",
+    redirect: "manual",
+    headers: { "x-forwarded-proto": "http" },
+  });
+  assert.equal(upgraded.status, 301);
+  assert.equal(upgraded.headers.get("location"), `https://127.0.0.1:${PORT}/write?from=http`);
+  assertBaselineHeaders(upgraded.headers);
+
+  const posted = await fetch(`http://127.0.0.1:${PORT}/api/subscriptions/stripe/checkout`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "x-forwarded-proto": "http", "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(posted.status, 308);
+  assert.equal(
+    posted.headers.get("location"),
+    `https://127.0.0.1:${PORT}/api/subscriptions/stripe/checkout`
+  );
+
+  const alreadyHttps = await fetch(`http://127.0.0.1:${PORT}/write`, {
+    method: "HEAD",
+    redirect: "manual",
+    headers: { "x-forwarded-proto": "https" },
+  });
+  assert.equal(alreadyHttps.status, 200);
+  assert.equal(alreadyHttps.headers.get("location"), null);
+
+  const health = await fetch(`http://127.0.0.1:${PORT}/`, {
+    method: "GET",
+    redirect: "manual",
+    headers: { "x-forwarded-proto": "http", "user-agent": "RailwayHealthCheck/1.0" },
+  });
+  assert.equal(health.status, 200);
+  assert.equal(health.headers.get("location"), null);
+  assert.match(health.headers.get("content-type") || "", /text\/html/);
+});
+
+test("checkout success and return URLs reject a foreign host", async () => {
+  const origin = `http://127.0.0.1:${PORT}`;
+  const foreign = await fetch(`${origin}/api/subscriptions/stripe/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      reader: "0x1111111111111111111111111111111111111111",
+      writer: "0x2222222222222222222222222222222222222222",
+      successUrl: "https://evil.example/phish",
+      cancelUrl: `${origin}/account.html?sub=cancel`,
+    }),
+  });
+  assert.equal(foreign.status, 400);
+  const foreignBody = await foreign.json();
+  assert.equal(foreignBody.error, "invalid_redirect");
+  assert.equal(JSON.stringify(foreignBody).includes("evil.example"), false);
+
+  const swapped = await fetch(`${origin}/api/subscriptions/stripe/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      successUrl: `${origin}/account.html?sub=ok`,
+      cancelUrl: "https://127.0.0.1.evil.example/account.html",
+    }),
+  });
+  assert.equal(swapped.status, 400);
+  assert.equal((await swapped.json()).error, "invalid_redirect");
+
+  const sameOrigin = await fetch(`${origin}/api/subscriptions/stripe/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      reader: "0x1111111111111111111111111111111111111111",
+      writer: "0x2222222222222222222222222222222222222222",
+      successUrl: `${origin}/account.html?sub=ok`,
+      cancelUrl: `${origin}/account.html?sub=cancel`,
+    }),
+  });
+  assert.equal(sameOrigin.status, 503);
+
+  const badReturn = await fetch(`${origin}/api/stripe/create-intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      articleId: "demo",
+      amountUsdCents: 199,
+      returnUrl: "https://evil.example/steal?session_id={CHECKOUT_SESSION_ID}",
+    }),
+  });
+  assert.equal(badReturn.status, 400);
+  const badReturnBody = await badReturn.json();
+  assert.equal(badReturnBody.error, "invalid_return_url");
+  assert.equal(JSON.stringify(badReturnBody).includes("evil.example"), false);
+
+  const goodReturn = await fetch(`${origin}/api/stripe/create-intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      articleId: "demo",
+      amountUsdCents: 199,
+      returnUrl: `${origin}/unlock.html?session_id={CHECKOUT_SESSION_ID}`,
+    }),
+  });
+  assert.equal(goodReturn.status, 503);
+  assert.equal((await goodReturn.json()).error, "stripe_not_configured");
+});
+
 test("GET /server/data is not served as a static file", async () => {
   const dir = path.join(ROOT, "server/data");
   fs.mkdirSync(dir, { recursive: true });

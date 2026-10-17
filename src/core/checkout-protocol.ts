@@ -96,6 +96,47 @@ export function buildCheckoutUrl(params: CheckoutParams, baseUrl = getCheckoutBa
   return url.toString();
 }
 
+/**
+ * URL checkout may navigate to after pay or cancel.
+ * Our own origin is always allowed. The embed parent is allowed only when
+ * the document referrer is that same parent, so a crafted link cannot pick
+ * an unrelated host. Anything else is dropped.
+ */
+export function checkoutReturnTarget(
+  returnUrl: string | null | undefined,
+  options: { pageOrigin: string; parentOrigin?: string; referrer?: string }
+): string | null {
+  const raw = String(returnUrl || "").trim();
+  if (!raw || /[\s\\]/.test(raw)) return null;
+  let target: URL;
+  let page: URL;
+  try {
+    target = new URL(raw);
+    page = new URL(options.pageOrigin);
+  } catch {
+    return null;
+  }
+  if (target.username || target.password) return null;
+  if (target.protocol !== "http:" && target.protocol !== "https:") return null;
+  if (target.origin === page.origin) return target.toString();
+
+  const parentRaw = String(options.parentOrigin || "").trim();
+  const referrerRaw = String(options.referrer || "").trim();
+  if (!parentRaw || !referrerRaw) return null;
+  try {
+    const parent = new URL(parentRaw);
+    const referrer = new URL(referrerRaw);
+    if (parent.protocol !== "http:" && parent.protocol !== "https:") return null;
+    if (referrer.protocol !== "http:" && referrer.protocol !== "https:") return null;
+    if (target.origin === parent.origin && referrer.origin === parent.origin) {
+      return target.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /** Article URL + fiat session so the widget can unlock after a same-tab mobile checkout. */
 export function buildArticleReturnUrl(
   returnUrl: string,

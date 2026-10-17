@@ -858,15 +858,21 @@ export class MonUnlock extends LitElement {
     this.subscriptionBusy = true;
     this.error = null;
     try {
-      const returnUrl = window.location.href;
-      const res = await fetch(`${getCheckoutBaseUrl()}/api/subscriptions/stripe/checkout`, {
+      // Stripe's success/cancel URLs must be this site. A publisher page here
+      // is an open redirect after checkout; the webhook still records the sub.
+      const checkoutBase = getCheckoutBaseUrl();
+      const successUrl = new URL("/account.html", `${checkoutBase}/`);
+      successUrl.searchParams.set("sub", "ok");
+      const cancelUrl = new URL("/account.html", `${checkoutBase}/`);
+      cancelUrl.searchParams.set("sub", "cancel");
+      const res = await fetch(`${checkoutBase}/api/subscriptions/stripe/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reader,
           writer,
-          successUrl: returnUrl,
-          cancelUrl: returnUrl,
+          successUrl: successUrl.toString(),
+          cancelUrl: cancelUrl.toString(),
         }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
