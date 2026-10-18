@@ -1,8 +1,16 @@
-# Scheduled read-only checks for https://openpaywall.app.
+# Read-only checks for https://openpaywall.app.
 #
-# Every 15 minutes: homepage, public feed, one article page (CSP included),
-# agent health, and the gas-relayer MON balance. A check is tried 3 times
-# before it counts as a failure. A passing run exits 0 and sends nothing.
+# GitHub delays the schedule on this public repo (runs land hours apart, not
+# every 15 minutes). The cron below stays as the backup. When it does run it
+# checks the homepage, the public feed, one article page (CSP included),
+# agent health, and GET /api/uptime. A check is tried 3 times before it
+# counts as a failure. A passing run exits 0 and sends nothing.
+#
+# Frequent checks are a free UptimeRobot account (5-minute HTTP monitors,
+# email only). That needs no token and no new GitHub secret. A dispatch
+# token or an in-app timer was the alternative: a token is an extra secret
+# that can start workflows, and a timer inside the Railway process cannot
+# report that the process is down. Do not create a public status page.
 #
 # This repository is public, so a failure must not open a GitHub issue.
 # After the retries, a confirmed failure fails this job. GitHub then emails
@@ -24,18 +32,36 @@
 #
 # Actions logs are public. They print check names and status codes only.
 #
-# Carlos — add these in GitHub → Settings → Secrets and variables → Actions.
-# The workflow skips the balance check when the address is absent. It never
-# creates production data.
+# Enable the frequent checks (no repo secret):
+#   1. Create a free account at https://uptimerobot.com with your email.
+#   2. Add three HTTP(s) monitors, interval 5 minutes, alert contact = your
+#      email. Leave status pages off.
+#        https://openpaywall.app/
+#        https://openpaywall.app/api/agents/health
+#        https://openpaywall.app/api/uptime
+#      Alert when the response is not HTTP 200.
+#   3. Wait until Railway has deployed this commit, then open /api/uptime.
+#      The backup job calls that path as soon as this file is on main. If a
+#      run starts before the deploy finishes, that one run fails.
+#      {"ok":true,"relayer":"ok"} and HTTP 200 means the relayer is funded.
+#      "unset" means Railway has no relayer key. "low" means it is under the
+#      line. "fail" means the balance read failed. The body has no address
+#      and no balance.
 #
-#   Variable or secret RELAYER_ADDRESS
-#     The relayer wallet (0x + 40 hex chars). A variable is enough; the
-#     address is already public at GET /api/relay/health. Do not commit it.
-#   Variable RELAYER_LOW_BALANCE_WEI   (optional)
-#     Alert below this many wei. Default 1000000000000000000 (1 MON), same
-#     as RELAYER_LOW_BALANCE_WEI in server/relay-gas.mjs.
-#   Variable MONAD_RPC_URL              (optional)
-#     Default https://rpc.monad.xyz. Read-only eth_getBalance.
+# Rollback: delete or pause those three monitors. This schedule keeps
+# running. Disable the "uptime" workflow on the Actions tab to stop the
+# backup too. No secret was added, so there is nothing to rotate.
+#
+# The relayer decision is made on the server from the existing Railway
+# secret RELAYER_PRIVATE_KEY. This workflow does not read RELAYER_ADDRESS.
+# Do not add that variable. If the key is missing, /api/uptime says "unset"
+# and this job fails.
+#
+# Optional Railway variable (not a GitHub variable):
+#   RELAYER_LOW_BALANCE_WEI
+#     Positive integer wei. Default 1000000000000000000 (1 MON), same as
+#     RELAYER_LOW_BALANCE_WEI in server/relay-gas.mjs. Leave unset for the
+#     default. This is the alert line, not a balance reading.
 #
 # Pull requests run the unit tests only. The schedule runs from main after merge.
 name: uptime
@@ -81,9 +107,6 @@ jobs:
         id: probe
         env:
           UPTIME_BASE_URL: https://openpaywall.app
-          RELAYER_ADDRESS: ${{ vars.RELAYER_ADDRESS || secrets.RELAYER_ADDRESS }}
-          RELAYER_LOW_BALANCE_WEI: ${{ vars.RELAYER_LOW_BALANCE_WEI }}
-          MONAD_RPC_URL: ${{ vars.MONAD_RPC_URL || 'https://rpc.monad.xyz' }}
           UPTIME_ATTEMPTS: "3"
           UPTIME_RETRY_MS: "5000"
           UPTIME_REPORT_PATH: /tmp/uptime-report.md

@@ -72,6 +72,7 @@ import {
   upsertWriterPlan,
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
+import { readRelayerBalanceStatus, uptimeHttpResult } from "./relay-gas.mjs";
 import { articleHtmlForSlug, feedHtmlForReq, isDefaultOgPath, ogJpegForSlug, parseArticleSlug, writerHtmlForWallet } from "./og-http.mjs";
 import {
   canonicalWriterPath,
@@ -1149,6 +1150,14 @@ const server = http.createServer(guardRequest(async (req, res) => {
       const status = e?.status || 500;
       return sendJson(res, status, { error: e?.message || "lapse_failed" });
     }
+  }
+
+  // Public uptime probe. Status word only — never the address or the balance.
+  // 200 when the relayer is funded; 503 for low, unset (no key), or fail.
+  if (method === "GET" && url.pathname === "/api/uptime") {
+    const reading = await readRelayerBalanceStatus();
+    const result = uptimeHttpResult(reading.status);
+    return sendJson(res, result.httpStatus, result.body);
   }
 
   // --- Publisher gas relayer (registerArticleFor; writer still signs) ---

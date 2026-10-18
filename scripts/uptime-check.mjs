@@ -4,9 +4,10 @@
  * GET the homepage, the public article feed, one article page, and
  * /api/agents/health. On HTML responses, require the production CSP
  * (default-src 'self', frame-ancestors 'none', no script-src 'unsafe-eval'
- * or esm.sh). When RELAYER_ADDRESS is set, eth_getBalance that wallet on
- * Monad and fail if it is below RELAYER_LOW_BALANCE_WEI (default 1 MON,
- * the same default as server/relay-gas.mjs).
+ * or esm.sh). The relayer check is GET /api/uptime. The server decides
+ * ok, low, unset, or fail from its own key and returns that word only.
+ * This script does not read an address and does not print a balance.
+ * unset (no key on the server) fails the run; it is not skipped.
  *
  * Each check retries before it is reported as a failure. Nothing is posted
  * to the app and no transaction is sent. Stdout is check names and status
@@ -14,44 +15,16 @@
  *
  *   UPTIME_BASE_URL=https://openpaywall.app node scripts/uptime-check.mjs
  *
- * Repository variable or secret (either name works; the variable is enough
- * because the address is public):
- *   RELAYER_ADDRESS          — skip the balance check when unset
- * Optional variable:
- *   RELAYER_LOW_BALANCE_WEI  — default 1000000000000000000 (1 MON)
- *   MONAD_RPC_URL            — default https://rpc.monad.xyz
+ * The threshold is RELAYER_LOW_BALANCE_WEI on the server (optional, default
+ * 1 MON, the same default as server/relay-gas.mjs). This process does not
+ * read that variable.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ONE_MON_WEI = 10n ** 18n;
-export const DEFAULT_RPC_URL = "https://rpc.monad.xyz";
-
-const ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9-]{0,200}$/;
-
-export function parseLowBalanceWei(raw) {
-  const text = String(raw ?? "").trim();
-  if (/^[0-9]+$/.test(text)) {
-    try {
-      const value = BigInt(text);
-      if (value > 0n) return value;
-    } catch {
-      /* default */
-    }
-  }
-  return ONE_MON_WEI;
-}
-
-export function formatMon(wei) {
-  const value = BigInt(wei);
-  const negative = value < 0n;
-  const abs = negative ? -value : value;
-  const whole = abs / ONE_MON_WEI;
-  const frac = (abs % ONE_MON_WEI).toString().padStart(18, "0").slice(0, 4);
-  return `${negative ? "-" : ""}${whole}.${frac} MON`;
-}
+const RELAYER_WORDS = new Set(["ok", "low", "unset", "fail"]);
 
 export function scriptSrcProblems(csp) {
   const problems = [];
@@ -200,72 +173,24 @@ async function checkHealth(base, request) {
   return { name: "health", ok: true, code: "200", detail: "200" };
 }
 
-async function checkBalance(request, { relayerAddress, rpcUrl, threshold }) {
-  if (!relayerAddress) {
-    return {
-      name: "relayer-balance",
-      ok: true,
-      skipped: true,
-      code: "skip",
-      detail: "skip",
-    };
-  }
-  if (!ADDRESS.test(relayerAddress)) {
-    return {
-      name: "relayer-balance",
-      ok: false,
-      code: "fail",
-      detail: "address",
-    };
-  }
-  const res = await request(rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "eth_getBalance",
-      params: [relayerAddress, "latest"],
-    }),
-  });
-  const text = await res.text();
-  if (res.status !== 200) {
-    return { name: "relayer-balance", ok: false, code: String(res.status), detail: "http" };
-  }
-  let payload;
+async function checkBalance(base, request) {
+  const res = await request(`${base}/api/uptime`, { method: "GET" });
+  const read = await readResponse(res, base);
+  if (!read.ok) return { name: "relayer-balance", ok: false, code: "fail", detail: "fail" };
+  let body;
   try {
-    payload = JSON.parse(text);
+    body = JSON.parse(read.text);
   } catch {
-    return { name: "relayer-balance", ok: false, code: "fail", detail: "not-json" };
+    return { name: "relayer-balance", ok: false, code: "fail", detail: "fail" };
   }
-  if (payload.error) {
-    return {
-      name: "relayer-balance",
-      ok: false,
-      code: "fail",
-      detail: "rpc",
-    };
+  const word = typeof body?.relayer === "string" ? body.relayer : "";
+  if (!RELAYER_WORDS.has(word) || (word === "ok" && read.res.status !== 200)) {
+    return { name: "relayer-balance", ok: false, code: "fail", detail: "fail" };
   }
-  let balance;
-  try {
-    balance = BigInt(payload.result);
-  } catch {
-    return { name: "relayer-balance", ok: false, code: "fail", detail: "wei" };
+  if (word === "ok") {
+    return { name: "relayer-balance", ok: true, code: "200", detail: "200" };
   }
-  if (balance < threshold) {
-    return {
-      name: "relayer-balance",
-      ok: false,
-      code: "low",
-      detail: `${formatMon(balance)} is below ${formatMon(threshold)}`,
-    };
-  }
-  return {
-    name: "relayer-balance",
-    ok: true,
-    code: "200",
-    detail: "200",
-  };
+  return { name: "relayer-balance", ok: false, code: word, detail: word };
 }
 
 async function withRetries(name, fn, { attempts, retryMs, sleep }) {
@@ -288,9 +213,6 @@ async function withRetries(name, fn, { attempts, retryMs, sleep }) {
  * @param {{
  *   baseUrl?: string,
  *   fetchImpl?: typeof fetch,
- *   relayerAddress?: string,
- *   lowBalanceWei?: string,
- *   rpcUrl?: string,
  *   attempts?: number,
  *   retryMs?: number,
  *   timeoutMs?: number,
@@ -304,9 +226,6 @@ export async function runUptimeChecks(options = {}) {
   const retryMs = options.retryMs ?? 5000;
   const sleep = options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const timeoutMs = options.timeoutMs ?? 15000;
-  const relayerAddress = String(options.relayerAddress ?? "").trim();
-  const threshold = parseLowBalanceWei(options.lowBalanceWei);
-  const rpcUrl = String(options.rpcUrl || DEFAULT_RPC_URL).trim() || DEFAULT_RPC_URL;
   const calls = [];
 
   async function request(url, init = {}) {
@@ -329,9 +248,7 @@ export async function runUptimeChecks(options = {}) {
   const feed = await retry("feed", () => checkFeed(base, request));
   const article = await retry("article", () => checkArticle(base, request, feed.slug || ""));
   const health = await retry("health", () => checkHealth(base, request));
-  const balance = await retry("relayer-balance", () =>
-    checkBalance(request, { relayerAddress, rpcUrl, threshold })
-  );
+  const balance = await retry("relayer-balance", () => checkBalance(base, request));
   const checks = [home, feed, article, health, balance];
   const ok = checks.every((check) => check.ok);
   return { ok, checks, calls, baseUrl: base };
@@ -349,9 +266,6 @@ export function renderReport(result) {
 async function main() {
   const result = await runUptimeChecks({
     baseUrl: process.env.UPTIME_BASE_URL,
-    relayerAddress: process.env.RELAYER_ADDRESS,
-    lowBalanceWei: process.env.RELAYER_LOW_BALANCE_WEI,
-    rpcUrl: process.env.MONAD_RPC_URL,
     attempts: Number(process.env.UPTIME_ATTEMPTS || 3),
     retryMs: Number(process.env.UPTIME_RETRY_MS || 5000),
   });
