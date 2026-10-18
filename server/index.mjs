@@ -33,6 +33,10 @@ import {
   handleStripeWebhook,
   createConnectOnboardingLink,
   processPendingPayouts,
+  retryFailedPayouts,
+  payoutsCronEnabled,
+  formatPayoutLog,
+  emptyPayoutCounts,
   getUnlockBySession,
 } from "./stripe.mjs";
 import {
@@ -68,6 +72,7 @@ import {
   upsertWriterPlan,
 } from "./subscriptions.mjs";
 import { relayerConfigured, relayerHealth, relayRegisterArticle } from "./relay-register.mjs";
+import { readRelayerBalanceStatus, uptimeHttpResult } from "./relay-gas.mjs";
 import { articleHtmlForSlug, feedHtmlForReq, isDefaultOgPath, ogJpegForSlug, parseArticleSlug, writerHtmlForWallet } from "./og-http.mjs";
 import {
   canonicalWriterPath,
@@ -714,14 +719,48 @@ const server = http.createServer(guardRequest(async (req, res) => {
       if (bearer !== cronSecret && headerSecret !== cronSecret) {
         return sendJson(res, 401, { error: "unauthorized" });
       }
+      if (!payoutsCronEnabled()) {
+        const idle = { ...emptyPayoutCounts(), processed: 0, status: "disabled" };
+        console.log(formatPayoutLog(idle, "disabled"));
+        return sendJson(res, 200, idle);
+      }
       const raw = await readBody(req);
       const parsed = raw ? JSON.parse(raw) : {};
       const result = await processPendingPayouts({ limit: parsed.limit });
       return sendJson(res, 200, result);
     } catch (e) {
+      if (e instanceof SyntaxError) return sendJson(res, 400, { error: "invalid_json" });
       const status = e?.status || 500;
-      console.error("[stripe] payouts:", e?.message || e);
-      return sendJson(res, status, { error: e?.message || "payouts_failed" });
+      console.error(formatPayoutLog(emptyPayoutCounts(), "error"));
+      const known = e?.message === "stripe_not_configured" || e?.message === "supabase_not_configured";
+      return sendJson(res, status, { error: known ? e.message : "payouts_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/stripe/payouts/retry") {
+    try {
+      const retrySecret = (process.env.PAYOUT_RETRY_SECRET || "").trim();
+      if (!retrySecret) {
+        return sendJson(res, 503, { error: "payout_retry_not_configured" });
+      }
+      const auth = String(req.headers.authorization || "");
+      const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+      if (!bearer || bearer !== retrySecret) {
+        return sendJson(res, 401, { error: "unauthorized" });
+      }
+      const raw = await readBody(req);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const result = await retryFailedPayouts({ limit: parsed.limit, confirm: parsed.confirm === true });
+      return sendJson(res, 200, result);
+    } catch (e) {
+      if (e instanceof SyntaxError) return sendJson(res, 400, { error: "invalid_json" });
+      const status = e?.status || 500;
+      console.error(formatPayoutLog(emptyPayoutCounts(), "error"));
+      const safe =
+        e?.message === "payout_retry_not_confirmed" ||
+        e?.message === "stripe_not_configured" ||
+        e?.message === "supabase_not_configured";
+      return sendJson(res, status, { error: safe ? e.message : "payouts_failed" });
     }
   }
 
@@ -1111,6 +1150,14 @@ const server = http.createServer(guardRequest(async (req, res) => {
       const status = e?.status || 500;
       return sendJson(res, status, { error: e?.message || "lapse_failed" });
     }
+  }
+
+  // Public uptime probe. Status word only — never the address or the balance.
+  // 200 when the relayer is funded; 503 for low, unset (no key), or fail.
+  if (method === "GET" && url.pathname === "/api/uptime") {
+    const reading = await readRelayerBalanceStatus();
+    const result = uptimeHttpResult(reading.status);
+    return sendJson(res, result.httpStatus, result.body);
   }
 
   // --- Publisher gas relayer (registerArticleFor; writer still signs) ---

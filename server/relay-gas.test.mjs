@@ -10,6 +10,9 @@ import {
   claimPersistentGas,
   gasGlobalDailyCap,
   relayerLowBalanceWei,
+  readRelayerBalanceStatus,
+  resetRelayerStatusCacheForTests,
+  uptimeHttpResult,
 } from "./relay-gas.mjs";
 import { buildGasAuthMessage } from "./writer-mutation-auth.mjs";
 
@@ -463,6 +466,87 @@ test("an underfunded relayer logs and tells checkout to fall back", async () => 
   );
   assert.equal(sent, false);
   assert.equal(JSON.parse(logs[0]).event, "relayer_low_balance");
+});
+
+test("public relayer status is a word and does not carry the balance", async () => {
+  resetRelayerStatusCacheForTests();
+  const one = 10n ** 18n;
+  const deps = {
+    account: () => account,
+    threshold: one,
+    cache: null,
+    attempts: 2,
+  };
+  const low = await readRelayerBalanceStatus({
+    ...deps,
+    getBalance: async () => 1n,
+  });
+  const ok = await readRelayerBalanceStatus({
+    ...deps,
+    getBalance: async () => one,
+  });
+  const unset = await readRelayerBalanceStatus({
+    account: () => null,
+    cache: null,
+  });
+  const malformed = await readRelayerBalanceStatus({
+    account: () => ({ address: "not-an-address" }),
+    cache: null,
+  });
+  let reads = 0;
+  const fail = await readRelayerBalanceStatus({
+    ...deps,
+    attempts: 2,
+    getBalance: async () => {
+      reads += 1;
+      throw new Error("rpc down");
+    },
+  });
+  assert.deepEqual(low, { status: "low" });
+  assert.deepEqual(ok, { status: "ok" });
+  assert.deepEqual(unset, { status: "unset" });
+  assert.deepEqual(malformed, { status: "unset" });
+  assert.deepEqual(fail, { status: "fail" });
+  assert.equal(reads, 2);
+  for (const result of [low, ok, unset, malformed, fail]) {
+    assert.deepEqual(Object.keys(result), ["status"]);
+    assert.equal(JSON.stringify(result).includes(account.address), false);
+  }
+
+  const calls = [];
+  const cache = { at: 0, status: "" };
+  const first = await readRelayerBalanceStatus({
+    ...deps,
+    cache,
+    now: 1_000,
+    getBalance: async () => {
+      calls.push("read");
+      return one;
+    },
+  });
+  const second = await readRelayerBalanceStatus({
+    ...deps,
+    cache,
+    now: 5_000,
+    getBalance: async () => {
+      calls.push("read");
+      return 1n;
+    },
+  });
+  assert.deepEqual(first, { status: "ok" });
+  assert.deepEqual(second, { status: "ok" });
+  assert.deepEqual(calls, ["read"]);
+
+  for (const word of ["ok", "low", "unset", "fail"]) {
+    const http = uptimeHttpResult(word);
+    assert.deepEqual(Object.keys(http.body).sort(), ["ok", "relayer"]);
+    assert.equal(http.body.relayer, word);
+    assert.equal(http.body.ok, word === "ok");
+    assert.equal(http.httpStatus, word === "ok" ? 200 : 503);
+  }
+  const junk = uptimeHttpResult("0xsecret");
+  assert.equal(junk.httpStatus, 503);
+  assert.deepEqual(junk.body, { ok: false, relayer: "fail" });
 });
 
 test("checkout falls back to card when gas is capped or unavailable", () => {

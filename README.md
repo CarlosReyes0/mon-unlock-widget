@@ -211,9 +211,9 @@ On **/write**, tap **Add a photo, video, or audio** or drop a file into the draf
 1. Reader pays with card / Apple Pay / Google Pay → funds hit **your platform** Stripe account.
 2. Server records `fiat_unlocks` and queues `payout_jobs`.
 3. Publisher clicks **Connect payments** on `/account.html` (or **Set up Stripe payouts** on `/dashboard.html`) → Stripe Connect Express onboarding.
-4. A cron (or ops) call to `POST /api/stripe/payouts/process` with `Authorization: Bearer $STRIPE_PAYOUT_CRON_SECRET` transfers pending jobs to the publisher’s Connect account.
+4. A scheduled call to `POST /api/stripe/payouts/process` transfers **pending** jobs to the publisher’s Connect account. Each transfer uses the unlock’s charge as `source_transaction`. The handler does nothing unless `PAYOUTS_CRON_ENABLED=true`. Failed rows stay failed until someone runs the separate admin retry.
 
-Set `STRIPE_PAYOUT_CRON_SECRET` on Railway. Without Connect onboarding, jobs stay `pending` with `publisher_not_onboarded`.
+Set `STRIPE_PAYOUT_CRON_SECRET` on Railway, and store that same value in Supabase Vault as `stripe_payout_cron_secret` when you apply `supabase/migrations/0018_payout_source_charge.sql`. That migration is not applied automatically. Leave `PAYOUTS_CRON_ENABLED` unset or `false` until you want pending transfers to run. Retry of failed rows uses `PAYOUT_RETRY_SECRET` and `scripts/retry-failed-payouts.mjs`; the schedule never calls it. Without Connect onboarding, jobs stay `pending` with `publisher_not_onboarded`.
 
 ### Privy checkout setup
 

@@ -14,6 +14,9 @@
  *
  *   RELAYER_GAS_GLOBAL_DAILY_CAP — positive integer, default 50 (~2.5 MON/day)
  *   RELAYER_LOW_BALANCE_WEI      — log relayer_low_balance below this, default 1 MON
+ *
+ * GET /api/uptime uses readRelayerBalanceStatus. The JSON is ok/low/unset/fail
+ * only. It does not include the address or the balance.
  */
 import { createPublicClient, createWalletClient, http, keccak256, parseEther, toBytes } from "viem";
 import { storedPriceCents } from "./article-price.mjs";
@@ -359,4 +362,86 @@ export async function relayGasDrip(body, ctx = {}, deps = {}) {
     }
     throw err;
   }
+}
+
+export const RELAYER_STATUS_WORDS = ["ok", "low", "unset", "fail"];
+const RELAYER_STATUS = new Set(RELAYER_STATUS_WORDS);
+const statusCache = { at: 0, status: "" };
+
+export function resetRelayerStatusCacheForTests() {
+  statusCache.at = 0;
+  statusCache.status = "";
+}
+
+async function defaultRelayerBalance(address, deps) {
+  const rpcUrl = deps.rpcUrl ?? monadRpcUrl();
+  const publicClient = createPublicClient({
+    chain: monadChain(rpcUrl),
+    transport: http(rpcUrl, { timeout: 8_000 }),
+  });
+  return publicClient.getBalance({ address });
+}
+
+/**
+ * Public relayer check. Returns a status word and nothing else.
+ * "unset" means the server has no relayer key. "low" means the balance is
+ * under RELAYER_LOW_BALANCE_WEI (default 1 MON). "fail" means the read failed.
+ * ok/low are cached briefly so a burst of polls does not fan out to the RPC.
+ * @param {{
+ *   account?: () => { address?: string } | null,
+ *   env?: NodeJS.ProcessEnv,
+ *   threshold?: bigint,
+ *   getBalance?: () => Promise<bigint>,
+ *   rpcUrl?: string,
+ *   attempts?: number,
+ *   now?: number,
+ *   cache?: { at: number, status: string } | null,
+ *   cacheMs?: number,
+ * }} [deps]
+ */
+export async function readRelayerBalanceStatus(deps = {}) {
+  const now = deps.now ?? Date.now();
+  const state = deps.cache === undefined ? statusCache : deps.cache;
+  const ttl = deps.cacheMs ?? 20_000;
+  if (
+    state &&
+    (state.status === "ok" || state.status === "low") &&
+    now >= state.at &&
+    now - state.at < ttl
+  ) {
+    return { status: state.status };
+  }
+
+  const account = (deps.account ?? relayerAccount)();
+  const address = account && typeof account.address === "string" ? account.address : "";
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return { status: "unset" };
+
+  const threshold = deps.threshold ?? relayerLowBalanceWei(deps.env);
+  const attempts = deps.attempts ?? 2;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const balance = deps.getBalance
+        ? await deps.getBalance()
+        : await defaultRelayerBalance(address, deps);
+      if (typeof balance !== "bigint") continue;
+      const status = balance < threshold ? "low" : "ok";
+      if (state) {
+        state.at = now;
+        state.status = status;
+      }
+      return { status };
+    } catch {
+      /* one retry, then fail without logging the RPC error */
+    }
+  }
+  return { status: "fail" };
+}
+
+/** HTTP shape for GET /api/uptime. Two fields, no address, no balance. */
+export function uptimeHttpResult(status) {
+  const relayer = RELAYER_STATUS.has(status) ? status : "fail";
+  return {
+    httpStatus: relayer === "ok" ? 200 : 503,
+    body: { ok: relayer === "ok", relayer },
+  };
 }

@@ -12,6 +12,9 @@
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  *   STRIPE_PLATFORM_FEE_BPS (optional, default 0)
+ *   STRIPE_PAYOUT_CRON_SECRET — required to call the payout endpoints
+ *   PAYOUTS_CRON_ENABLED — must be the string "true" or pending payouts are not sent
+ *   PAYOUT_RETRY_SECRET — admin-only retry of failed rows; the cron never uses it
  */
 import Stripe from "stripe";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -376,6 +379,95 @@ export function isUniqueViolation(err) {
   return code === "23505" || /duplicate key value violates unique constraint/i.test(msg);
 }
 
+/** Scheduled payouts stay off until this is exactly "true". */
+export function payoutsCronEnabled(env = process.env) {
+  return String(env.PAYOUTS_CRON_ENABLED ?? "").trim().toLowerCase() === "true";
+}
+
+const PAYOUT_COUNT_KEYS = ["paid", "failed", "pending", "skipped", "not_claimed", "reversed"];
+
+export function emptyPayoutCounts() {
+  return { paid: 0, failed: 0, pending: 0, skipped: 0, not_claimed: 0, reversed: 0 };
+}
+
+/** Counts and statuses only. Callers must not append ids or amounts. */
+export function formatPayoutLog(counts, status) {
+  const parts = [];
+  if (status) parts.push(`status=${status}`);
+  for (const key of PAYOUT_COUNT_KEYS) {
+    parts.push(`${key}=${Number(counts?.[key]) || 0}`);
+  }
+  return `[stripe] payouts ${parts.join(" ")}`;
+}
+
+export function payoutIdempotencyKey(jobId) {
+  return `payout_job_${jobId}`;
+}
+
+/**
+ * Charge id from a PaymentIntent, Charge, Invoice, or Dispute-shaped object.
+ * Returns null unless the id is a charge id.
+ * @param {object | null | undefined} source
+ */
+export function stripeChargeId(source) {
+  if (!source || typeof source !== "object") return null;
+  const values = [source.latest_charge, source.charge];
+  if (source.object === "charge") values.push(source.id);
+  for (const value of values) {
+    if (typeof value === "string" && value.startsWith("ch_")) return value;
+    if (value && typeof value === "object" && typeof value.id === "string" && value.id.startsWith("ch_")) {
+      return value.id;
+    }
+  }
+  const payments = source.payments?.data;
+  if (Array.isArray(payments)) {
+    for (const entry of payments) {
+      const nested = stripeChargeId(entry?.payment) || stripeChargeId(entry);
+      if (nested) return nested;
+    }
+  }
+  const charges = source.charges?.data;
+  if (Array.isArray(charges)) {
+    for (const charge of charges) {
+      const nested = stripeChargeId(charge);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+function isUnknownColumn(err, column) {
+  const blob = `${err?.message || ""} ${err?.details?.message || ""} ${err?.details?.code || ""}`;
+  return blob.includes(column) && /PGRST204|42703|schema cache|does not exist/i.test(blob);
+}
+
+function transferFailureCode(err) {
+  const code = String(err?.code || err?.raw?.code || "");
+  if (code === "balance_insufficient" || code === "insufficient_funds") return "balance_insufficient";
+  return "transfer_failed";
+}
+
+async function supabaseInsert(table, row) {
+  try {
+    return await supabase(table, {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: [row],
+    });
+  } catch (e) {
+    if (!Object.prototype.hasOwnProperty.call(row, "stripe_charge_id") || !isUnknownColumn(e, "stripe_charge_id")) {
+      throw e;
+    }
+    const copy = { ...row };
+    delete copy.stripe_charge_id;
+    return await supabase(table, {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: [copy],
+    });
+  }
+}
+
 /**
  * @param {string} paymentIntentId
  * @param {string} [sessionToken]
@@ -435,26 +527,23 @@ export async function grantFiatUnlockFromIntent(intent) {
     };
   }
 
+  const chargeId = stripeChargeId(intent);
   let unlock;
   try {
-    const rows = await supabase("fiat_unlocks", {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: [
-        {
-          article_id: articleId,
-          article_id_hash: articleIdHash,
-          publisher,
-          session_token: sessionToken,
-          stripe_payment_intent_id: intent.id,
-          amount_cents: amountCents,
-          currency: intent.currency || "usd",
-          buyer_email: intent.receipt_email || null,
-          reader: intent.metadata?.reader || null,
-          status: "succeeded",
-        },
-      ],
-    });
+    const unlockRow = {
+      article_id: articleId,
+      article_id_hash: articleIdHash,
+      publisher,
+      session_token: sessionToken,
+      stripe_payment_intent_id: intent.id,
+      amount_cents: amountCents,
+      currency: intent.currency || "usd",
+      buyer_email: intent.receipt_email || null,
+      reader: intent.metadata?.reader || null,
+      status: "succeeded",
+    };
+    if (chargeId) unlockRow.stripe_charge_id = chargeId;
+    const rows = await supabaseInsert("fiat_unlocks", unlockRow);
     unlock = Array.isArray(rows) ? rows[0] : rows;
   } catch (e) {
     // Concurrent webhook + confirm both passed the pre-check; loser hits unique constraint.
@@ -482,19 +571,15 @@ export async function grantFiatUnlockFromIntent(intent) {
   const payoutCents = Math.max(0, amountCents - fee);
 
   if (payoutCents > 0) {
-    await supabase("payout_jobs", {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
-      body: [
-        {
-          fiat_unlock_id: unlock.id,
-          publisher,
-          amount_cents: payoutCents,
-          currency: "usd",
-          status: "pending",
-        },
-      ],
-    });
+    const payoutRow = {
+      fiat_unlock_id: unlock.id,
+      publisher,
+      amount_cents: payoutCents,
+      currency: "usd",
+      status: "pending",
+    };
+    if (chargeId) payoutRow.stripe_charge_id = chargeId;
+    await supabaseInsert("payout_jobs", payoutRow);
   }
 
   return { granted: true, already: false, sessionToken, fiatUnlockId: unlock.id };
@@ -611,23 +696,12 @@ export async function handleStripeWebhook(rawBody, signature) {
   }
 
   if (event.type === "charge.refunded" || event.type === "charge.dispute.created") {
-    // Soft-revoke: mark unlock refunded/disputed when possible.
-    const charge = event.data.object;
-    const pi =
-      typeof charge.payment_intent === "string"
-        ? charge.payment_intent
-        : charge.payment_intent?.id;
-    if (pi) {
-      const status = event.type === "charge.refunded" ? "refunded" : "disputed";
-      await supabase(
-        `fiat_unlocks?stripe_payment_intent_id=eq.${encodeURIComponent(pi)}`,
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: { status },
-        }
-      );
-    }
+    const object = event.data.object;
+    const paymentIntentId =
+      typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id;
+    const chargeId = stripeChargeId(object);
+    const status = event.type === "charge.refunded" ? "refunded" : "disputed";
+    await markUnlockNotPayable({ paymentIntentId, chargeId, status });
     return { received: true, type: event.type };
   }
 
@@ -711,112 +785,333 @@ export async function createConnectOnboardingLink(input) {
   return { url: link.url, stripeAccountId: accountId };
 }
 
-/**
- * Attempt Transfers for pending payout_jobs.
- * When Connect stablecoin payouts are enabled, publishers receive USDC in their linked wallet.
- * Until then, jobs stay pending with a clear error (no silent drop).
- */
-export async function processPendingPayouts({ limit = 20 } = {}) {
-  const stripe = getStripe();
-  const jobs = await supabase(
-    `payout_jobs?select=*&status=eq.pending&order=created_at.asc&limit=${Math.min(50, Math.max(1, limit))}`
-  );
-  if (!Array.isArray(jobs) || jobs.length === 0) {
-    return { processed: 0, results: [] };
+let payoutChargeColumn = true;
+
+function payoutProcessed(counts) {
+  return PAYOUT_COUNT_KEYS.reduce((sum, key) => sum + (Number(counts[key]) || 0), 0);
+}
+
+function finishPayoutRun(counts) {
+  console.log(formatPayoutLog(counts, "ran"));
+  return { ...counts, processed: payoutProcessed(counts) };
+}
+
+async function selectPayoutJobs(status, limit) {
+  const unlockColumns = payoutChargeColumn
+    ? "id,status,stripe_payment_intent_id,stripe_charge_id"
+    : "id,status,stripe_payment_intent_id";
+  const select = `*,fiat_unlocks(${unlockColumns})`;
+  const transferGuard = status === "failed" ? "&stripe_transfer_id=is.null" : "";
+  try {
+    const rows = await supabase(
+      `payout_jobs?select=${encodeURIComponent(select)}&status=eq.${encodeURIComponent(status)}${transferGuard}&order=created_at.asc&limit=${limit}`
+    );
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    if (payoutChargeColumn && isUnknownColumn(e, "stripe_charge_id")) {
+      payoutChargeColumn = false;
+      return selectPayoutJobs(status, limit);
+    }
+    throw e;
   }
+}
 
-  const results = [];
-  for (const job of jobs) {
+async function transitionPayout(id, fromStatus, patch) {
+  const rows = await supabase(
+    `payout_jobs?id=eq.${encodeURIComponent(id)}&status=eq.${encodeURIComponent(fromStatus)}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: { ...patch, updated_at: new Date().toISOString() },
+    }
+  );
+  return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+}
+
+async function claimPayout(id, fromStatus) {
+  const rows = await supabase(
+    `payout_jobs?id=eq.${encodeURIComponent(id)}&status=eq.${encodeURIComponent(fromStatus)}&stripe_transfer_id=is.null`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: { status: "processing", error: null, updated_at: new Date().toISOString() },
+    }
+  );
+  if (!Array.isArray(rows) || rows.length !== 1 || rows[0].status !== "processing") return null;
+  return rows[0];
+}
+
+async function reloadUnlock(job) {
+  if (!job?.fiat_unlock_id) return null;
+  const select = payoutChargeColumn
+    ? "id,status,stripe_payment_intent_id,stripe_charge_id"
+    : "id,status,stripe_payment_intent_id";
+  try {
+    const rows = await supabase(
+      `fiat_unlocks?select=${encodeURIComponent(select)}&id=eq.${encodeURIComponent(job.fiat_unlock_id)}&limit=1`
+    );
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  } catch (e) {
+    if (payoutChargeColumn && isUnknownColumn(e, "stripe_charge_id")) {
+      payoutChargeColumn = false;
+      return reloadUnlock(job);
+    }
+    throw e;
+  }
+}
+
+async function rememberChargeId(job, unlock, chargeId) {
+  if (!chargeId) return;
+  const writes = [];
+  if (unlock?.id && unlock.stripe_charge_id !== chargeId) {
+    writes.push(
+      supabase(`fiat_unlocks?id=eq.${encodeURIComponent(unlock.id)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: { stripe_charge_id: chargeId },
+      })
+    );
+  }
+  if (job?.id && job.stripe_charge_id !== chargeId) {
+    writes.push(
+      supabase(`payout_jobs?id=eq.${encodeURIComponent(job.id)}&status=eq.processing`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: { stripe_charge_id: chargeId },
+      })
+    );
+  }
+  if (writes.length === 0) return;
+  try {
+    await Promise.all(writes);
+  } catch {
+    /* The transfer still carries the charge. A cache write must not block it. */
+  }
+}
+
+async function resolveChargeId(job, unlock, stripe) {
+  const stored = [job?.stripe_charge_id, unlock?.stripe_charge_id].find(
+    (id) => typeof id === "string" && id.startsWith("ch_")
+  );
+  if (stored) return stored;
+  const paymentIntentId = unlock?.stripe_payment_intent_id;
+  if (typeof paymentIntentId !== "string" || !paymentIntentId.startsWith("pi_")) return null;
+  const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  const chargeId = stripeChargeId(intent);
+  await rememberChargeId(job, unlock, chargeId);
+  return chargeId;
+}
+
+/**
+ * Refunds and disputes make the unlock's payout not payable.
+ * Rows that already have a transfer id are left alone.
+ * @param {{ paymentIntentId?: string, chargeId?: string, status: "refunded" | "disputed" }} input
+ */
+export async function markUnlockNotPayable({ paymentIntentId, chargeId, status }) {
+  if (status !== "refunded" && status !== "disputed") {
+    const err = new Error("invalid_unlock_status");
+    err.status = 400;
+    throw err;
+  }
+  /** @type {Array<{ id: number | string }>} */
+  let unlocks = [];
+  if (typeof paymentIntentId === "string" && paymentIntentId.startsWith("pi_")) {
+    const rows = await supabase(
+      `fiat_unlocks?stripe_payment_intent_id=eq.${encodeURIComponent(paymentIntentId)}`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: { status },
+      }
+    );
+    if (Array.isArray(rows)) unlocks = rows;
+  }
+  if (unlocks.length === 0 && typeof chargeId === "string" && chargeId.startsWith("ch_")) {
     try {
-      await supabase(`payout_jobs?id=eq.${job.id}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: { status: "processing", updated_at: new Date().toISOString() },
-      });
-
-      const accounts = await supabase(
-        `publisher_accounts?select=*&publisher=eq.${encodeURIComponent(job.publisher)}&limit=1`
+      const rows = await supabase(
+        `fiat_unlocks?stripe_charge_id=eq.${encodeURIComponent(chargeId)}`,
+        {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: { status },
+        }
       );
-      const account = Array.isArray(accounts) ? accounts[0] : null;
-      if (!account?.stripe_account_id) {
-        await supabase(`payout_jobs?id=eq.${job.id}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: {
-            status: "pending",
-            error: "publisher_not_onboarded",
-            updated_at: new Date().toISOString(),
-          },
-        });
-        results.push({ id: job.id, status: "pending", error: "publisher_not_onboarded" });
-        continue;
-      }
-
-      const stripeAccount = await stripe.accounts.retrieve(account.stripe_account_id);
-      if (!stripeAccount?.payouts_enabled && !stripeAccount?.charges_enabled) {
-        await supabase(`payout_jobs?id=eq.${job.id}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: {
-            status: "pending",
-            error: "publisher_not_onboarded",
-            updated_at: new Date().toISOString(),
-          },
-        });
-        results.push({ id: job.id, status: "pending", error: "publisher_not_onboarded" });
-        continue;
-      }
-      if (!account.onboarded_at && (stripeAccount.payouts_enabled || stripeAccount.charges_enabled)) {
-        await supabase(`publisher_accounts?publisher=eq.${encodeURIComponent(job.publisher)}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: {
-            onboarded_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        });
-      }
-
-      // USD transfer to Connect account. With Stripe stablecoin payouts (private preview),
-      // the connected account can set USDC as payout currency → crypto wallet.
-      const transfer = await stripe.transfers.create({
-        amount: job.amount_cents,
-        currency: "usd",
-        destination: account.stripe_account_id,
-        metadata: {
-          payout_job_id: String(job.id),
-          publisher: job.publisher,
-          fiat_unlock_id: String(job.fiat_unlock_id),
-        },
-      });
-
-      await supabase(`payout_jobs?id=eq.${job.id}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: {
-          status: "paid",
-          stripe_transfer_id: transfer.id,
-          error: null,
-          updated_at: new Date().toISOString(),
-        },
-      });
-      results.push({ id: job.id, status: "paid", transferId: transfer.id });
+      if (Array.isArray(rows)) unlocks = rows;
     } catch (e) {
-      const message = e?.message || "transfer_failed";
-      await supabase(`payout_jobs?id=eq.${job.id}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: {
-          status: "failed",
-          error: message,
-          updated_at: new Date().toISOString(),
-        },
-      });
-      results.push({ id: job.id, status: "failed", error: message });
+      if (!isUnknownColumn(e, "stripe_charge_id")) throw e;
     }
   }
 
-  return { processed: results.length, results };
+  let skipped = 0;
+  for (const unlock of unlocks) {
+    if (unlock?.id == null) continue;
+    const jobs = await supabase(
+      `payout_jobs?fiat_unlock_id=eq.${encodeURIComponent(unlock.id)}&or=(status.eq.pending,status.eq.processing)&stripe_transfer_id=is.null`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: { status: "skipped", error: "not_payable", updated_at: new Date().toISOString() },
+      }
+    );
+    if (Array.isArray(jobs)) skipped += jobs.length;
+  }
+  console.log(formatPayoutLog({ ...emptyPayoutCounts(), skipped }, status));
+  return { skipped };
+}
+
+async function settlePayoutJob(job, stripe, counts, fromStatus) {
+  const claimed = await claimPayout(job.id, fromStatus);
+  if (!claimed) {
+    counts.not_claimed++;
+    return;
+  }
+
+  try {
+    const unlock = await reloadUnlock(claimed);
+    if (claimed.fiat_unlock_id) {
+      if (!unlock) {
+        await transitionPayout(claimed.id, "processing", { status: "pending", error: "missing_unlock" });
+        counts.pending++;
+        return;
+      }
+      if (unlock.status !== "succeeded") {
+        await transitionPayout(claimed.id, "processing", { status: "skipped", error: "not_payable" });
+        counts.skipped++;
+        return;
+      }
+    }
+
+    const chargeId = await resolveChargeId(claimed, unlock, stripe);
+    if (!chargeId) {
+      await transitionPayout(claimed.id, "processing", { status: "pending", error: "missing_source_charge" });
+      counts.pending++;
+      return;
+    }
+
+    const accounts = await supabase(
+      `publisher_accounts?select=stripe_account_id,onboarded_at&publisher=eq.${encodeURIComponent(claimed.publisher)}&limit=1`
+    );
+    const account = Array.isArray(accounts) ? accounts[0] : null;
+    if (!account?.stripe_account_id) {
+      await transitionPayout(claimed.id, "processing", { status: "pending", error: "publisher_not_onboarded" });
+      counts.pending++;
+      return;
+    }
+
+    let stripeAccount;
+    try {
+      stripeAccount = await stripe.accounts.retrieve(account.stripe_account_id);
+    } catch {
+      await transitionPayout(claimed.id, "processing", { status: "pending", error: "account_lookup_failed" });
+      counts.pending++;
+      return;
+    }
+    if (!stripeAccount?.payouts_enabled && !stripeAccount?.charges_enabled) {
+      await transitionPayout(claimed.id, "processing", { status: "pending", error: "publisher_not_onboarded" });
+      counts.pending++;
+      return;
+    }
+    if (!account.onboarded_at && (stripeAccount.payouts_enabled || stripeAccount.charges_enabled)) {
+      try {
+        await supabase(`publisher_accounts?publisher=eq.${encodeURIComponent(claimed.publisher)}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: { onboarded_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+        });
+      } catch {
+        /* onboarding timestamp is not required to transfer */
+      }
+    }
+
+    const again = claimed.fiat_unlock_id ? await reloadUnlock(claimed) : unlock;
+    if (claimed.fiat_unlock_id && (!again || again.status !== "succeeded")) {
+      await transitionPayout(claimed.id, "processing", { status: "skipped", error: "not_payable" });
+      counts.skipped++;
+      return;
+    }
+
+    const transfer = await stripe.transfers.create(
+      {
+        amount: claimed.amount_cents,
+        currency: claimed.currency || "usd",
+        destination: account.stripe_account_id,
+        source_transaction: chargeId,
+        metadata: {
+          payout_job_id: String(claimed.id),
+          ...(claimed.fiat_unlock_id ? { fiat_unlock_id: String(claimed.fiat_unlock_id) } : {}),
+        },
+      },
+      { idempotencyKey: payoutIdempotencyKey(claimed.id) }
+    );
+
+    const saved = await transitionPayout(claimed.id, "processing", {
+      status: "paid",
+      stripe_transfer_id: transfer.id,
+      error: null,
+    });
+    if (saved) {
+      counts.paid++;
+      return;
+    }
+
+    const after = claimed.fiat_unlock_id ? await reloadUnlock(claimed) : null;
+    if (after && after.status !== "succeeded") {
+      try {
+        await stripe.transfers.createReversal(
+          transfer.id,
+          {},
+          { idempotencyKey: `${payoutIdempotencyKey(claimed.id)}_reversal` }
+        );
+        counts.reversed++;
+      } catch {
+        counts.failed++;
+      }
+      return;
+    }
+    counts.failed++;
+  } catch (e) {
+    const saved = await transitionPayout(claimed.id, "processing", {
+      status: "failed",
+      error: transferFailureCode(e),
+    }).catch(() => null);
+    if (saved) counts.failed++;
+    else counts.not_claimed++;
+  }
+}
+
+async function runPayouts({ fromStatus, limit }) {
+  const stripe = getStripe();
+  const capped = Math.min(50, Math.max(1, Number(limit) || 20));
+  const jobs = await selectPayoutJobs(fromStatus, capped);
+  const counts = emptyPayoutCounts();
+  for (const job of jobs) {
+    if (job.status !== fromStatus || job.stripe_transfer_id) continue;
+    await settlePayoutJob(job, stripe, counts, fromStatus);
+  }
+  return finishPayoutRun(counts);
+}
+
+/**
+ * Transfer pending payout_jobs. Failed rows are not selected.
+ * Each transfer is tied to the unlock charge and claimed with a status transition
+ * so a second run cannot send it again.
+ */
+export async function processPendingPayouts({ limit = 20 } = {}) {
+  return runPayouts({ fromStatus: "pending", limit });
+}
+
+/**
+ * Admin-only. Moves failed rows that never received a transfer through the same
+ * claim-and-transfer path. The scheduled job does not call this.
+ * @param {{ limit?: number, confirm?: boolean }} [opts]
+ */
+export async function retryFailedPayouts({ limit = 20, confirm = false } = {}) {
+  if (confirm !== true) {
+    const err = new Error("payout_retry_not_confirmed");
+    err.status = 400;
+    throw err;
+  }
+  return runPayouts({ fromStatus: "failed", limit });
 }
 
 export async function getUnlockBySession(sessionToken) {
