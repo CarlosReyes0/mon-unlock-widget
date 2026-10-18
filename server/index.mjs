@@ -214,12 +214,18 @@ function sendSecuredHtml(req, res, status, html, extraHeaders = {}) {
 function sendJson(res, status, body, extraHeaders = {}) {
   cors(res);
   const payload = JSON.stringify(body);
-  res.writeHead(status, {
+  const headers = {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     ...extraHeaders,
-  });
-  res.end(payload);
+  };
+  if (typeof payload === "string") {
+    headers["Content-Length"] = Buffer.byteLength(payload);
+  }
+  res.writeHead(status, headers);
+  // HEAD keeps the GET status and headers, including Content-Length, and sends no body.
+  if ((res.req?.method || "GET") === "HEAD") return res.end();
+  return res.end(payload);
 }
 
 function sendText(res, status, text, extraHeaders = {}, method = "GET") {
@@ -581,7 +587,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
     return handleSessionToken(req, res);
   }
 
-  if (method === "GET" && url.pathname === "/api/coinbase/health") {
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/api/coinbase/health") {
     return sendJson(res, 200, {
       ok: true,
       coinbaseConfigured: Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET),
@@ -589,7 +595,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
   }
 
   // --- Stripe fiat unlock ---
-  if (method === "GET" && url.pathname === "/api/stripe/health") {
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/api/stripe/health") {
     return sendJson(res, 200, {
       ok: true,
       stripeConfigured: stripeConfigured(),
@@ -778,7 +784,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
     return res.end(payload);
   }
 
-  if (method === "GET" && url.pathname === "/api/agents/health") {
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/api/agents/health") {
     return sendJson(res, 200, {
       ok: true,
       service: "mon-unlock",
@@ -1154,14 +1160,15 @@ const server = http.createServer(guardRequest(async (req, res) => {
 
   // Public uptime probe. Status word only — never the address or the balance.
   // 200 when the relayer is funded; 503 for low, unset (no key), or fail.
-  if (method === "GET" && url.pathname === "/api/uptime") {
+  // HEAD uses that same status. A low or unset relayer still fails the probe.
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/api/uptime") {
     const reading = await readRelayerBalanceStatus();
     const result = uptimeHttpResult(reading.status);
     return sendJson(res, result.httpStatus, result.body);
   }
 
   // --- Publisher gas relayer (registerArticleFor; writer still signs) ---
-  if (method === "GET" && url.pathname === "/api/relay/health") {
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/api/relay/health") {
     return sendJson(res, 200, relayerHealth());
   }
 
@@ -1288,7 +1295,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
     }
   }
 
-  if (method === "GET" && url.pathname === "/api/listings/health") {
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/api/listings/health") {
     return sendJson(res, 200, {
       ok: true,
       supabaseConfigured: listingsSupabaseConfigured(),
