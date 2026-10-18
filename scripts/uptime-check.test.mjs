@@ -3,8 +3,6 @@ import fs from "node:fs";
 import { test } from "node:test";
 import {
   cspProblems,
-  ONE_MON_WEI,
-  parseLowBalanceWei,
   renderReport,
   runUptimeChecks,
 } from "./uptime-check.mjs";
@@ -30,15 +28,12 @@ function jsonResponse(body, status = 200) {
   });
 }
 
-function healthyFetch({ homeStatus = 200, balance = "0xde0b6b3a7640000", csp = CSP } = {}) {
+function healthyFetch({ homeStatus = 200, relayer = "ok", uptimeStatus = 200, csp = CSP, uptimeBody } = {}) {
   const calls = [];
   let homeHits = 0;
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url, method: init.method || "GET", body: init.body || "" });
     const target = new URL(url);
-    if (target.hostname === "rpc.monad.xyz") {
-      return jsonResponse({ jsonrpc: "2.0", id: 1, result: balance });
-    }
     if (target.pathname === "/") {
       homeHits += 1;
       const status = homeHits === 1 ? homeStatus : 200;
@@ -52,6 +47,10 @@ function healthyFetch({ homeStatus = 200, balance = "0xde0b6b3a7640000", csp = C
     }
     if (target.pathname === "/api/agents/health") {
       return jsonResponse({ ok: true, product: "Open Paywall" });
+    }
+    if (target.pathname === "/api/uptime") {
+      const body = uptimeBody ?? { ok: relayer === "ok", relayer };
+      return jsonResponse(body, uptimeStatus);
     }
     return new Response("missing", { status: 404 });
   };
@@ -68,20 +67,19 @@ test("csp accepts wasm-unsafe-eval and rejects a real unsafe-eval token", () => 
   assert.ok(problems.some((problem) => problem.includes("CDN")));
 });
 
-test("low-balance default matches the server 1 MON threshold", () => {
+test("the server still defaults the relayer alert line to 1 MON", () => {
   const gas = fs.readFileSync(new URL("../server/relay-gas.mjs", import.meta.url), "utf8");
   assert.match(gas, /parseEther\("1"\)/);
-  assert.equal(parseLowBalanceWei(""), ONE_MON_WEI);
-  assert.equal(parseLowBalanceWei("1000000000000000000"), ONE_MON_WEI);
-  assert.equal(parseLowBalanceWei("0"), ONE_MON_WEI);
+  assert.match(gas, /RELAYER_LOW_BALANCE_WEI/);
+  assert.match(gas, /export async function readRelayerBalanceStatus/);
+  assert.match(gas, /export function uptimeHttpResult/);
 });
 
-test("a healthy site passes, retries a blip, and only reads balance", async () => {
+test("a healthy site passes, retries a blip, and only GETs the status endpoint", async () => {
   const { fetchImpl, calls } = healthyFetch({ homeStatus: 500 });
   const result = await runUptimeChecks({
     baseUrl: "https://openpaywall.app",
     fetchImpl,
-    relayerAddress: "0x1111111111111111111111111111111111111111",
     attempts: 2,
     retryMs: 0,
     sleep: noSleep,
@@ -94,47 +92,66 @@ test("a healthy site passes, retries a blip, and only reads balance", async () =
   assert.match(report, /article status=200/);
   assert.match(report, /relayer-balance status=200/);
   assert.doesNotMatch(report, /hello-post|MON|0x/);
-  const methods = calls.map((call) => call.method);
-  assert.ok(methods.includes("GET"));
-  const posts = calls.filter((call) => call.method !== "GET");
-  assert.equal(posts.length, 1);
-  assert.match(posts[0].body, /"method":"eth_getBalance"/);
-  assert.doesNotMatch(posts[0].body, /eth_send|sendTransaction/);
-});
-
-test("missing RELAYER_ADDRESS skips the balance check instead of failing", async () => {
-  const { fetchImpl, calls } = healthyFetch();
-  const result = await runUptimeChecks({
-    baseUrl: "https://openpaywall.app",
-    fetchImpl,
-    relayerAddress: "",
-    attempts: 1,
-    sleep: noSleep,
-  });
-  assert.equal(result.ok, true);
-  const balance = result.checks.find((check) => check.name === "relayer-balance");
-  assert.equal(balance.skipped, true);
+  assert.ok(calls.every((call) => call.method === "GET"));
+  assert.ok(calls.some((call) => new URL(call.url).pathname === "/api/uptime"));
   assert.equal(calls.some((call) => call.method === "POST"), false);
 });
 
-test("a wallet under 1 MON fails only after retries", async () => {
-  const { fetchImpl } = healthyFetch({ balance: "0x1" });
+test("an unset relayer fails with status=unset instead of being skipped", async () => {
+  const { fetchImpl, calls } = healthyFetch({ relayer: "unset", uptimeStatus: 503 });
   const result = await runUptimeChecks({
     baseUrl: "https://openpaywall.app",
     fetchImpl,
-    relayerAddress: "0x0000000000000000000000000000000000000001",
+    attempts: 1,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, false);
+  const balance = result.checks.find((check) => check.name === "relayer-balance");
+  assert.equal(balance.ok, false);
+  assert.equal(balance.code, "unset");
+  assert.equal(balance.skipped, undefined);
+  const report = renderReport(result);
+  assert.match(report, /relayer-balance status=unset/);
+  assert.doesNotMatch(report, /0x|\bwei\b|MON/);
+  assert.equal(calls.some((call) => call.method === "POST"), false);
+});
+
+test("a low relayer fails only after retries and the report stays a status word", async () => {
+  const { fetchImpl } = healthyFetch({ relayer: "low", uptimeStatus: 503 });
+  const result = await runUptimeChecks({
+    baseUrl: "https://openpaywall.app",
+    fetchImpl,
     attempts: 2,
     retryMs: 0,
     sleep: noSleep,
   });
   assert.equal(result.ok, false);
   const balance = result.checks.find((check) => check.name === "relayer-balance");
-  assert.match(balance.detail, /below 1\.0000 MON/);
   assert.equal(balance.code, "low");
+  assert.equal(balance.detail, "low");
   assert.equal(balance.attempts, 2);
   const report = renderReport(result);
   assert.match(report, /relayer-balance status=low/);
-  assert.doesNotMatch(report, /MON|0x|below/);
+  assert.doesNotMatch(report, /MON|0x|below|wei/);
+});
+
+test("a missing status endpoint fails closed", async () => {
+  const { fetchImpl } = healthyFetch();
+  const result = await runUptimeChecks({
+    baseUrl: "https://openpaywall.app",
+    fetchImpl: async (url, init) => {
+      const target = new URL(url);
+      if (target.pathname === "/api/uptime") return new Response("missing", { status: 404 });
+      return fetchImpl(url, init);
+    },
+    attempts: 1,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, false);
+  const balance = result.checks.find((check) => check.name === "relayer-balance");
+  assert.equal(balance.code, "fail");
+  assert.match(renderReport(result), /relayer-balance status=fail/);
+  assert.doesNotMatch(renderReport(result), /missing/);
 });
 
 test("a connection error keeps the check name after retries", async () => {
@@ -159,29 +176,39 @@ test("a connection error keeps the check name after retries", async () => {
   assert.doesNotMatch(report, /fetch failed|127\.0\.0\.1/);
 });
 
-test("an unusable address is not echoed back", async () => {
-  const secret = `0x${"ab".repeat(32)}`;
-  const { fetchImpl } = healthyFetch();
+test("extra fields on the status payload are not echoed", async () => {
+  const leaked = `0x${"ab".repeat(20)}`;
+  const { fetchImpl } = healthyFetch({
+    uptimeStatus: 503,
+    uptimeBody: { ok: false, relayer: "fail", address: leaked, balance: "999" },
+  });
   const result = await runUptimeChecks({
     baseUrl: "https://openpaywall.app",
     fetchImpl,
-    relayerAddress: secret,
     attempts: 1,
     sleep: noSleep,
   });
   const balance = result.checks.find((check) => check.name === "relayer-balance");
   assert.equal(balance.ok, false);
-  assert.equal(balance.detail.includes(secret), false);
-  assert.equal(renderReport(result).includes(secret), false);
+  assert.equal(balance.code, "fail");
+  const report = renderReport(result);
+  assert.equal(report.includes(leaked), false);
+  assert.equal(report.includes("999"), false);
+  assert.match(report, /relayer-balance status=fail/);
 });
 
 test("the workflow does not hardcode an address and skips prod on pull requests", () => {
   const script = fs.readFileSync(new URL("./uptime-check.mjs", import.meta.url), "utf8");
   const workflow = fs.readFileSync(new URL("../.github/workflows/uptime.yml", import.meta.url), "utf8");
-  assert.doesNotMatch(script, /eth_send|sendTransaction|personal_sign/);
+  assert.doesNotMatch(script, /eth_send|sendTransaction|personal_sign|eth_getBalance/);
+  assert.doesNotMatch(script, /RELAYER_ADDRESS/);
   assert.doesNotMatch(workflow, /0x[a-fA-F0-9]{40}/);
   assert.match(workflow, /cron: "\*\/15 \* \* \* \*"/);
-  assert.match(workflow, /vars\.RELAYER_ADDRESS \|\| secrets\.RELAYER_ADDRESS/);
+  assert.match(workflow, /\/api\/uptime/);
+  assert.match(workflow, /uptimerobot\.com/);
+  assert.match(workflow, /RELAYER_LOW_BALANCE_WEI/);
+  assert.doesNotMatch(workflow, /vars\.RELAYER_ADDRESS|secrets\.RELAYER_ADDRESS/);
+  assert.doesNotMatch(workflow, /UPTIME_DISPATCH|github_pat_|ghp_/);
   assert.match(workflow, /if: github\.event_name == 'pull_request'/);
   assert.match(workflow, /if: github\.event_name != 'pull_request'/);
   assert.match(workflow, /UPTIME_ATTEMPTS: "3"/);

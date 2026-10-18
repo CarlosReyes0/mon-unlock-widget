@@ -191,6 +191,15 @@ test("GET /api/relay/health reports relayerConfigured=false without key", async 
   assert.equal(body.relayerAddress, null);
 });
 
+test("GET /api/uptime reports unset and hides the address and balance", async () => {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/uptime`);
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  const body = await res.json();
+  assert.deepEqual(body, { ok: false, relayer: "unset" });
+  assert.equal(JSON.stringify(body).includes("0x"), false);
+});
+
 test("POST /api/relay/register returns 503 without relayer key", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/relay/register`, {
     method: "POST",
