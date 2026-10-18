@@ -437,7 +437,7 @@ export async function readRelayerBalanceStatus(deps = {}) {
   return { status: "fail" };
 }
 
-/** HTTP shape for GET /api/uptime. Two fields, no address, no balance. */
+/** HTTP shape for GET and HEAD /api/uptime. Two fields, no address, no balance. */
 export function uptimeHttpResult(status) {
   const relayer = RELAYER_STATUS.has(status) ? status : "fail";
   return {

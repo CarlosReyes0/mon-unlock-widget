@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import { test, after } from "node:test";
 import path from "node:path";
@@ -198,6 +199,64 @@ test("GET /api/uptime reports unset and hides the address and balance", async ()
   const body = await res.json();
   assert.deepEqual(body, { ok: false, relayer: "unset" });
   assert.equal(JSON.stringify(body).includes("0x"), false);
+});
+
+test("HEAD health routes match GET status and headers and send no body", async () => {
+  const paths = [
+    ["/api/agents/health", 200],
+    ["/api/coinbase/health", 200],
+    ["/api/stripe/health", 200],
+    ["/api/relay/health", 200],
+    ["/api/listings/health", 200],
+    ["/api/uptime", 503],
+  ];
+  for (const [pathName, status] of paths) {
+    const got = await headMatchesGet(`http://127.0.0.1:${PORT}${pathName}`);
+    assert.equal(got.status, status, pathName);
+    if (pathName === "/api/uptime") {
+      assert.deepEqual(got.body, { ok: false, relayer: "unset" });
+      assert.equal(JSON.stringify(got.body).includes("0x"), false);
+    }
+  }
+});
+
+test("HEAD /api/uptime is 200 only when GET would be 200", async () => {
+  const fundedRpc = await listenJsonRpc("0x03e8");
+  const lowRpc = await listenJsonRpc("0x01");
+  const funded = await startProbeServer(18970, {
+    RELAYER_PRIVATE_KEY: TEST_RELAYER_KEY,
+    RELAYER_LOW_BALANCE_WEI: "1000",
+    MONAD_RPC_URL: `http://127.0.0.1:${fundedRpc.port}`,
+  });
+  const low = await startProbeServer(18972, {
+    RELAYER_PRIVATE_KEY: TEST_RELAYER_KEY,
+    RELAYER_LOW_BALANCE_WEI: "1000",
+    MONAD_RPC_URL: `http://127.0.0.1:${lowRpc.port}`,
+  });
+  const failed = await startProbeServer(18974, {
+    RELAYER_PRIVATE_KEY: TEST_RELAYER_KEY,
+    MONAD_RPC_URL: "http://127.0.0.1:18975",
+  });
+  try {
+    const ok = await headMatchesGet("http://127.0.0.1:18970/api/uptime");
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body, { ok: true, relayer: "ok" });
+    assert.equal(JSON.stringify(ok.body).includes("0x"), false);
+
+    const short = await headMatchesGet("http://127.0.0.1:18972/api/uptime");
+    assert.equal(short.status, 503);
+    assert.deepEqual(short.body, { ok: false, relayer: "low" });
+
+    const down = await headMatchesGet("http://127.0.0.1:18974/api/uptime");
+    assert.equal(down.status, 503);
+    assert.deepEqual(down.body, { ok: false, relayer: "fail" });
+  } finally {
+    funded.kill("SIGTERM");
+    low.kill("SIGTERM");
+    failed.kill("SIGTERM");
+    fundedRpc.close();
+    lowRpc.close();
+  }
 });
 
 test("POST /api/relay/register returns 503 without relayer key", async () => {
@@ -996,3 +1055,110 @@ test("GET /server/data is not served as a static file", async () => {
     fs.unlinkSync(file);
   }
 });
+
+const TEST_RELAYER_KEY = "0xac0974bec39a17e36ba4a6b4d4aad435cce0e4c9335790421507b8a191e28881";
+
+function readReqBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+function listenJsonRpc(balanceHex) {
+  const server = http.createServer(async (req, res) => {
+    let parsed = {};
+    try {
+      const raw = await readReqBody(req);
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch {
+      parsed = {};
+    }
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    const replies = items.map((item) => {
+      if (item?.method === "eth_getBalance") {
+        return { jsonrpc: "2.0", id: item.id ?? null, result: balanceHex };
+      }
+      if (item?.method === "eth_chainId") {
+        return { jsonrpc: "2.0", id: item.id ?? null, result: "0x8f" };
+      }
+      return {
+        jsonrpc: "2.0",
+        id: item?.id ?? null,
+        error: { code: -32601, message: "method not found" },
+      };
+    });
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(Array.isArray(parsed) ? replies : replies[0]));
+  });
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      resolve({ port: server.address().port, close: () => server.close() });
+    });
+  });
+}
+
+function startProbeServer(port, extraEnv) {
+  const child = spawn(process.execPath, ["server/index.mjs"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      CDP_API_KEY_ID: "",
+      CDP_API_KEY_SECRET: "",
+      CDP_API_KEY: "",
+      CDP_API_SECRET: "",
+      STRIPE_SECRET_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
+      SUPABASE_URL: "",
+      SUPABASE_SERVICE_ROLE_KEY: "",
+      MPP_SECRET_KEY: "",
+      MPP_TEMPO_RECIPIENT: "",
+      MPP_DEV_BYPASS: "",
+      BASE_BUILDER_CODE: "",
+      MIROSHARK_X402_PRIVATE_KEY: "",
+      VOICE_DRAFT_API_KEY: "",
+      OPENAI_API_KEY: "",
+      ANTHROPIC_API_KEY: "",
+      VOICE_DRAFTS_VISIBLE: "",
+      RELAYER_PRIVATE_KEY: "",
+      ...extraEnv,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    const onExit = (code) => {
+      reject(new Error(`probe server on ${port} exited ${code}: ${stderr.slice(-500)}`));
+    };
+    child.once("exit", onExit);
+    child.once("error", (err) => {
+      child.off("exit", onExit);
+      reject(err);
+    });
+    child.stdout.once("data", () => {
+      child.off("exit", onExit);
+      resolve(child);
+    });
+  });
+}
+
+async function headMatchesGet(url) {
+  const get = await fetch(url);
+  const head = await fetch(url, { method: "HEAD" });
+  assert.equal(head.status, get.status, url);
+  for (const header of ["content-type", "cache-control", "content-length", "access-control-allow-origin"]) {
+    assert.equal(head.headers.get(header), get.headers.get(header), `${url} ${header}`);
+  }
+  assert.match(get.headers.get("content-type") || "", /application\/json/);
+  assert.ok(Number(get.headers.get("content-length")) > 0, `${url} content-length`);
+  const headBody = Buffer.from(await head.arrayBuffer());
+  assert.equal(headBody.length, 0, `${url} HEAD body`);
+  const body = await get.json();
+  return { status: get.status, body };
+}
