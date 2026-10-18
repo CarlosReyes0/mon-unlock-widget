@@ -18,6 +18,7 @@ import {
   checkoutIntegrationId,
   getStripe,
   isUniqueViolation,
+  stripeChargeId,
   supabaseConfigured,
 } from "./stripe.mjs";
 import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
@@ -403,25 +404,38 @@ async function upsertSubscriptionRow(row) {
   }
 }
 
-async function queueSubscriptionPayout({ subscriptionId, writer, amountCents }) {
+async function queueSubscriptionPayout({ subscriptionId, writer, amountCents, chargeId }) {
   const feeBps = Math.max(0, Number(process.env.STRIPE_PLATFORM_FEE_BPS || "0") || 0);
   const fee = Math.floor((amountCents * feeBps) / 10_000);
   const payoutCents = Math.max(0, amountCents - fee);
   if (payoutCents <= 0) return null;
-  const rows = await supabase("payout_jobs", {
-    method: "POST",
-    prefer: "return=representation",
-    body: [
-      {
-        publisher: writer,
-        amount_cents: payoutCents,
-        currency: "usd",
-        status: "pending",
-        subscription_id: subscriptionId,
-      },
-    ],
-  });
-  return Array.isArray(rows) ? rows[0] : rows;
+  const row = {
+    publisher: writer,
+    amount_cents: payoutCents,
+    currency: "usd",
+    status: "pending",
+    subscription_id: subscriptionId,
+  };
+  if (chargeId) row.stripe_charge_id = chargeId;
+  try {
+    const rows = await supabase("payout_jobs", {
+      method: "POST",
+      prefer: "return=representation",
+      body: [row],
+    });
+    return Array.isArray(rows) ? rows[0] : rows;
+  } catch (e) {
+    if (!row.stripe_charge_id) throw e;
+    const blob = `${e?.message || ""} ${e?.details?.message || ""}`;
+    if (!blob.includes("stripe_charge_id")) throw e;
+    delete row.stripe_charge_id;
+    const rows = await supabase("payout_jobs", {
+      method: "POST",
+      prefer: "return=representation",
+      body: [row],
+    });
+    return Array.isArray(rows) ? rows[0] : rows;
+  }
 }
 
 async function ensureStripePrice(plan, writer) {
@@ -510,6 +524,7 @@ async function activateStripeSubscription({
   stripeCustomerId,
   periodEnd,
   amountCents,
+  chargeId,
 }) {
   const row = await upsertSubscriptionRow({
     reader,
@@ -526,6 +541,7 @@ async function activateStripeSubscription({
       subscriptionId: row.id,
       writer,
       amountCents,
+      chargeId,
     });
   }
   return row;
@@ -571,6 +587,7 @@ export async function applyStripeSubscriptionEvent(event) {
       stripeCustomerId: customerId,
       periodEnd,
       amountCents,
+      chargeId: stripeChargeId(invoice),
     });
     return { applied: true, type: event.type, subscriptionId: row?.id };
   }
