@@ -23,10 +23,17 @@ export const FOLLOWER_AUTH_PREFIX = "Open Paywall follower v1";
 export const FOLLOWERS_EXPORT_AUTH_PREFIX = "Open Paywall followers export v1";
 export const MONAD_CHAIN_ID = 143;
 
-/** Legacy MON unlock contract. */
+/** ArticleUnlock (native MON) used by current embeds. Replace at cutover; do not edit LEGACY_ below. */
 export const MON_UNLOCK_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
-/** ArticleUnlockUsdc on Monad mainnet. */
+/** ArticleUnlockUsdc on Monad mainnet. Replace at cutover; do not edit LEGACY_ below. */
 export const USDC_UNLOCK_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+
+/**
+ * Unlock contracts that stay readable after a cutover.
+ * hasUnlocked on these addresses still counts. Do not point these at the new contracts.
+ */
+export const LEGACY_MON_UNLOCK_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+export const LEGACY_USDC_UNLOCK_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
 
 /**
  * Public anon JWT already shipped in the widget and dashboard.
@@ -83,12 +90,10 @@ export function requestHasSecret(
   return false;
 }
 
-export function allowedUnlockContracts(
-  extra: Array<string | null | undefined> = []
-): string[] {
+export function dedupeAddresses(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const raw of [MON_UNLOCK_CONTRACT, USDC_UNLOCK_CONTRACT, ...extra]) {
+  for (const raw of values) {
     const c = String(raw || "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(c)) continue;
     const key = c.toLowerCase();
@@ -97,6 +102,69 @@ export function allowedUnlockContracts(
     out.push(c);
   }
   return out;
+}
+
+export function allowedUnlockContracts(
+  extra: Array<string | null | undefined> = []
+): string[] {
+  return dedupeAddresses([
+    MON_UNLOCK_CONTRACT,
+    USDC_UNLOCK_CONTRACT,
+    LEGACY_MON_UNLOCK_CONTRACT,
+    LEGACY_USDC_UNLOCK_CONTRACT,
+    ...extra,
+  ]);
+}
+
+/** Current MON contract, the pre-cutover MON contract, and any extra MON address. */
+export function monReadContracts(extra: Array<string | null | undefined> = []): string[] {
+  return dedupeAddresses([MON_UNLOCK_CONTRACT, LEGACY_MON_UNLOCK_CONTRACT, ...extra]);
+}
+
+/** Current USDC contract, the pre-cutover USDC contract, and any extra USDC address. */
+export function usdcReadContracts(extra: Array<string | null | undefined> = []): string[] {
+  const other = new Set(
+    [MON_UNLOCK_CONTRACT, LEGACY_MON_UNLOCK_CONTRACT].map((c) => c.toLowerCase())
+  );
+  const filtered = extra.filter((raw) => !other.has(String(raw || "").trim().toLowerCase()));
+  return dedupeAddresses([USDC_UNLOCK_CONTRACT, LEGACY_USDC_UNLOCK_CONTRACT, ...filtered]);
+}
+
+/**
+ * Contracts whose hasUnlocked counts for this payment asset.
+ * MON reads do not include the USDC contracts, and the reverse.
+ * An unknown asset checks both families. Extras that are the other asset's
+ * known addresses are dropped so a shared env list cannot cross the asset.
+ */
+export function readContractsForAsset(
+  paymentAsset: string | null | undefined,
+  extra: Array<string | null | undefined> = []
+): string[] {
+  const asset = String(paymentAsset ?? "").trim().toLowerCase();
+  if (asset === "mon") {
+    const other = new Set(
+      [USDC_UNLOCK_CONTRACT, LEGACY_USDC_UNLOCK_CONTRACT].map((c) => c.toLowerCase())
+    );
+    const filtered = extra.filter((raw) => !other.has(String(raw || "").trim().toLowerCase()));
+    return monReadContracts(filtered);
+  }
+  if (asset === "usdc") return usdcReadContracts(extra);
+  return dedupeAddresses([...monReadContracts(extra), ...usdcReadContracts(extra)]);
+}
+
+/**
+ * Widget path: the embed contract picks the family.
+ * A primary that is not in either family is checked on its own.
+ * A known MON or USDC primary is checked together with its legacy twin.
+ */
+export function readContractsForPrimary(primary: string | null | undefined): string[] {
+  const p = String(primary || "").trim().toLowerCase();
+  const mon = monReadContracts();
+  const usdc = usdcReadContracts();
+  if (p && usdc.some((c) => c.toLowerCase() === p)) return usdc;
+  if (p && mon.some((c) => c.toLowerCase() === p)) return mon;
+  if (p && /^0x[a-f0-9]{40}$/.test(p)) return [String(primary).trim()];
+  return dedupeAddresses([...mon, ...usdc]);
 }
 
 export function isAllowedUnlockContract(

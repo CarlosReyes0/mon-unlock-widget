@@ -3,8 +3,12 @@ import { test, beforeEach } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import { keccak256, toBytes } from "viem";
 import { buildEmbedSignMessage, MAINNET_USDC_UNLOCK_CONTRACT } from "./embed-signature.mjs";
+import { allowedFiatUnlockContracts } from "./embed-signature.mjs";
 import {
   articleIdFromSlug,
+  assertRelayerRole,
+  isAllowedUnlockContract,
+  legacyOwnerRelayerEnabled,
   parseRelayRequest,
   relayRegisterArticle,
   resetRelayRateLimits,
@@ -111,7 +115,7 @@ test("relayRegisterArticle 503s when the relayer key is missing", async () => {
   );
 });
 
-test("relayRegisterArticle registers via owner after a valid embed signature", async () => {
+test("relayRegisterArticle registers after a valid embed signature", async () => {
   const embedSig = await signEmbed();
   const submitted = [];
   const confirmed = [];
@@ -227,6 +231,72 @@ test("relayRegisterArticle requires a reserved slug owned by the signer", async 
       ),
     (err) => err.status === 403 && err.message === "reservation_required"
   );
+});
+
+test("assertRelayerRole matches relayer() and ignores a different owner", () => {
+  const account = "0xabcabcabcabcabcabcabcabcabcabcabcabcabca";
+  assert.equal(
+    assertRelayerRole({
+      account,
+      relayerOnContract: account.toUpperCase(),
+      ownerOnContract: "0x1111111111111111111111111111111111111111",
+      legacyOwnerRelayer: true,
+    }),
+    "relayer"
+  );
+  assert.throws(
+    () =>
+      assertRelayerRole({
+        account,
+        relayerOnContract: "0x2222222222222222222222222222222222222222",
+        ownerOnContract: account,
+        legacyOwnerRelayer: true,
+      }),
+    (err) => err.status === 503 && err.message === "relayer_mismatch"
+  );
+});
+
+test("assertRelayerRole falls back to owner only when relayer() is missing and the flag is set", () => {
+  const account = "0xabcabcabcabcabcabcabcabcabcabcabcabcabca";
+  assert.equal(
+    assertRelayerRole({
+      account,
+      relayerOnContract: null,
+      ownerOnContract: account,
+      legacyOwnerRelayer: true,
+    }),
+    "legacy_owner"
+  );
+  assert.throws(
+    () =>
+      assertRelayerRole({
+        account,
+        relayerOnContract: null,
+        ownerOnContract: account,
+        legacyOwnerRelayer: false,
+      }),
+    (err) => err.status === 503 && err.message === "relayer_role_unavailable"
+  );
+  assert.throws(
+    () =>
+      assertRelayerRole({
+        account,
+        relayerOnContract: "0x0000000000000000000000000000000000000000",
+        ownerOnContract: account,
+        legacyOwnerRelayer: true,
+      }),
+    (err) => err.status === 503 && err.message === "relayer_mismatch"
+  );
+});
+
+test("legacy owner flag and env contract allowlist", () => {
+  assert.equal(legacyOwnerRelayerEnabled({ UNLOCK_LEGACY_OWNER_RELAYER: "1" }), true);
+  assert.equal(legacyOwnerRelayerEnabled({ UNLOCK_LEGACY_OWNER_RELAYER: "true" }), true);
+  assert.equal(legacyOwnerRelayerEnabled({}), false);
+  const next = "0x4444444444444444444444444444444444444444";
+  const allowed = allowedFiatUnlockContracts({ UNLOCK_CONTRACT: next });
+  assert.equal(allowed.some((c) => c.toLowerCase() === next), true);
+  assert.equal(isAllowedUnlockContract(CONTRACT), true);
 });
 
 test("relayRegisterArticle 409s when another publisher reserved the slug", async () => {

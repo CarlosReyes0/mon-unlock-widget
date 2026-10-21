@@ -6,6 +6,15 @@ pragma solidity ^0.8.24;
  * @notice Pay native MON to unlock an article. Phase 1 — Monad testnet.
  * @dev articleId = keccak256(bytes("your-article-slug")) — must match widget encoding.
  *      Article IDs are globally unique. Re-registration by a different publisher reverts.
+ *
+ *      Roles:
+ *      - owner: cold wallet. Two-step transferOwnership / acceptOwnership.
+ *        Sets the relayer. May emergency-pause via setActive. May updatePrice.
+ *      - relayer: hot wallet used by the server. registerArticleFor only.
+ *        The server does not send updatePrice or setActive, so the relayer cannot.
+ *      - publisher: registerArticle, updatePrice, and setActive for their own article.
+ *
+ *      Reader functions (unlock, hasUnlocked, getArticle) are unchanged.
  */
 contract ArticleUnlock {
     struct Article {
@@ -15,6 +24,9 @@ contract ArticleUnlock {
     }
 
     address public owner;
+    address public pendingOwner;
+    /// @notice Server wallet allowed to call registerArticleFor. Not the owner.
+    address public relayer;
 
     mapping(bytes32 => Article) public articles;
     mapping(bytes32 => mapping(address => bool)) public unlocked;
@@ -31,8 +43,13 @@ contract ArticleUnlock {
         uint256 amount,
         address indexed publisher
     );
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event RelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
 
     error NotOwner();
+    error NotRelayer();
+    error InvalidAddress();
     error InvalidPublisher();
     error InvalidPrice();
     error ArticleNotFound();
@@ -48,8 +65,41 @@ contract ArticleUnlock {
         _;
     }
 
-    constructor() {
+    modifier onlyRelayer() {
+        if (msg.sender != relayer) revert NotRelayer();
+        _;
+    }
+
+    /// @param initialOwner Cold wallet. Cannot be the zero address.
+    /// @param initialRelayer Hot wallet that will call registerArticleFor.
+    constructor(address initialOwner, address initialRelayer) {
+        if (initialOwner == address(0) || initialRelayer == address(0)) revert InvalidAddress();
+        owner = initialOwner;
+        relayer = initialRelayer;
+        emit OwnershipTransferred(address(0), initialOwner);
+        emit RelayerUpdated(address(0), initialRelayer);
+    }
+
+    /// @notice Start a two-step ownership transfer. `newOwner` must call acceptOwnership.
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert InvalidAddress();
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Finish a two-step ownership transfer. Caller must be pendingOwner.
+    function acceptOwnership() external {
+        if (pendingOwner == address(0) || msg.sender != pendingOwner) revert NotOwner();
+        emit OwnershipTransferred(owner, msg.sender);
         owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice Point registerArticleFor at a new server wallet. Owner only.
+    function setRelayer(address newRelayer) external onlyOwner {
+        if (newRelayer == address(0)) revert InvalidAddress();
+        emit RelayerUpdated(relayer, newRelayer);
+        relayer = newRelayer;
     }
 
     /// @notice Register an article you publish. Price in wei (1 MON = 1e18 wei).
@@ -68,12 +118,13 @@ contract ArticleUnlock {
         emit ArticleRegistered(articleId, priceWei, msg.sender);
     }
 
-    /// @notice Owner can register on behalf of a publisher (bootstrap / demo setup).
+    /// @notice Relayer registers on behalf of a publisher. Payments still go to `publisher`.
+    ///         The owner cannot call this unless they are also the relayer.
     function registerArticleFor(
         bytes32 articleId,
         uint256 priceWei,
         address publisher
-    ) external onlyOwner {
+    ) external onlyRelayer {
         if (priceWei == 0) revert InvalidPrice();
         if (publisher == address(0)) revert InvalidPublisher();
         address existing = articles[articleId].publisher;
@@ -88,6 +139,9 @@ contract ArticleUnlock {
         emit ArticleRegistered(articleId, priceWei, publisher);
     }
 
+    /// @notice Publisher or owner. The relayer may not call this.
+    /// @dev The server never sends updatePrice. Writers sign it from their own wallet.
+    ///      Keeping the relayer out means a hot wallet cannot reprice articles.
     function updatePrice(bytes32 articleId, uint256 priceWei) external {
         Article storage a = articles[articleId];
         if (a.publisher == address(0)) revert ArticleNotFound();
@@ -97,6 +151,9 @@ contract ArticleUnlock {
         emit ArticleUpdated(articleId, priceWei);
     }
 
+    /// @notice Publisher may toggle their own article. Owner may toggle any article
+    ///         (emergency pause or resume). The relayer may not call this.
+    /// @dev The server never sends setActive, so that call stays off the hot wallet.
     function setActive(bytes32 articleId, bool active) external {
         Article storage a = articles[articleId];
         if (a.publisher == address(0)) revert ArticleNotFound();

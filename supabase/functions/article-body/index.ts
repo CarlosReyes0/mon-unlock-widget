@@ -5,15 +5,21 @@
 //
 // Unlock verification order:
 // 1. Fiat session (Stripe) via fiat_unlocks
-// 2. Supabase unlocks table (indexer backfill / dashboard)
-// 3. On-chain hasUnlocked() on the MON or USDC unlock contract only.
-//    A caller-supplied unlock_contract is ignored unless it is one of those.
+// 2. Supabase unlocks table (indexer backfill / dashboard). Rows from the
+//    previous unlock contracts stay valid.
+// 3. On-chain hasUnlocked() for this article's asset, on the current contract
+//    and the legacy contract. A caller-supplied unlock_contract is added only
+//    when it is one of ours. Anything else is ignored, so a fake hasUnlocked()
+//    cannot unlock the paid body.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createPublicClient, http, keccak256, toBytes } from 'https://esm.sh/viem@2.57.7';
 import {
   allowedUnlockContracts,
   isAllowedUnlockContract,
+  monReadContracts,
+  readContractsForAsset,
+  usdcReadContracts,
 } from '../../../src/core/publish-auth.ts';
 import { verifyReaderSessionToken } from '../../../src/core/reader-session.ts';
 
@@ -136,19 +142,21 @@ Deno.serve(async (req) => {
         headers,
       });
     }
-    const extraContracts = [
+    const monExtras = [
       Deno.env.get('CONTRACT_ADDRESS'),
-      Deno.env.get('USDC_CONTRACT_ADDRESS'),
+      Deno.env.get('LEGACY_CONTRACT_ADDRESS'),
     ];
+    const usdcExtras = [
+      Deno.env.get('USDC_CONTRACT_ADDRESS'),
+      Deno.env.get('LEGACY_USDC_CONTRACT_ADDRESS'),
+    ];
+    const allowExtras = [...monExtras, ...usdcExtras];
     const requestedContract = url.searchParams.get('unlock_contract');
-    // A caller-supplied contract is used only when it is one of ours.
-    // Anything else is ignored and both official contracts are checked,
-    // so a fake hasUnlocked() cannot unlock the paid body.
-    const contractsToCheck = (
-      requestedContract && isAllowedUnlockContract(requestedContract, extraContracts)
-        ? [requestedContract]
-        : allowedUnlockContracts(extraContracts)
-    ) as `0x${string}`[];
+    // A caller-supplied contract is added only when it is one of ours and it
+    // belongs to this article's asset. Anything else is ignored, so a fake
+    // hasUnlocked() cannot unlock the paid body. The read set still includes
+    // the current contract and the legacy contract for that asset.
+    const knownContracts = allowedUnlockContracts(allowExtras);
 
     if (!reader && !fiatSession) {
       return new Response(
@@ -169,12 +177,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    let article: { article_id_hash: string; body: string | null } | null = null;
+    let article: {
+      article_id_hash: string;
+      body: string | null;
+      payment_asset?: string | null;
+    } | null = null;
 
     if (articleId) {
       const { data: bySlug, error: slugError } = await supabase
         .from('articles')
-        .select('article_id_hash, body')
+        .select('article_id_hash, body, payment_asset')
         .eq('article_id', articleId)
         .limit(1);
 
@@ -192,7 +204,7 @@ Deno.serve(async (req) => {
         const derivedHash = keccak256(toBytes(articleId));
         const { data: byHash, error: hashError } = await supabase
           .from('articles')
-          .select('article_id_hash, body')
+          .select('article_id_hash, body, payment_asset')
           .eq('article_id_hash', derivedHash)
           .limit(1);
 
@@ -216,7 +228,7 @@ Deno.serve(async (req) => {
     } else if (articleIdHashParam) {
       const { data: byHash, error: hashError } = await supabase
         .from('articles')
-        .select('article_id_hash, body')
+        .select('article_id_hash, body, payment_asset')
         .eq('article_id_hash', articleIdHashParam)
         .limit(1);
 
@@ -236,6 +248,23 @@ Deno.serve(async (req) => {
     if (!article) {
       return new Response(JSON.stringify({ error: 'Article not found' }), { status: 404, headers });
     }
+
+    const asset = String(article.payment_asset || '').trim().toLowerCase();
+    const readExtras =
+      asset === 'mon' ? [...monExtras] : asset === 'usdc' ? [...usdcExtras] : [...allowExtras];
+    if (requestedContract && isAllowedUnlockContract(requestedContract, allowExtras)) {
+      const req = requestedContract.toLowerCase();
+      const inMon = monReadContracts(monExtras).some((c) => c.toLowerCase() === req);
+      const inUsdc = usdcReadContracts(usdcExtras).some((c) => c.toLowerCase() === req);
+      const sameAsset =
+        (asset === 'mon' && inMon) ||
+        (asset === 'usdc' && inUsdc) ||
+        (asset !== 'mon' && asset !== 'usdc' && (inMon || inUsdc));
+      if (sameAsset && knownContracts.some((c) => c.toLowerCase() === req)) {
+        readExtras.push(requestedContract);
+      }
+    }
+    const contractsToCheck = readContractsForAsset(asset, readExtras) as `0x${string}`[];
 
     let isUnlocked = false;
 
