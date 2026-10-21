@@ -9,8 +9,10 @@
  *   CDP_API_KEY_SECRET / CDP_API_SECRET — Secret (Ed25519 or EC PEM)
  *   STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
- *   RELAYER_PRIVATE_KEY                — contract owner; pays registerArticleFor gas
- *                                        and optional reader USDC-unlock gas drips
+ *   RELAYER_PRIVATE_KEY                — unlock relayer(); pays registerArticleFor gas
+ *                                        and optional reader USDC-unlock gas drips.
+ *                                        Not the contract owner. For the previous
+ *                                        contracts set UNLOCK_LEGACY_OWNER_RELAYER=1.
  *   RELAYER_GAS_GLOBAL_DAILY_CAP       — gas drips per UTC day, default 50
  *   RELAYER_LOW_BALANCE_WEI            — log relayer_low_balance below this, default 1 MON
  *   VOICE_DRAFT_DAILY_LIMIT            — voice drafts per address per UTC day, default 8

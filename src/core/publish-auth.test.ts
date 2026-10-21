@@ -7,12 +7,16 @@ import {
   FOLLOWER_AUTH_PREFIX,
   FOLLOWERS_EXPORT_AUTH_PREFIX,
   LISTING_AUTH_PREFIX,
+  LEGACY_MON_UNLOCK_CONTRACT,
+  LEGACY_USDC_UNLOCK_CONTRACT,
   MON_UNLOCK_CONTRACT,
   PLAN_AUTH_PREFIX,
   PUBLISH_AUTH_PREFIX,
   USDC_UNLOCK_CONTRACT,
   allowedUnlockContracts,
   buildALaCarteAuthMessage,
+  readContractsForAsset,
+  readContractsForPrimary,
   buildFollowerAuthMessage,
   buildFollowersExportAuthMessage,
   buildListingAuthMessage,
@@ -62,6 +66,35 @@ describe("unlock contract allowlist", () => {
       ]),
       true
     );
+    assert.equal(isAllowedUnlockContract(LEGACY_MON_UNLOCK_CONTRACT), true);
+    assert.equal(isAllowedUnlockContract(LEGACY_USDC_UNLOCK_CONTRACT), true);
+  });
+
+  it("checks the legacy twin for the same asset and not the other asset", () => {
+    const usdcReads = readContractsForAsset("usdc", [
+      MON_UNLOCK_CONTRACT,
+      "0x2222222222222222222222222222222222222222",
+    ]);
+    assert.equal(usdcReads.some((c) => c.toLowerCase() === MON_UNLOCK_CONTRACT.toLowerCase()), false);
+    assert.equal(
+      usdcReads.some((c) => c.toLowerCase() === "0x2222222222222222222222222222222222222222"),
+      true
+    );
+    assert.ok(usdcReads.some((c) => c.toLowerCase() === USDC_UNLOCK_CONTRACT.toLowerCase()));
+    assert.ok(usdcReads.some((c) => c.toLowerCase() === LEGACY_USDC_UNLOCK_CONTRACT.toLowerCase()));
+
+    const monReads = readContractsForAsset("mon", [USDC_UNLOCK_CONTRACT]);
+    assert.equal(monReads.some((c) => c.toLowerCase() === USDC_UNLOCK_CONTRACT.toLowerCase()), false);
+    assert.ok(monReads.some((c) => c.toLowerCase() === LEGACY_MON_UNLOCK_CONTRACT.toLowerCase()));
+
+    const primary = readContractsForPrimary(USDC_UNLOCK_CONTRACT);
+    assert.deepEqual(
+      primary.map((c) => c.toLowerCase()),
+      [USDC_UNLOCK_CONTRACT.toLowerCase()]
+    );
+    assert.deepEqual(readContractsForPrimary("0x3333333333333333333333333333333333333333"), [
+      "0x3333333333333333333333333333333333333333",
+    ]);
   });
 });
 

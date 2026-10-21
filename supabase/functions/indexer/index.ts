@@ -10,6 +10,8 @@ import { requestHasSecret } from "../../../src/core/publish-auth.ts";
 const MON_CONTRACT = (Deno.env.get("CONTRACT_ADDRESS") || "") as `0x${string}`;
 const USDC_CONTRACT = (Deno.env.get("USDC_CONTRACT_ADDRESS") ||
   "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f") as `0x${string}`;
+const LEGACY_MON_CONTRACT = (Deno.env.get("LEGACY_CONTRACT_ADDRESS") || "") as `0x${string}`;
+const LEGACY_USDC_CONTRACT = (Deno.env.get("LEGACY_USDC_CONTRACT_ADDRESS") || "") as `0x${string}`;
 const RPC_URL = Deno.env.get("RPC_URL") || "https://rpc.monad.xyz";
 const CHUNK_SIZE = 100n;
 const MAX_BLOCKS_PER_RUN = 2000n;
@@ -94,14 +96,27 @@ async function insertUnlock(log: any, paymentAsset: PaymentAsset) {
   if (error) throw new Error(`Insert unlock failed: ${error.message}`);
 }
 
-async function getLastIndexedBlock(contract: string): Promise<bigint> {
+function configuredStartBlock(): bigint | null {
+  const raw = (Deno.env.get("INDEXER_START_BLOCK") || "").trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const n = BigInt(raw);
+  return n > 0n ? n : null;
+}
+
+async function getLastIndexedBlock(contract: string, useStartBlock: boolean): Promise<bigint> {
   const { data, error } = await supabase
     .from("indexer_state")
     .select("last_indexed_block")
     .eq("contract_address", contract.toLowerCase())
     .single();
-  if (error || !data) return 0n;
-  return BigInt(data.last_indexed_block as string);
+  if (!error && data) return BigInt(data.last_indexed_block as string);
+  // A missing row on a newly deployed contract can start at INDEXER_START_BLOCK.
+  // Legacy contracts ignore that value so a cutover cannot skip their history.
+  if (useStartBlock) {
+    const start = configuredStartBlock();
+    if (start) return start - 1n;
+  }
+  return 0n;
 }
 
 async function setLastIndexedBlock(contract: string, block: bigint) {
@@ -119,9 +134,10 @@ async function setLastIndexedBlock(contract: string, block: bigint) {
 async function indexContract(
   contract: `0x${string}`,
   paymentAsset: PaymentAsset,
-  currentBlock: bigint
+  currentBlock: bigint,
+  useStartBlock: boolean
 ): Promise<string> {
-  const lastIndexed = await getLastIndexedBlock(contract);
+  const lastIndexed = await getLastIndexedBlock(contract, useStartBlock);
   const fromBlock = lastIndexed + 1n;
   if (fromBlock > currentBlock) {
     return `${paymentAsset}: up to date`;
@@ -174,9 +190,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const targets: { address: `0x${string}`; asset: PaymentAsset }[] = [];
-    if (isAddress(MON_CONTRACT)) targets.push({ address: MON_CONTRACT, asset: "mon" });
-    if (isAddress(USDC_CONTRACT)) targets.push({ address: USDC_CONTRACT, asset: "usdc" });
+    const targets: { address: `0x${string}`; asset: PaymentAsset; useStartBlock: boolean }[] = [];
+    const pushTarget = (address: string, asset: PaymentAsset, useStartBlock: boolean) => {
+      if (!isAddress(address)) return;
+      const key = address.toLowerCase();
+      if (targets.some((t) => t.address.toLowerCase() === key)) return;
+      targets.push({ address, asset, useStartBlock });
+    };
+    // Primary addresses may use INDEXER_START_BLOCK when they have no cursor yet.
+    pushTarget(MON_CONTRACT, "mon", true);
+    pushTarget(USDC_CONTRACT, "usdc", true);
+    // Legacy addresses keep their own cursor. A missing cursor scans from block 0.
+    pushTarget(LEGACY_MON_CONTRACT, "mon", false);
+    pushTarget(LEGACY_USDC_CONTRACT, "usdc", false);
     if (targets.length === 0) {
       return new Response("No CONTRACT_ADDRESS / USDC_CONTRACT_ADDRESS configured", {
         status: 500,
@@ -186,7 +212,7 @@ Deno.serve(async (req) => {
     const currentBlock = await publicClient.getBlockNumber();
     const parts: string[] = [];
     for (const t of targets) {
-      parts.push(await indexContract(t.address, t.asset, currentBlock));
+      parts.push(await indexContract(t.address, t.asset, currentBlock, t.useStartBlock));
     }
     return new Response(parts.join(" | "), { status: 200 });
   } catch (e: any) {

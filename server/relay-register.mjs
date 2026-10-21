@@ -5,13 +5,15 @@
  * checks all read the contract. Writers should not pay that gas.
  *
  * Flow: writer signs the embed message (free) → this server calls
- * `registerArticleFor` as the contract owner → payments still go to the writer.
+ * `registerArticleFor` as the contract relayer → payments still go to the writer.
  *
  * Runtime env:
- *   RELAYER_PRIVATE_KEY  — must be the ArticleUnlock / ArticleUnlockUsdc owner
- *   MONAD_RPC_URL        — optional, defaults to https://rpc.monad.xyz
- *   RELAYER_DAILY_LIMIT  — per-publisher cap (default 20)
- *   RELAYER_IP_DAILY_LIMIT — per-IP cap (default 40)
+ *   RELAYER_PRIVATE_KEY          — the relayer() wallet, read only from the environment
+ *   UNLOCK_LEGACY_OWNER_RELAYER  — set to 1 only for contracts that have no relayer()
+ *                                  and still treat the owner as the caller
+ *   MONAD_RPC_URL                — optional, defaults to https://rpc.monad.xyz
+ *   RELAYER_DAILY_LIMIT          — per-publisher cap (default 20)
+ *   RELAYER_IP_DAILY_LIMIT       — per-IP cap (default 40)
  */
 import {
   createPublicClient,
@@ -22,9 +24,9 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  ALLOWED_FIAT_UNLOCK_CONTRACTS,
   MAINNET_USDC_UNLOCK_CONTRACT,
   MONAD_CHAIN_ID,
+  allowedFiatUnlockContracts,
   assertFiatEmbedAuthorized,
 } from "./embed-signature.mjs";
 import {
@@ -69,6 +71,16 @@ export const REGISTER_FOR_ABI = [
 const OWNER_ABI = [
   {
     name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+];
+
+const RELAYER_ABI = [
+  {
+    name: "relayer",
     type: "function",
     stateMutability: "view",
     inputs: [],
@@ -130,7 +142,41 @@ export function articleIdFromSlug(slug) {
 
 export function isAllowedUnlockContract(contract) {
   const c = String(contract || "").trim().toLowerCase();
-  return ALLOWED_FIAT_UNLOCK_CONTRACTS.some((allowed) => allowed.toLowerCase() === c);
+  return allowedFiatUnlockContracts().some((allowed) => allowed.toLowerCase() === c);
+}
+
+export function legacyOwnerRelayerEnabled(env = process.env) {
+  const raw = String(env.UNLOCK_LEGACY_OWNER_RELAYER || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+/**
+ * New contracts: relayer() must equal the address derived from RELAYER_PRIVATE_KEY.
+ * A returned address is strict even when the legacy flag is on.
+ * Contracts with no relayer() (the call reverts, so relayerOnContract is null)
+ * fall back to owner() only when UNLOCK_LEGACY_OWNER_RELAYER is set.
+ * @param {{
+ *   account: string,
+ *   relayerOnContract: string | null,
+ *   ownerOnContract?: string | null,
+ *   legacyOwnerRelayer?: boolean,
+ * }} input
+ * @returns {"relayer" | "legacy_owner"}
+ */
+export function assertRelayerRole(input) {
+  const account = String(input.account || "").toLowerCase();
+  const relayer =
+    input.relayerOnContract == null ? null : String(input.relayerOnContract).toLowerCase();
+  if (relayer && relayer !== ZERO) {
+    if (relayer !== account) throw httpError("relayer_mismatch", 503);
+    return "relayer";
+  }
+  if (relayer === null && input.legacyOwnerRelayer) {
+    const owner = String(input.ownerOnContract || "").toLowerCase();
+    if (!owner || owner === ZERO || owner !== account) throw httpError("relayer_not_owner", 503);
+    return "legacy_owner";
+  }
+  throw httpError(relayer === null ? "relayer_role_unavailable" : "relayer_mismatch", 503);
 }
 
 function httpError(message, status = 400) {
@@ -201,7 +247,7 @@ export function relayerHealth() {
     ok: true,
     relayerConfigured: Boolean(account),
     relayerAddress: account ? account.address : null,
-    contracts: ALLOWED_FIAT_UNLOCK_CONTRACTS,
+    contracts: allowedFiatUnlockContracts(),
   };
 }
 
@@ -244,14 +290,34 @@ async function defaultSubmitRegisterArticleFor({
 
   const chain = monadChain(rpcUrl);
   const publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
-  const owner = await publicClient.readContract({
-    address: contract,
-    abi: OWNER_ABI,
-    functionName: "owner",
-  });
-  if (String(owner).toLowerCase() !== account.address.toLowerCase()) {
-    throw httpError("relayer_not_owner", 503);
+  let relayerOnContract = null;
+  try {
+    relayerOnContract = await publicClient.readContract({
+      address: contract,
+      abi: RELAYER_ABI,
+      functionName: "relayer",
+    });
+  } catch {
+    relayerOnContract = null;
   }
+  let ownerOnContract = null;
+  if (relayerOnContract == null) {
+    try {
+      ownerOnContract = await publicClient.readContract({
+        address: contract,
+        abi: OWNER_ABI,
+        functionName: "owner",
+      });
+    } catch {
+      ownerOnContract = null;
+    }
+  }
+  assertRelayerRole({
+    account: account.address,
+    relayerOnContract,
+    ownerOnContract,
+    legacyOwnerRelayer: legacyOwnerRelayerEnabled(),
+  });
 
   const walletClient = createWalletClient({
     account,

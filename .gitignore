@@ -26,6 +26,10 @@ dist-publisher/
 supabase/.temp/
 supabase/.branches/
 
+# Local publisher remap for scripts/migrate-unlock-registrations.mjs.
+# Copy scripts/publisher-remap.example.json. Do not commit real addresses.
+scripts/publisher-remap.json
+
 # Credential dumps and private key material
 *.pem
 *.key

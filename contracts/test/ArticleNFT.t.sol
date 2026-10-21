@@ -45,8 +45,8 @@ contract ArticleNFTTest is Test {
 
     function setUp() public {
         usdc = new MockUsdc();
-        unlockMon = new ArticleUnlock();
-        unlockUsdc = new ArticleUnlockUsdc(address(usdc));
+        unlockMon = new ArticleUnlock(address(this), address(this));
+        unlockUsdc = new ArticleUnlockUsdc(address(usdc), address(this), address(this));
         nft = new ArticleNFT(address(unlockMon), address(unlockUsdc), "https://example.test/nft/");
         articleId = keccak256(bytes(SLUG));
 
