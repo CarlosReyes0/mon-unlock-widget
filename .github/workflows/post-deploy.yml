@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "22.23.4"
       - name: Post-deploy unit tests
         run: node --test scripts/post-deploy-smoke.test.mjs scripts/railway-rollback.test.mjs scripts/private-alert.test.mjs
 
@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "22.23.4"
 
       - name: Railway marked the deploy failed
         if: github.event_name == 'deployment_status' && (github.event.deployment_status.state == 'failure' || github.event.deployment_status.state == 'error')
