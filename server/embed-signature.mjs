@@ -11,14 +11,40 @@ export const EMBED_SIG_PREFIX = "MON Unlock v1";
 export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
 export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL];
 export const MAINNET_UNLOCK_CONTRACT =
-  "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+  "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167";
 /** USDC ArticleUnlockUsdc — same allowlist as widget payment-asset helpers. */
 export const MAINNET_USDC_UNLOCK_CONTRACT =
+  "0xa27bb0c25D12DE778bA135162ebAE665593786b2";
+/** Pre-cutover contracts. Leave these in place when the primaries above change. */
+export const LEGACY_UNLOCK_CONTRACT =
+  "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+export const LEGACY_USDC_UNLOCK_CONTRACT =
   "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
 export const ALLOWED_FIAT_UNLOCK_CONTRACTS = [
   MAINNET_UNLOCK_CONTRACT,
   MAINNET_USDC_UNLOCK_CONTRACT,
+  LEGACY_UNLOCK_CONTRACT,
+  LEGACY_USDC_UNLOCK_CONTRACT,
 ];
+
+/** Hardcoded contracts plus UNLOCK_CONTRACT / USDC_UNLOCK_CONTRACT from the environment. */
+export function allowedFiatUnlockContracts(env = process.env) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of [
+    ...ALLOWED_FIAT_UNLOCK_CONTRACTS,
+    env.UNLOCK_CONTRACT,
+    env.USDC_UNLOCK_CONTRACT,
+  ]) {
+    const c = String(raw || "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(c)) continue;
+    const key = c.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
+}
 export const MONAD_CHAIN_ID = 143;
 
 export function buildEmbedSignMessage(
@@ -58,7 +84,7 @@ export async function assertFiatEmbedAuthorized(input) {
   if (!contract.startsWith("0x") || contract.length !== 42) {
     return { ok: false, status: 400, error: "invalid_contract" };
   }
-  const contractOk = ALLOWED_FIAT_UNLOCK_CONTRACTS.some(
+  const contractOk = allowedFiatUnlockContracts().some(
     (c) => c.toLowerCase() === contract.toLowerCase()
   );
   if (!contractOk) {

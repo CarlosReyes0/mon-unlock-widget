@@ -18,7 +18,7 @@ describe("buildCheckoutUrl", () => {
         articleId: "demo-post",
         title: "Hello",
         price: "1.5",
-        contract: "0x27cA0c23835328e2Ab1424b66330be86fe177FA6",
+        contract: "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167",
         embedSig: "0xabc",
         parentOrigin: "https://publisher.example",
         returnUrl: "https://publisher.example/post?x=1",

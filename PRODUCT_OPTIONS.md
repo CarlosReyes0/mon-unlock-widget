@@ -30,9 +30,9 @@ Check off or delete items as you decide.
 
 **Yes, register articles on-chain.** Crypto unlock (`unlock` / `hasUnlocked`) and embed-sig checks read the contract. Skipping that would make card-only posts work and break MON/USDC pay.
 
-**No, writers should not pay gas to publish.** `/write`, generator, and `/register.html` sign the embed (free), then `POST /api/relay/register` calls `registerArticleFor` as the contract owner. If `RELAYER_PRIVATE_KEY` is unset, the writer’s wallet still submits `registerArticle` (old path).
+**No, writers should not pay gas to publish.** `/write`, generator, and `/register.html` sign the embed (free), then `POST /api/relay/register` calls `registerArticleFor` as the contract relayer. If `RELAYER_PRIVATE_KEY` is unset, the writer’s wallet still submits `registerArticle` (old path).
 
-Set `RELAYER_PRIVATE_KEY` on Railway to the **contract owner** wallet, funded with a little MON. That key can also `updatePrice` / `setActive` (owner privileges) — use a dedicated hot wallet, not a cold deployer that holds other funds.
+Set `RELAYER_PRIVATE_KEY` on Railway to the **relayer** wallet, funded with a little MON. That key calls `registerArticleFor` only. Price changes stay on the publisher wallet (`updatePrice`). Emergency `setActive` stays with the cold owner. The owner and the relayer are different addresses. See [docs/cutover-unlock-contracts.md](docs/cutover-unlock-contracts.md).
 
 ---
 

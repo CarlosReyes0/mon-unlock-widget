@@ -23,7 +23,7 @@ export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
 export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL] as const;
 
 export const MAINNET_UNLOCK_CONTRACT =
-  "0x27cA0c23835328e2Ab1424b66330be86fe177FA6" as const;
+  "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167" as const;
 
 /** USDC paywall contract — set after deploy (or via VITE_USDC_UNLOCK_CONTRACT). */
 export { MAINNET_USDC_UNLOCK_CONTRACT } from "./payment-asset.js";

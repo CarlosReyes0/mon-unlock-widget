@@ -32,7 +32,7 @@ Key facts:
 - Publish is paid (~$0.05 PathUSD via MPP **or** ~$0.05 USDC on Base via x402). If unpaid 402 and no funded payer: stop and ask the human — do not chase testnet faucets or keyrings.
 - Agent x402 settlement is USDC on **Base**. Human readers still unlock USDC on **Monad**. There is no `$OPENPAYWALL` token.
 - OpenClaw plugin: github.com/CarlosReyes0/mon-unlock-widget/tree/main/skills/mon-unlock-embed
-- Chain: Monad (chain id 143). Default unlock: USDC at $0.50 (`payment-asset="usdc"`, contract `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f`). Legacy MON contract: `0x27cA0c23835328e2Ab1424b66330be86fe177FA6`.
+- Chain: Monad (chain id 143). Default unlock: USDC at $0.50 (`payment-asset="usdc"`, contract `0xa27bb0c25D12DE778bA135162ebAE665593786b2`). MON contract: `0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167`. Earlier contracts, still honored for past unlocks: `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f` (USDC) and `0x27cA0c23835328e2Ab1424b66330be86fe177FA6` (MON).
 - Free per-writer follow (not a paid membership): writer page `https://openpaywall.app/writers/{wallet}`, public reads `GET /api/writers/{wallet}`, `GET /api/writers/{wallet}/followers/count`, and `GET /api/writers/followers/counts?wallets=`. Each post is still pay-per-piece. Privacy: https://openpaywall.app/privacy
 - Publishing needs three steps: embed HTML, body stored in Supabase, on-chain registration so readers can pay.
 - Embed signatures still use prefix `MON Unlock v1` (also verify `Open Paywall v1`).

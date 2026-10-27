@@ -7,12 +7,16 @@ import {
   FOLLOWER_AUTH_PREFIX,
   FOLLOWERS_EXPORT_AUTH_PREFIX,
   LISTING_AUTH_PREFIX,
+  LEGACY_MON_UNLOCK_CONTRACT,
+  LEGACY_USDC_UNLOCK_CONTRACT,
   MON_UNLOCK_CONTRACT,
   PLAN_AUTH_PREFIX,
   PUBLISH_AUTH_PREFIX,
   USDC_UNLOCK_CONTRACT,
   allowedUnlockContracts,
   buildALaCarteAuthMessage,
+  readContractsForAsset,
+  readContractsForPrimary,
   buildFollowerAuthMessage,
   buildFollowersExportAuthMessage,
   buildListingAuthMessage,
@@ -55,13 +59,42 @@ describe("unlock contract allowlist", () => {
     assert.equal(isAllowedUnlockContract("0x0000000000000000000000000000000000000001"), false);
     assert.equal(isAllowedUnlockContract(""), false);
     const extra = allowedUnlockContracts(["0x1111111111111111111111111111111111111111"]);
-    assert.equal(extra.length, 3);
+    assert.equal(extra.length, 5);
     assert.equal(
       isAllowedUnlockContract("0x1111111111111111111111111111111111111111", [
         "0x1111111111111111111111111111111111111111",
       ]),
       true
     );
+    assert.equal(isAllowedUnlockContract(LEGACY_MON_UNLOCK_CONTRACT), true);
+    assert.equal(isAllowedUnlockContract(LEGACY_USDC_UNLOCK_CONTRACT), true);
+  });
+
+  it("checks the legacy twin for the same asset and not the other asset", () => {
+    const usdcReads = readContractsForAsset("usdc", [
+      MON_UNLOCK_CONTRACT,
+      "0x2222222222222222222222222222222222222222",
+    ]);
+    assert.equal(usdcReads.some((c) => c.toLowerCase() === MON_UNLOCK_CONTRACT.toLowerCase()), false);
+    assert.equal(
+      usdcReads.some((c) => c.toLowerCase() === "0x2222222222222222222222222222222222222222"),
+      true
+    );
+    assert.ok(usdcReads.some((c) => c.toLowerCase() === USDC_UNLOCK_CONTRACT.toLowerCase()));
+    assert.ok(usdcReads.some((c) => c.toLowerCase() === LEGACY_USDC_UNLOCK_CONTRACT.toLowerCase()));
+
+    const monReads = readContractsForAsset("mon", [USDC_UNLOCK_CONTRACT]);
+    assert.equal(monReads.some((c) => c.toLowerCase() === USDC_UNLOCK_CONTRACT.toLowerCase()), false);
+    assert.ok(monReads.some((c) => c.toLowerCase() === LEGACY_MON_UNLOCK_CONTRACT.toLowerCase()));
+
+    const primary = readContractsForPrimary(USDC_UNLOCK_CONTRACT);
+    assert.deepEqual(
+      primary.map((c) => c.toLowerCase()),
+      [USDC_UNLOCK_CONTRACT.toLowerCase(), LEGACY_USDC_UNLOCK_CONTRACT.toLowerCase()]
+    );
+    assert.deepEqual(readContractsForPrimary("0x3333333333333333333333333333333333333333"), [
+      "0x3333333333333333333333333333333333333333",
+    ]);
   });
 });
 
@@ -83,7 +116,7 @@ describe("publish signature", () => {
   it("verifies a wallet signature and rejects a body swap", async () => {
     const message = await buildPublishAuthMessage(fields);
     assert.ok(message.startsWith(PUBLISH_AUTH_PREFIX));
-    assert.match(message, /contract:0xd66df017335ae80bce5d4ec728421f3a3daf6f9f/);
+    assert.match(message, /contract:0xa27bb0c25d12de778ba135162ebae665593786b2/);
     const signature = await account.signMessage({ message });
     assert.equal(
       await verifyMessage({ address: account.address, message, signature }),

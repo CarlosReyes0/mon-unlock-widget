@@ -110,7 +110,7 @@ test("publish defaults to USDC $0.50 embed when paymentAsset and price omitted",
   assert.equal(body.price, "0.50");
   assert.match(body.embed, /payment-asset="usdc"/);
   assert.match(body.embed, /price="0\.50"/);
-  assert.match(body.embed, /unlock-contract="0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f"/);
+  assert.match(body.embed, /unlock-contract="0xa27bb0c25D12DE778bA135162ebAE665593786b2"/);
 
   const url = new URL(body.finishRegistrationUrl);
   assert.equal(url.searchParams.get("paymentAsset"), "usdc");

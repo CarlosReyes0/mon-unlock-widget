@@ -121,7 +121,7 @@ Copy `examples/embed.html` or use this block. **Only edit the parts in ALL CAPS:
   author="Your name"
   price="5"
   theme="light"
-  unlock-contract="0x27cA0c23835328e2Ab1424b66330be86fe177FA6"
+  unlock-contract="0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167"
   walletconnect-project-id="c2a289e11ad2998f8ea4633db536334c"
 >
   <div slot="teaser">

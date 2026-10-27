@@ -143,8 +143,8 @@ export function toPublicListing(row) {
       typeof row.unlock_contract === "string" && row.unlock_contract.trim()
         ? row.unlock_contract.trim()
         : paymentAsset === "usdc"
-          ? "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f"
-          : "0x27cA0c23835328e2Ab1424b66330be86fe177FA6",
+          ? "0xa27bb0c25D12DE778bA135162ebAE665593786b2"
+          : "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167",
     embedSig:
       typeof row.embed_sig === "string" && row.embed_sig.trim()
         ? row.embed_sig.trim()

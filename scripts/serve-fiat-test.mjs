@@ -105,5 +105,5 @@ const vite = await createViteServer({
 
 await vite.listen();
 const url =
-  "http://127.0.0.1:5173/unlock.html?articleId=the-quote-was-a-trap-939i9e&title=The%20Quote%20Was%20a%20Trap&price=0.50&contract=0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f&parentOrigin=http://127.0.0.1:5173&paymentAsset=usdc&returnUrl=http://127.0.0.1:5173/articles.html";
+  "http://127.0.0.1:5173/unlock.html?articleId=the-quote-was-a-trap-939i9e&title=The%20Quote%20Was%20a%20Trap&price=0.50&contract=0xa27bb0c25D12DE778bA135162ebAE665593786b2&parentOrigin=http://127.0.0.1:5173&paymentAsset=usdc&returnUrl=http://127.0.0.1:5173/articles.html";
 console.log("Fiat sandbox checkout: " + url);

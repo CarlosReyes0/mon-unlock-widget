@@ -12,6 +12,7 @@ import {
 } from "viem";
 import { monadMainnet } from "./chains.js";
 import { assertEmbedAuthorized, EmbedSignatureError } from "./embed-signature.js";
+import { readContractsForPrimary } from "./publish-auth.js";
 import { MONAD_USDC } from "./swap-usdc-to-mon.js";
 import type { Eip1193Provider } from "./wallet.js";
 import type { UnlockRecord } from "./types.js";
@@ -33,6 +34,20 @@ const HAS_UNLOCKED_ABI = [
   },
 ] as const;
 
+async function readHasUnlocked(
+  read: (contract: Address) => Promise<boolean>,
+  contracts: readonly string[]
+): Promise<boolean> {
+  for (const contract of contracts) {
+    try {
+      if (await read(contract as Address)) return true;
+    } catch {
+      /* try the legacy twin before treating the reader as locked */
+    }
+  }
+  return false;
+}
+
 /** Public-RPC hasUnlocked check (no wallet provider required). */
 export async function checkOnchainAccessViaRpc(params: {
   contractAddress: Address;
@@ -44,16 +59,17 @@ export async function checkOnchainAccessViaRpc(params: {
     chain: monadMainnet,
     transport: http(monadMainnet.rpcUrls.default.http[0]),
   });
-  try {
-    return (await publicClient.readContract({
-      address: params.contractAddress,
-      abi: HAS_UNLOCKED_ABI,
-      functionName: "hasUnlocked",
-      args: [params.wallet as Address, toArticleId(params.articleId)],
-    })) as boolean;
-  } catch {
-    return false;
-  }
+  const articleId = toArticleId(params.articleId);
+  return readHasUnlocked(
+    (contract) =>
+      publicClient.readContract({
+        address: contract,
+        abi: HAS_UNLOCKED_ABI,
+        functionName: "hasUnlocked",
+        args: [params.wallet as Address, articleId],
+      }) as Promise<boolean>,
+    readContractsForPrimary(params.contractAddress)
+  );
 }
 
 const STORAGE_KEY = "mon-unlock-widget";
@@ -149,19 +165,20 @@ export class OnchainUnlockService {
 
     const eth = this.getEthProvider();
     let unlocked = false;
+    const id = toArticleId(articleId);
 
     if (eth) {
       const publicClient = createPublicClient({ chain: this.chain, transport: custom(eth) });
-      try {
-        unlocked = (await publicClient.readContract({
-          address: this.contractAddress,
-          abi: HAS_UNLOCKED_ABI,
-          functionName: "hasUnlocked",
-          args: [wallet as Address, toArticleId(articleId)],
-        })) as boolean;
-      } catch {
-        unlocked = false;
-      }
+      unlocked = await readHasUnlocked(
+        (contract) =>
+          publicClient.readContract({
+            address: contract,
+            abi: HAS_UNLOCKED_ABI,
+            functionName: "hasUnlocked",
+            args: [wallet as Address, id],
+          }) as Promise<boolean>,
+        readContractsForPrimary(this.contractAddress)
+      );
     } else {
       // No injected provider (e.g. after Privy checkout on publisher page) — use public RPC.
       unlocked = await checkOnchainAccessViaRpc({

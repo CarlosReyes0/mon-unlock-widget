@@ -8,13 +8,13 @@ import {ArticleNFT} from "../src/ArticleNFT.sol";
 ///
 /// Env:
 ///   PRIVATE_KEY          deployer (becomes owner; can setBaseURI / unlock contracts)
-///   UNLOCK_MON           ArticleUnlock (native MON). Default: mainnet 0x27cA0c23835328e2Ab1424b66330be86fe177FA6
-///   UNLOCK_USDC          ArticleUnlockUsdc. Default: mainnet 0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f
+///   UNLOCK_MON           ArticleUnlock (native MON). Default: mainnet 0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167
+///   UNLOCK_USDC          ArticleUnlockUsdc. Default: mainnet 0xa27bb0c25D12DE778bA135162ebAE665593786b2
 ///   NFT_BASE_URI         metadata prefix, must end with /  e.g.
 ///                        https://openpaywall.app/api/article-nfts/metadata/
 contract DeployArticleNft is Script {
-    address constant MAINNET_UNLOCK_MON = 0x27cA0c23835328e2Ab1424b66330be86fe177FA6;
-    address constant MAINNET_UNLOCK_USDC = 0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f;
+    address constant MAINNET_UNLOCK_MON = 0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167;
+    address constant MAINNET_UNLOCK_USDC = 0xa27bb0c25D12DE778bA135162ebAE665593786b2;
 
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");

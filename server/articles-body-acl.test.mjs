@@ -103,7 +103,7 @@ test("article-body unlock paths read body with the service role key", () => {
   assert.match(edge, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(edge, /verifyReaderSessionToken/);
   assert.match(edge, /reader_session_required/);
-  assert.match(edge, /\.select\('article_id_hash, body'\)/);
+  assert.match(edge, /\.select\('article_id_hash, body, payment_asset'\)/);
   assert.match(railway, /includeBody/);
   assert.match(
     railway,

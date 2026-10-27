@@ -3,7 +3,8 @@
   "chainId": 143,
   "rpcUrl": "https://rpc.monad.xyz",
   "usdcToken": "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
-  "contract": "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f",
-  "status": "deployed",
-  "notes": "ArticleUnlockUsdc — publishers receive USDC. Leave MON ArticleUnlock (0x27cA0c…) live for existing embeds (path A)."
+  "notes": "ArticleUnlockUsdc with two-step ownership and a relayer role. Replaces 0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f (kept as legacy).",
+  "contract": "0xa27bb0c25D12DE778bA135162ebAE665593786b2",
+  "deployBlock": 116920874,
+  "status": "deployed"
 }
