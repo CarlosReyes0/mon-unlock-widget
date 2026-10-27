@@ -34,6 +34,14 @@ supabase/.branches/
 id_rsa
 id_ed25519
 *.keystore
+# Backup drill / age identity. Never commit these if they are generated in-tree.
+openpaywall-backup-identity.txt
+openpaywall-backup-deploy
+openpaywall-backup-deploy.pub
+
+# Python bytecode from local syntax checks
+__pycache__/
+*.pyc
 credentials.json
 client_secret*.json
 *service-account*.json
