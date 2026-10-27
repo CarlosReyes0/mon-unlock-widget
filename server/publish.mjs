@@ -3,6 +3,7 @@
  * Mirrors skills/mon-unlock-embed/embed.ts so OpenClaw and the HTTP API stay aligned.
  */
 import { createHash } from "node:crypto";
+import { assertPublisherNotBlocked } from "./blocked-publishers.mjs";
 import { keccak256, toBytes, parseEther, parseUnits } from "viem";
 
 export const CDN_BASE =
@@ -371,6 +372,7 @@ export async function publishArticleForAgent(raw) {
   }
 
   const { input } = validated;
+  assertPublisherNotBlocked(input.publisher);
   const paymentAsset = input.paymentAsset;
   // Reserve-on-create: claim the global slug in Supabase before on-chain register.
   const sync = await syncMetadataToSupabase(input);

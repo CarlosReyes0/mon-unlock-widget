@@ -23,6 +23,7 @@ import {
   toBytes,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { assertPublisherNotBlocked } from "./blocked-publishers.mjs";
 import {
   MAINNET_USDC_UNLOCK_CONTRACT,
   MONAD_CHAIN_ID,
@@ -348,6 +349,7 @@ export async function relayRegisterArticle(body, ctx = {}, deps = {}) {
   }
 
   const req = parseRelayRequest(body);
+  assertPublisherNotBlocked(req.publisher);
   const ip = String(ctx.ip || "unknown");
 
   const takeToken = deps.takeRateLimit ?? takeRateLimitToken;

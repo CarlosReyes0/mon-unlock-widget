@@ -7,6 +7,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifyMessage } from 'https://esm.sh/viem@2.57.7';
 import { parseArticlePriceCents, usdcAtomicForCents } from '../../../src/core/article-price.ts';
+import { isBlockedPublisher } from '../../../src/core/blocked-publishers.ts';
 import {
   buildListingAuthMessage,
   requestHasSecret,
@@ -71,6 +72,9 @@ Deno.serve(async (req) => {
     const publisherNorm = String(publisher).trim().toLowerCase();
     if (!/^0x[a-f0-9]{40}$/.test(publisherNorm)) {
       return new Response(JSON.stringify({ error: 'invalid_publisher' }), { status: 400, headers });
+    }
+    if (isBlockedPublisher(publisherNorm, Deno.env.get('BLOCKED_PUBLISHERS'))) {
+      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers });
     }
 
     let priceCents: number | undefined;

@@ -40,6 +40,13 @@ test("indexer rejects callers that do not present INDEXER_SECRET", () => {
   assert.match(edge, /x-indexer-secret/);
   assert.match(edge, /indexer_auth_not_configured/);
   assert.match(edge, /unauthorized/);
+  assert.match(edge, /BLOCKED_PUBLISHERS/);
+  assert.match(edge, /decideArticleRegistration/);
+  assert.match(edge, /registrationUpdatePatch/);
+  assert.match(read("src/core/indexer-registration.ts"), /from "\.\/blocked-publishers\.ts"/);
+  assert.doesNotMatch(read("src/core/indexer-registration.ts"), /blocked-publishers\.js/);
+  assert.match(edge, /PUBLISHER_LEFT_UNCHANGED_WARNING|decision\.warn/);
+  assert.doesNotMatch(edge, /update\(\{\s*publisher,/);
   assert.match(cron, /x-indexer-secret/);
   assert.match(cron, /INDEXER_SECRET is not set/);
   assert.match(docker, allowEnv);
@@ -62,6 +69,10 @@ test("register-article requires a publish signature or REGISTER_PUBLISH_SECRET",
   assert.match(edge, /buildPublishAuthMessage/);
   assert.match(edge, /unauthorized/);
   assert.match(edge, /shouldApplyListing/);
+  assert.match(edge, /BLOCKED_PUBLISHERS/);
+  assert.match(edge, /isBlockedPublisher/);
+  assert.match(edge, /Deno\.env\.get\('BLOCKED_PUBLISHERS'\)/);
+  assert.match(edge, /status: 403/);
   assert.match(write, /buildPublishAuthMessage/);
   assert.match(write, /publishSig/);
   assert.match(write, /listOnOpenPaywall: true/);
@@ -81,6 +92,10 @@ test("update-listing requires a listing signature or LISTING_ADMIN_SECRET", () =
   assert.match(edge, /buildListingAuthMessage/);
   assert.match(edge, /listingSig/);
   assert.match(edge, /unauthorized/);
+  assert.match(edge, /BLOCKED_PUBLISHERS/);
+  assert.match(edge, /isBlockedPublisher/);
+  assert.match(edge, /Deno\.env\.get\('BLOCKED_PUBLISHERS'\)/);
+  assert.match(edge, /status: 403/);
   assert.match(dashboard, /buildListingAuthMessage/);
   assert.match(dashboard, /listingSig/);
   assert.match(read(".env.example"), /INDEXER_SECRET=/);

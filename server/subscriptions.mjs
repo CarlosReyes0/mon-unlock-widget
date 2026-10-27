@@ -28,6 +28,7 @@ import {
   buildALaCarteAuthMessage,
   buildPlanAuthMessage,
 } from "./writer-mutation-auth.mjs";
+import { assertPublisherNotBlocked } from "./blocked-publishers.mjs";
 import { verifyMonadUsdcPayment } from "./crypto-subscription-payment.mjs";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
@@ -503,6 +504,7 @@ export async function createStripeSubscriptionCheckout(input) {
   const writer = normalizeAddress(input.writer);
   if (!reader) throw httpError("invalid_reader");
   if (!writer) throw httpError("invalid_writer");
+  assertPublisherNotBlocked(writer);
   if (reader === writer) throw httpError("cannot_subscribe_to_self");
 
   const live = await listLiveSubscriptions(reader, writer);

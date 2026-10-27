@@ -26,6 +26,9 @@ enabled = true
 # Shared secrets go in a dedicated header (x-indexer-secret, x-publish-secret,
 # x-listing-admin-secret). Do not put the secret in Authorization while
 # verify_jwt is true — the gateway rejects a non-JWT bearer before the function runs.
+# BLOCKED_PUBLISHERS is an optional comma-separated denylist. register-article,
+# update-listing, and indexer read it from the function env. Unset means no blocking.
+# Do not commit addresses in this file.
 
 [functions.indexer]
 verify_jwt = true # anon JWT at the gateway; INDEXER_SECRET via x-indexer-secret in the handler

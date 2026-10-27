@@ -14,6 +14,7 @@
  *   STRIPE_PAYOUT_CRON_SECRET — required to call the payout endpoints
  *   PAYOUTS_CRON_ENABLED — must be the string "true" or pending payouts are not sent
  *   PAYOUT_RETRY_SECRET — admin-only retry of failed rows; the cron never uses it
+ *   BLOCKED_PUBLISHERS — comma-separated wallets that cannot be the payee of a new card checkout
  *
  * The writer transfer is the queued sale minus the Stripe processing fee on that
  * charge (balance transaction fee), capped at what the platform netted. The
@@ -25,6 +26,7 @@ import { keccak256, toBytes } from "viem";
 import { authorizeFiatUnlock } from "./embed-signature.mjs";
 import { resolveUnlockChargeCents } from "./article-price.mjs";
 import { checkoutMethodVisibilityForAccount } from "./stripe-payment-methods.mjs";
+import { isBlockedPublisher } from "./blocked-publishers.mjs";
 import { assertConnectOnboardingAuth } from "./writer-mutation-auth.mjs";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
@@ -197,6 +199,11 @@ async function prepareArticleFiatCharge(input) {
   const amountUsdCents = priced.cents;
 
   const publisherKey = String(article.publisher).toLowerCase();
+  if (isBlockedPublisher(publisherKey)) {
+    const err = new Error("forbidden");
+    err.status = 403;
+    throw err;
+  }
   if (article.allow_a_la_carte === false) {
     const err = new Error("a_la_carte_disabled");
     err.status = 403;
@@ -570,7 +577,10 @@ export async function grantFiatUnlockFromIntent(intent) {
   }
 
   // Queued amount is the listed sale. Stripe's fee is deducted when the transfer is created.
-  if (amountCents > 0) {
+  // A reader who already paid still gets the unlock. No new payout row is
+  // queued when that article's publisher is on BLOCKED_PUBLISHERS.
+  // Pending and failed rows are left alone.
+  if (amountCents > 0 && !isBlockedPublisher(publisher)) {
     const payoutRow = {
       fiat_unlock_id: unlock.id,
       publisher,
@@ -717,6 +727,12 @@ export async function handleStripeWebhook(rawBody, signature) {
  * @param {{ publisher: string, refreshUrl: string, returnUrl: string, issuedAt?: string, connectSig?: string }} input
  */
 export async function createConnectOnboardingLink(input) {
+  const publisherPreview = String(input?.publisher || "").trim().toLowerCase();
+  if (isBlockedPublisher(publisherPreview)) {
+    const err = new Error("forbidden");
+    err.status = 403;
+    throw err;
+  }
   await assertConnectOnboardingAuth({
     publisher: input.publisher,
     issuedAt: input.issuedAt,

@@ -170,7 +170,7 @@ describe("subscription sale before tax", () => {
 
 test("processing fee migration is additive and does not touch payout rows", () => {
   const sql = fs.readFileSync(
-    path.join(ROOT, "supabase/migrations/0019_payout_processing_fee.sql"),
+    path.join(ROOT, "supabase/migrations/20261027053000_payout_processing_fee.sql"),
     "utf8"
   );
   assert.match(sql, /NOT APPLIED to production/);

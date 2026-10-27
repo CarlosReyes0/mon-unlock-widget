@@ -22,6 +22,7 @@
  * in server/.
  */
 import { recoverMessageAddress } from "viem";
+import { assertPublisherNotBlocked } from "./blocked-publishers.mjs";
 import { issuedAtFresh } from "./follow-core.mjs";
 
 export const PLAN_AUTH_PREFIX = "Open Paywall plan v1";
@@ -124,6 +125,7 @@ export async function assertPublisherSignature(publisher, message, signature) {
  * @param {number} [now]
  */
 export async function assertWriterMutationSignature(input, now = Date.now()) {
+  assertPublisherNotBlocked(input?.publisher);
   const signature = typeof input?.signature === "string" ? input.signature.trim() : "";
   if (!signature) throw httpError("unauthorized", 401);
   if (!issuedAtFresh(input?.issuedAt, now)) throw httpError("stale_signature", 401);
@@ -139,6 +141,7 @@ export async function assertWriterMutationSignature(input, now = Date.now()) {
  */
 export async function assertConnectOnboardingAuth(input, now = Date.now()) {
   const publisher = asText(input?.publisher).trim().toLowerCase();
+  assertPublisherNotBlocked(publisher);
   const issuedAt = asText(input?.issuedAt).trim();
   if (!connectIssuedAtFresh(issuedAt, now)) throw httpError("unauthorized", 401);
   const message = buildConnectAuthMessage({ publisher, issuedAt });
