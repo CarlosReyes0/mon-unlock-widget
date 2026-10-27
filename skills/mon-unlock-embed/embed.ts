@@ -15,7 +15,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 export const CDN_BASE = "https://openpaywall.app";
-export const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+export const MAINNET_CONTRACT = "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167";
 export const WIDGET_VERSION = "20240714";
 export const WC_PROJECT_ID = "c2a289e11ad2998f8ea4633db536334c";
 export const REGISTER_ARTICLE_URL =

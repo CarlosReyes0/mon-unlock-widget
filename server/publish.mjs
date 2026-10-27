@@ -9,12 +9,12 @@ export const CDN_BASE =
   process.env.CDN_BASE || "https://openpaywall.app";
 /** Legacy native-MON unlock contract (kept live — path A). */
 export const MAINNET_MON_CONTRACT =
-  process.env.UNLOCK_CONTRACT || "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+  process.env.UNLOCK_CONTRACT || "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167";
 /** @deprecated use MAINNET_MON_CONTRACT */
 export const MAINNET_CONTRACT = MAINNET_MON_CONTRACT;
 /** ArticleUnlockUsdc on Monad mainnet. */
 export const MAINNET_USDC_CONTRACT =
-  process.env.USDC_UNLOCK_CONTRACT || "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+  process.env.USDC_UNLOCK_CONTRACT || "0xa27bb0c25D12DE778bA135162ebAE665593786b2";
 /** Circle USDC on Monad mainnet. */
 export const MONAD_USDC_TOKEN = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603";
 export const WIDGET_VERSION = process.env.WIDGET_VERSION || "20240714";

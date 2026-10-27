@@ -24,9 +24,9 @@ export const FOLLOWERS_EXPORT_AUTH_PREFIX = "Open Paywall followers export v1";
 export const MONAD_CHAIN_ID = 143;
 
 /** ArticleUnlock (native MON) used by current embeds. Replace at cutover; do not edit LEGACY_ below. */
-export const MON_UNLOCK_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+export const MON_UNLOCK_CONTRACT = "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167";
 /** ArticleUnlockUsdc on Monad mainnet. Replace at cutover; do not edit LEGACY_ below. */
-export const USDC_UNLOCK_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+export const USDC_UNLOCK_CONTRACT = "0xa27bb0c25D12DE778bA135162ebAE665593786b2";
 
 /**
  * Unlock contracts that stay readable after a cutover.

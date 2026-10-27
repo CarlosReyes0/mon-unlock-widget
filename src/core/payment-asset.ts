@@ -17,12 +17,12 @@ export const MAINNET_USDC_UNLOCK_CONTRACT: string = (
     typeof import.meta.env.VITE_USDC_UNLOCK_CONTRACT === "string"
       ? import.meta.env.VITE_USDC_UNLOCK_CONTRACT.trim()
       : ""
-  ) || "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f"
+  ) || "0xa27bb0c25D12DE778bA135162ebAE665593786b2"
 );
 
 /** Legacy native-MON unlock contract (kept live — path A). */
 export const MAINNET_MON_UNLOCK_CONTRACT =
-  "0x27cA0c23835328e2Ab1424b66330be86fe177FA6" as const;
+  "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167" as const;
 
 export function normalizePaymentAsset(value: string | null | undefined): PaymentAsset {
   const v = (value ?? "").trim().toLowerCase();

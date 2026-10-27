@@ -9,7 +9,7 @@ import { requestHasSecret } from "../../../src/core/publish-auth.ts";
 
 const MON_CONTRACT = (Deno.env.get("CONTRACT_ADDRESS") || "") as `0x${string}`;
 const USDC_CONTRACT = (Deno.env.get("USDC_CONTRACT_ADDRESS") ||
-  "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f") as `0x${string}`;
+  "0xa27bb0c25D12DE778bA135162ebAE665593786b2") as `0x${string}`;
 const LEGACY_MON_CONTRACT = (Deno.env.get("LEGACY_CONTRACT_ADDRESS") || "") as `0x${string}`;
 const LEGACY_USDC_CONTRACT = (Deno.env.get("LEGACY_USDC_CONTRACT_ADDRESS") || "") as `0x${string}`;
 const RPC_URL = Deno.env.get("RPC_URL") || "https://rpc.monad.xyz";

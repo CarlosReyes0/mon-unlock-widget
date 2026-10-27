@@ -11,10 +11,10 @@ export const EMBED_SIG_PREFIX = "MON Unlock v1";
 export const EMBED_SIG_PREFIX_OPENPAYWALL = "Open Paywall v1";
 export const EMBED_SIG_PREFIXES = [EMBED_SIG_PREFIX, EMBED_SIG_PREFIX_OPENPAYWALL];
 export const MAINNET_UNLOCK_CONTRACT =
-  "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+  "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167";
 /** USDC ArticleUnlockUsdc — same allowlist as widget payment-asset helpers. */
 export const MAINNET_USDC_UNLOCK_CONTRACT =
-  "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+  "0xa27bb0c25D12DE778bA135162ebAE665593786b2";
 /** Pre-cutover contracts. Leave these in place when the primaries above change. */
 export const LEGACY_UNLOCK_CONTRACT =
   "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";

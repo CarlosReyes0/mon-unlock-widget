@@ -100,7 +100,7 @@ Path A: keep the native MON `ArticleUnlock` live for existing embeds. Deploy `Ar
 
 Use `script/DeployUnlock.s.sol` (see Deploy above). `USDC_TOKEN` defaults to Circle USDC `0x754704Bc059F8C67012fEd69BC8A327a5aafb603`.
 
-Mainnet deploy: `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f` (wired as the app/indexer default).
+Mainnet deploy: `0xa27bb0c25D12DE778bA135162ebAE665593786b2` (wired as the app/indexer default). The earlier deploy `0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f` stays readable for past unlocks.
 Override with `VITE_USDC_UNLOCK_CONTRACT` / `USDC_CONTRACT_ADDRESS` for forks.
 Publishers receive USDC; readers only need a tiny MON balance for gas.
 

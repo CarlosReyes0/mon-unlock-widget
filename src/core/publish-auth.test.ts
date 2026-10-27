@@ -59,7 +59,7 @@ describe("unlock contract allowlist", () => {
     assert.equal(isAllowedUnlockContract("0x0000000000000000000000000000000000000001"), false);
     assert.equal(isAllowedUnlockContract(""), false);
     const extra = allowedUnlockContracts(["0x1111111111111111111111111111111111111111"]);
-    assert.equal(extra.length, 3);
+    assert.equal(extra.length, 5);
     assert.equal(
       isAllowedUnlockContract("0x1111111111111111111111111111111111111111", [
         "0x1111111111111111111111111111111111111111",
@@ -90,7 +90,7 @@ describe("unlock contract allowlist", () => {
     const primary = readContractsForPrimary(USDC_UNLOCK_CONTRACT);
     assert.deepEqual(
       primary.map((c) => c.toLowerCase()),
-      [USDC_UNLOCK_CONTRACT.toLowerCase()]
+      [USDC_UNLOCK_CONTRACT.toLowerCase(), LEGACY_USDC_UNLOCK_CONTRACT.toLowerCase()]
     );
     assert.deepEqual(readContractsForPrimary("0x3333333333333333333333333333333333333333"), [
       "0x3333333333333333333333333333333333333333",
@@ -116,7 +116,7 @@ describe("publish signature", () => {
   it("verifies a wallet signature and rejects a body swap", async () => {
     const message = await buildPublishAuthMessage(fields);
     assert.ok(message.startsWith(PUBLISH_AUTH_PREFIX));
-    assert.match(message, /contract:0xd66df017335ae80bce5d4ec728421f3a3daf6f9f/);
+    assert.match(message, /contract:0xa27bb0c25d12de778ba135162ebae665593786b2/);
     const signature = await account.signMessage({ message });
     assert.equal(
       await verifyMessage({ address: account.address, message, signature }),

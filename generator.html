@@ -528,9 +528,9 @@
       }
 
       const CDN_BASE = "https://openpaywall.app";
-      const MAINNET_CONTRACT = "0x27cA0c23835328e2Ab1424b66330be86fe177FA6";
+      const MAINNET_CONTRACT = "0x31282ceFbC656CA8DbCFf1398906a1AEF81Af167";
       // ArticleUnlockUsdc on Monad mainnet (override via window / localStorage for forks)
-      const MAINNET_USDC_CONTRACT = "0xd66Df017335ae80BcE5d4Ec728421f3a3DAf6f9f";
+      const MAINNET_USDC_CONTRACT = "0xa27bb0c25D12DE778bA135162ebAE665593786b2";
       const USDC_UNLOCK_CONTRACT = (window.__USDC_UNLOCK_CONTRACT__ || localStorage.getItem("usdcUnlockContract") || MAINNET_USDC_CONTRACT).trim();
       const MONAD_USDC = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603";
       function selectedAsset() {
