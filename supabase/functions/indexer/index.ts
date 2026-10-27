@@ -5,6 +5,10 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createPublicClient, http, parseAbiItem } from "https://esm.sh/viem@2.57.7";
+import {
+  decideArticleRegistration,
+  registrationUpdatePatch,
+} from "../../../src/core/indexer-registration.ts";
 import { requestHasSecret } from "../../../src/core/publish-auth.ts";
 
 const MON_CONTRACT = (Deno.env.get("CONTRACT_ADDRESS") || "") as `0x${string}`;
@@ -49,23 +53,35 @@ async function upsertArticle(log: any, paymentAsset: PaymentAsset) {
   const publisher = (log.args.publisher as string).toLowerCase();
   const priceWei = log.args.priceWei.toString();
 
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from("articles")
-    .select("id")
+    .select("id, publisher")
     .eq("article_id_hash", articleIdHash)
     .maybeSingle();
+  if (lookupError) throw new Error(`Lookup article failed: ${lookupError.message}`);
 
-  if (existing) {
+  const decision = decideArticleRegistration({
+    rowExists: Boolean(existing),
+    existingPublisher: existing?.publisher,
+    eventPublisher: publisher,
+    blockedList: Deno.env.get("BLOCKED_PUBLISHERS"),
+  });
+  if (decision.action === "skip") {
+    if (decision.warn) console.warn(decision.warn);
+    return;
+  }
+
+  if (decision.action === "update") {
+    const patch = registrationUpdatePatch({
+      existingPublisher: existing?.publisher,
+      eventPublisher: publisher,
+      priceWei,
+      paymentAsset,
+      now: new Date().toISOString(),
+    });
     const { error } = await supabase
       .from("articles")
-      .update({
-        publisher,
-        price_wei: priceWei,
-        payment_asset: paymentAsset,
-        active: true,
-        registration_status: "registered",
-        updated_at: new Date().toISOString(),
-      })
+      .update(patch)
       .eq("article_id_hash", articleIdHash);
     if (error) throw new Error(`Update article failed: ${error.message}`);
     return;

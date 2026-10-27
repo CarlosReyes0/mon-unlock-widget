@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { publicOrigin } from "./article-og.mjs";
 import { takePersistentRateLimit } from "./rate-limit.mjs";
 import { resolveRequestReaderSession } from "./reader-session.mjs";
+import { isBlockedPublisher } from "./blocked-publishers.mjs";
 import {
   assertRecentWalletSignature,
   buildMediaAuthMessage,
@@ -398,7 +399,9 @@ async function authorizeMediaUpload(req) {
     } catch {
       throw mediaError("unauthorized", 401, "Sign in to upload.");
     }
-    return address.toLowerCase();
+    const wallet = address.toLowerCase();
+    if (isBlockedPublisher(wallet)) throw mediaError("forbidden", 403, "forbidden");
+    return wallet;
   }
   let session = null;
   try {
@@ -407,6 +410,7 @@ async function authorizeMediaUpload(req) {
     throw mediaError("unauthorized", 401, "Sign in to upload.");
   }
   if (!session?.address) throw mediaError("unauthorized", 401, "Sign in to upload.");
+  if (isBlockedPublisher(session.address)) throw mediaError("forbidden", 403, "forbidden");
   return session.address;
 }
 

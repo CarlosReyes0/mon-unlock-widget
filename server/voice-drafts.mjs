@@ -23,6 +23,7 @@
  */
 import { ARTICLE_BODY_LIMIT, readLimitedBody } from "./body-limit.mjs";
 import { takePersistentRateLimit } from "./rate-limit.mjs";
+import { isBlockedPublisher } from "./blocked-publishers.mjs";
 import { resolveRequestReaderSession } from "./reader-session.mjs";
 import {
   assertRecentWalletSignature,
@@ -55,7 +56,13 @@ async function authorizeVoiceDraft(req, parsed) {
   if (signature || issuedAt || address) {
     const message = buildVoiceAuthMessage({ address, issuedAt });
     await assertRecentWalletSignature({ address, issuedAt, signature, message });
-    return address.toLowerCase();
+    const wallet = address.toLowerCase();
+    if (isBlockedPublisher(wallet)) {
+      const err = new Error("forbidden");
+      err.status = 403;
+      throw err;
+    }
+    return wallet;
   }
   let session = null;
   try {
@@ -68,6 +75,11 @@ async function authorizeVoiceDraft(req, parsed) {
   if (!session?.address) {
     const err = new Error("unauthorized");
     err.status = 401;
+    throw err;
+  }
+  if (isBlockedPublisher(session.address)) {
+    const err = new Error("forbidden");
+    err.status = 403;
     throw err;
   }
   return session.address;
@@ -565,12 +577,13 @@ export async function tryHandleVoiceDraftRequest(req, res) {
     try {
       signer = await authorizeVoiceDraft(req, parsed);
     } catch (e) {
-      sendJson(res, e?.status || 401, {
+      const blocked = e?.status === 403;
+      sendJson(res, blocked ? 403 : e?.status || 401, {
         ok: false,
-        code: "unauthorized",
+        code: blocked ? "forbidden" : "unauthorized",
         draftsOnly: true,
         autopost: false,
-        message: "Sign in to draft posts. Nothing was posted.",
+        message: blocked ? "forbidden" : "Sign in to draft posts. Nothing was posted.",
       });
       return true;
     }
