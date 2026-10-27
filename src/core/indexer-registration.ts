@@ -3,7 +3,7 @@
  * A blocked publisher is ignored. An existing row keeps its publisher when
  * the event names a different wallet.
  */
-import { isBlockedPublisher } from "./blocked-publishers.js";
+import { isBlockedPublisher } from "./blocked-publishers.ts";
 
 export const REGISTRATION_IGNORED_WARNING = "indexer: registration event ignored";
 export const PUBLISHER_LEFT_UNCHANGED_WARNING =
