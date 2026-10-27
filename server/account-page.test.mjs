@@ -23,6 +23,7 @@ test("account page is You + Get paid, no wallet address", () => {
   assert.match(app, /Get paid/);
   assert.match(app, /Connect payments/);
   assert.match(app, /then money goes to your bank/);
+  assert.match(app, /Stripe's fee is deducted/);
   assert.match(app, /goes to the wallet you are signed in with/);
   assert.doesNotMatch(app, /USDC wallet/);
   assert.doesNotMatch(app, /USDC is on/);

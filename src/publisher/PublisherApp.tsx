@@ -390,7 +390,7 @@ export function PublisherApp() {
             <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
               <h2 className="mon-pub-shell__card-title">Get paid</h2>
               <p className="mon-pub-auth__hint">
-                Card: connect payments, then money goes to your bank.
+                Card: connect payments, then money goes to your bank. Stripe's fee is deducted.
               </p>
               <p className="mon-pub-auth__hint">
                 USDC: a reader pays, it goes to the wallet you are signed in with. Automatic. No extra

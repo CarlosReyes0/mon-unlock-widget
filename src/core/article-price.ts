@@ -1,7 +1,8 @@
 /**
  * Per-article USD price for Write, publish, and listing edits.
  * Stripe's USD minimum is $0.50. There is no product maximum.
- * Card net is an estimate: price − (2.9% + $0.30). USDC net is the price.
+ * The card figure estimates 2.9% + $0.30 so a writer can pick a price.
+ * The payout deducts Stripe's fee on that charge, not this estimate. USDC net is the price.
  */
 
 export const MIN_ARTICLE_PRICE_CENTS = 50;
@@ -68,7 +69,7 @@ export function cardNetCents(priceCents: number): number {
 }
 
 export function priceNetLine(priceCents: number): string {
-  return `Card: you get ~${formatUsdFromCents(cardNetCents(priceCents))} · USDC: ~${formatUsdFromCents(priceCents)}`;
+  return `Card: you get ~${formatUsdFromCents(cardNetCents(priceCents))} after Stripe's fee · USDC: ~${formatUsdFromCents(priceCents)}`;
 }
 
 export function needsHighPriceConfirm(cents: number): boolean {

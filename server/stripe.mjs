@@ -11,11 +11,14 @@
  *   STRIPE_WEBHOOK_SECRET
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
- *   STRIPE_PLATFORM_FEE_BPS (optional, default 0)
  *   STRIPE_PAYOUT_CRON_SECRET — required to call the payout endpoints
  *   PAYOUTS_CRON_ENABLED — must be the string "true" or pending payouts are not sent
  *   PAYOUT_RETRY_SECRET — admin-only retry of failed rows; the cron never uses it
  *   BLOCKED_PUBLISHERS — comma-separated wallets that cannot be the payee of a new card checkout
+ *
+ * The writer transfer is the queued sale minus the Stripe processing fee on that
+ * charge (balance transaction fee), capped at what the platform netted. The
+ * platform does not add a cut. The fee is read at payout time, not estimated.
  */
 import Stripe from "stripe";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -30,7 +33,6 @@ const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-const PLATFORM_FEE_BPS = Math.max(0, Number(process.env.STRIPE_PLATFORM_FEE_BPS || "0") || 0);
 
 /** @type {Stripe | null} */
 let stripeSingleton = null;
@@ -574,17 +576,15 @@ export async function grantFiatUnlockFromIntent(intent) {
     throw err;
   }
 
-  const fee = Math.floor((amountCents * PLATFORM_FEE_BPS) / 10_000);
-  const payoutCents = Math.max(0, amountCents - fee);
-
+  // Queued amount is the listed sale. Stripe's fee is deducted when the transfer is created.
   // A reader who already paid still gets the unlock. No new payout row is
   // queued when that article's publisher is on BLOCKED_PUBLISHERS.
   // Pending and failed rows are left alone.
-  if (payoutCents > 0 && !isBlockedPublisher(publisher)) {
+  if (amountCents > 0 && !isBlockedPublisher(publisher)) {
     const payoutRow = {
       fiat_unlock_id: unlock.id,
       publisher,
-      amount_cents: payoutCents,
+      amount_cents: amountCents,
       currency: "usd",
       status: "pending",
     };
@@ -832,16 +832,189 @@ async function selectPayoutJobs(status, limit) {
   }
 }
 
+/** Stripe Transfer `amount` must be a positive integer in the smallest currency unit. */
+export const MIN_STRIPE_TRANSFER_CENTS = 1;
+
+const PAYOUT_FEE_COLUMNS = ["stripe_fee_cents", "net_cents"];
+let payoutFeeColumns = true;
+
+/** @param {unknown} value */
+function integerCents(value) {
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value === "string" && /^-?\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function sameMoneyCurrency(a, b) {
+  const left = String(a || "").trim().toLowerCase();
+  const right = String(b || "").trim().toLowerCase();
+  return left !== "" && left === right;
+}
+
+/**
+ * Writer transfer for one card sale.
+ * `saleCents` is the queued sale (listed price, not tax).
+ * `feeCents` is that charge's balance transaction fee.
+ * `platformNetCents` is what the platform still holds from the charge.
+ * The result is sale minus that fee, and never above the platform net or the charge.
+ * @param {{
+ *   saleCents: number,
+ *   feeCents: number,
+ *   platformNetCents: number,
+ *   chargeCents?: number | null,
+ *   minimumCents?: number,
+ * }} input
+ */
+export function writerCardTransferCents(input) {
+  const sale = integerCents(input.saleCents);
+  const fee = integerCents(input.feeCents);
+  const platformNet = integerCents(input.platformNetCents);
+  const minimum = integerCents(input.minimumCents ?? MIN_STRIPE_TRANSFER_CENTS);
+  if (
+    sale == null ||
+    sale <= 0 ||
+    fee == null ||
+    fee < 0 ||
+    platformNet == null ||
+    minimum == null ||
+    minimum < 1
+  ) {
+    return { ok: false, reason: "invalid_amounts" };
+  }
+  /** @type {number[]} */
+  const caps = [sale - fee, platformNet, sale];
+  const charge = integerCents(input.chargeCents);
+  if (charge != null && charge >= 0) caps.push(charge);
+  const raw = Math.min(...caps);
+  const netCents = raw > 0 ? raw : 0;
+  if (raw < minimum) {
+    return {
+      ok: true,
+      action: "skip",
+      transferCents: netCents,
+      feeCents: fee,
+      netCents,
+      reason: raw <= 0 ? "net_non_positive" : "below_minimum_transfer",
+    };
+  }
+  return {
+    ok: true,
+    action: "transfer",
+    transferCents: raw,
+    feeCents: fee,
+    netCents: raw,
+    reason: null,
+  };
+}
+
+/**
+ * Settlement for a payout from the charge's balance transaction.
+ * A missing balance transaction is not ready yet — callers leave the job pending.
+ * A currency that is not the payout currency is skipped; we do not estimate a conversion.
+ * @param {object | null | undefined} charge
+ * @param {number} saleCents
+ * @param {string} [payoutCurrency]
+ */
+export function settlementFromCharge(charge, saleCents, payoutCurrency = "usd") {
+  const bt = charge?.balance_transaction;
+  if (!bt || typeof bt !== "object") {
+    return { ready: false, reason: "processing_fee_unavailable" };
+  }
+  const payout = String(payoutCurrency || "usd").toLowerCase();
+  if (
+    !sameMoneyCurrency(bt.currency, payout) ||
+    (charge.currency && !sameMoneyCurrency(charge.currency, bt.currency))
+  ) {
+    return {
+      ready: true,
+      action: "skip",
+      transferCents: 0,
+      feeCents: null,
+      netCents: null,
+      reason: "fee_currency_mismatch",
+    };
+  }
+  const fee = integerCents(bt.fee);
+  const net = integerCents(bt.net);
+  if (fee == null || fee < 0 || net == null) {
+    return { ready: false, reason: "processing_fee_unavailable" };
+  }
+  if (charge.refunded === true || charge.disputed === true) {
+    return {
+      ready: true,
+      action: "skip",
+      transferCents: 0,
+      feeCents: fee,
+      netCents: 0,
+      reason: "not_payable",
+    };
+  }
+  let platformNet = net;
+  const refunded = integerCents(charge.amount_refunded);
+  if (refunded != null && refunded > 0) platformNet -= refunded;
+  const decision = writerCardTransferCents({
+    saleCents,
+    feeCents: fee,
+    platformNetCents: platformNet,
+    chargeCents: integerCents(charge.amount),
+  });
+  if (!decision.ok) return { ready: false, reason: decision.reason };
+  return { ready: true, ...decision };
+}
+
+function recordedWriterNet(job) {
+  const net = integerCents(job?.net_cents);
+  const fee = integerCents(job?.stripe_fee_cents);
+  if (net == null || net < 0 || fee == null || fee < 0) return null;
+  return { netCents: net, feeCents: fee };
+}
+
+function withoutFeeColumns(patch) {
+  const copy = { ...patch };
+  for (const column of PAYOUT_FEE_COLUMNS) delete copy[column];
+  return copy;
+}
+
+function feeAuditPatch(settlement) {
+  /** @type {Record<string, number>} */
+  const patch = {};
+  if (Number.isInteger(settlement.feeCents) && settlement.feeCents >= 0) {
+    patch.stripe_fee_cents = settlement.feeCents;
+  }
+  if (Number.isInteger(settlement.netCents) && settlement.netCents >= 0) {
+    patch.net_cents = settlement.netCents;
+  }
+  return patch;
+}
+
+/** Test isolation. Production leaves the schema probe latched after the first miss. */
+export function resetPayoutColumnSupportForTests() {
+  payoutFeeColumns = true;
+  payoutChargeColumn = true;
+}
+
 async function transitionPayout(id, fromStatus, patch) {
-  const rows = await supabase(
-    `payout_jobs?id=eq.${encodeURIComponent(id)}&status=eq.${encodeURIComponent(fromStatus)}`,
-    {
-      method: "PATCH",
-      headers: { Prefer: "return=representation" },
-      body: { ...patch, updated_at: new Date().toISOString() },
+  const body = payoutFeeColumns ? patch : withoutFeeColumns(patch);
+  try {
+    const rows = await supabase(
+      `payout_jobs?id=eq.${encodeURIComponent(id)}&status=eq.${encodeURIComponent(fromStatus)}`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: { ...body, updated_at: new Date().toISOString() },
+      }
+    );
+    return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  } catch (e) {
+    if (payoutFeeColumns && PAYOUT_FEE_COLUMNS.some((column) => isUnknownColumn(e, column))) {
+      payoutFeeColumns = false;
+      return transitionPayout(id, fromStatus, patch);
     }
-  );
-  return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+    throw e;
+  }
 }
 
 async function claimPayout(id, fromStatus) {
@@ -975,6 +1148,64 @@ export async function markUnlockNotPayable({ paymentIntentId, chargeId, status }
   return { skipped };
 }
 
+async function loadChargeSettlement(stripe, chargeId, saleCents, currency) {
+  const charge = await stripe.charges.retrieve(chargeId, {
+    expand: ["balance_transaction"],
+  });
+  if (typeof charge?.balance_transaction === "string") {
+    charge.balance_transaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction);
+  }
+  return settlementFromCharge(charge, saleCents, currency);
+}
+
+/**
+ * Pending rows use the charge's real fee. A failed row that never recorded a fee
+ * keeps the amount already sent with its idempotency key.
+ * @param {object} claimed
+ * @param {import("stripe").Stripe} stripe
+ * @param {string} chargeId
+ * @param {string} fromStatus
+ */
+async function resolveTransferAmount(claimed, stripe, chargeId, fromStatus) {
+  const saleCents = integerCents(claimed.amount_cents);
+  if (saleCents == null || saleCents <= 0) {
+    return { action: "skip", reason: "invalid_amounts", patch: {} };
+  }
+  const recorded = recordedWriterNet(claimed);
+  if (fromStatus === "failed" && !recorded) {
+    return { action: "transfer", transferCents: saleCents, patch: {} };
+  }
+  if (recorded) {
+    if (recorded.netCents < MIN_STRIPE_TRANSFER_CENTS) {
+      return {
+        action: "skip",
+        reason: recorded.netCents <= 0 ? "net_non_positive" : "below_minimum_transfer",
+        patch: { stripe_fee_cents: recorded.feeCents, net_cents: recorded.netCents },
+      };
+    }
+    return {
+      action: "transfer",
+      transferCents: recorded.netCents,
+      patch: { stripe_fee_cents: recorded.feeCents, net_cents: recorded.netCents },
+    };
+  }
+  let settlement;
+  try {
+    settlement = await loadChargeSettlement(stripe, chargeId, saleCents, claimed.currency || "usd");
+  } catch {
+    return { action: "pending", reason: "processing_fee_unavailable", patch: {} };
+  }
+  if (!settlement.ready) {
+    return { action: "pending", reason: settlement.reason || "processing_fee_unavailable", patch: {} };
+  }
+  return {
+    action: settlement.action,
+    transferCents: settlement.transferCents,
+    reason: settlement.reason,
+    patch: feeAuditPatch(settlement),
+  };
+}
+
 async function settlePayoutJob(job, stripe, counts, fromStatus) {
   const claimed = await claimPayout(job.id, fromStatus);
   if (!claimed) {
@@ -1046,9 +1277,47 @@ async function settlePayoutJob(job, stripe, counts, fromStatus) {
       return;
     }
 
+    let decision;
+    try {
+      decision = await resolveTransferAmount(claimed, stripe, chargeId, fromStatus);
+      if (decision.action === "pending") {
+        await transitionPayout(claimed.id, "processing", { status: "pending", error: decision.reason });
+        counts.pending++;
+        return;
+      }
+      if (decision.action !== "transfer") {
+        const skipped = await transitionPayout(claimed.id, "processing", {
+          status: "skipped",
+          error: decision.reason || "net_non_positive",
+          ...decision.patch,
+        });
+        if (skipped) counts.skipped++;
+        else counts.not_claimed++;
+        return;
+      }
+      if (decision.patch && Object.keys(decision.patch).length > 0) {
+        const noted = await transitionPayout(claimed.id, "processing", decision.patch);
+        if (!noted) {
+          counts.not_claimed++;
+          return;
+        }
+      }
+    } catch (e) {
+      // A failure before the transfer must not mark a pending row failed.
+      // Failed rows are retried at their original amount when no net was recorded.
+      if (fromStatus === "failed") throw e;
+      const released = await transitionPayout(claimed.id, "processing", {
+        status: "pending",
+        error: "processing_fee_unavailable",
+      }).catch(() => null);
+      if (released) counts.pending++;
+      else counts.not_claimed++;
+      return;
+    }
+
     const transfer = await stripe.transfers.create(
       {
-        amount: claimed.amount_cents,
+        amount: decision.transferCents,
         currency: claimed.currency || "usd",
         destination: account.stripe_account_id,
         source_transaction: chargeId,

@@ -22,6 +22,7 @@ const INTENT = "pi_test_synthetic";
 const ACCOUNT = "acct_test_synthetic";
 const TRANSFER = "tr_test_synthetic";
 const FIXTURE_CENTS = 4242;
+const FEE_CENTS = 153;
 const CRON_SECRET = "test-cron-secret";
 const RETRY_SECRET = "test-retry-secret";
 
@@ -35,6 +36,17 @@ const reversals = [];
 const payoutPatches = [];
 let failTransfer = false;
 let flipOnTransfer = false;
+let rejectFeeColumns = false;
+const chargeState = {
+  fee: FEE_CENTS,
+  net: null,
+  amount: null,
+  currency: "usd",
+  refunded: 0,
+  fullyRefunded: false,
+  disputed: false,
+  balanceTransaction: true,
+};
 let serverLog = "";
 let child;
 
@@ -99,6 +111,16 @@ function matches(row, params) {
 function reset() {
   failTransfer = false;
   flipOnTransfer = false;
+  rejectFeeColumns = false;
+  chargeState.fee = FEE_CENTS;
+  chargeState.net = null;
+  chargeState.amount = null;
+  chargeState.currency = "usd";
+  chargeState.refunded = 0;
+  chargeState.fullyRefunded = false;
+  chargeState.disputed = false;
+  chargeState.balanceTransaction = true;
+  api.resetPayoutColumnSupportForTests();
   transfers.length = 0;
   reversals.length = 0;
   payoutPatches.length = 0;
@@ -160,6 +182,17 @@ const supabase = http.createServer(async (req, res) => {
     payoutPatches.push(url.search);
     await new Promise((resolve) => setTimeout(resolve, 15));
     const body = raw ? JSON.parse(raw) : {};
+    if (
+      rejectFeeColumns &&
+      (Object.prototype.hasOwnProperty.call(body, "stripe_fee_cents") ||
+        Object.prototype.hasOwnProperty.call(body, "net_cents"))
+    ) {
+      sendJson(res, 400, {
+        message: "Could not find the 'stripe_fee_cents' column of 'payout_jobs' in the schema cache",
+        code: "PGRST204",
+      });
+      return;
+    }
     const matched = [];
     for (const job of state.jobs) {
       if (!matches(job, url.searchParams)) continue;
@@ -223,6 +256,49 @@ const stripe = http.createServer(async (req, res) => {
       id: INTENT,
       object: "payment_intent",
       latest_charge: LOOKUP_CHARGE,
+    });
+    return;
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/v1/charges/")) {
+    const amount = chargeState.amount ?? FIXTURE_CENTS;
+    const fee = chargeState.fee;
+    const net = chargeState.net ?? amount - fee;
+    const balance =
+      chargeState.balanceTransaction === false
+        ? null
+        : chargeState.balanceTransaction === "id"
+          ? "txn_test_synthetic"
+          : {
+              id: "txn_test_synthetic",
+              object: "balance_transaction",
+              amount,
+              fee,
+              net,
+              currency: chargeState.currency,
+            };
+    sendJson(res, 200, {
+      id: url.pathname.split("/").pop(),
+      object: "charge",
+      amount,
+      currency: chargeState.currency,
+      amount_refunded: chargeState.refunded,
+      refunded: chargeState.fullyRefunded,
+      disputed: chargeState.disputed,
+      balance_transaction: balance,
+    });
+    return;
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/v1/balance_transactions/")) {
+    const amount = chargeState.amount ?? FIXTURE_CENTS;
+    const fee = chargeState.fee;
+    const net = chargeState.net ?? amount - fee;
+    sendJson(res, 200, {
+      id: "txn_test_synthetic",
+      object: "balance_transaction",
+      amount,
+      fee,
+      net,
+      currency: chargeState.currency,
     });
     return;
   }
@@ -364,6 +440,9 @@ describe("writer card payouts", { concurrency: false }, () => {
     assert.equal(transfers.length, 1);
     assert.equal(transfers[0].source_transaction, CHARGE);
     assert.equal(transfers[0].destination, ACCOUNT);
+    assert.equal(transfers[0].amount, String(FIXTURE_CENTS - FEE_CENTS));
+    assert.equal(state.jobs[0].stripe_fee_cents, FEE_CENTS);
+    assert.equal(state.jobs[0].net_cents, FIXTURE_CENTS - FEE_CENTS);
     assert.equal(transfers[0].idempotencyKey, "payout_job_701");
     assert.equal(state.jobs[0].status, "paid");
     assert.equal(state.jobs[0].stripe_transfer_id, TRANSFER);
@@ -448,6 +527,8 @@ describe("writer card payouts", { concurrency: false }, () => {
     assert.equal(failed.failed, 1);
     assert.equal(state.jobs[0].status, "failed");
     assert.equal(state.jobs[0].error, "balance_insufficient");
+    assert.equal(transfers[0].amount, String(FIXTURE_CENTS - FEE_CENTS));
+    assert.equal(state.jobs[0].net_cents, FIXTURE_CENTS - FEE_CENTS);
     assert.equal(transfers.length, 1);
     failTransfer = false;
     const again = await api.processPendingPayouts();
@@ -471,6 +552,7 @@ describe("writer card payouts", { concurrency: false }, () => {
     assert.equal(transfers.length, 1);
     assert.equal(transfers[0].idempotencyKey, "payout_job_701");
     assert.equal(transfers[0].source_transaction, CHARGE);
+    assert.equal(transfers[0].amount, String(FIXTURE_CENTS));
     assert.equal(first.paid + second.paid, 1);
     assert.equal(state.jobs[0].status, "paid");
     const cron = await api.processPendingPayouts();
@@ -590,6 +672,166 @@ describe("writer card payouts", { concurrency: false }, () => {
     assert.doesNotMatch(out, new RegExp(`${RETRY_SECRET}|${CHARGE}|${FIXTURE_CENTS}`));
     assert.equal(transfers.length, 1);
     assert.equal(state.jobs[0].status, "paid");
+  });
+
+  test("a 50 cent sale transfers the charge fee's net", async () => {
+    reset();
+    logs.length = 0;
+    state.jobs[0].amount_cents = 50;
+    chargeState.amount = 50;
+    chargeState.fee = 31;
+    chargeState.net = 19;
+    const result = await api.processPendingPayouts();
+    assert.equal(result.paid, 1);
+    assert.equal(transfers[0].amount, "19");
+    assert.equal(state.jobs[0].stripe_fee_cents, 31);
+    assert.equal(state.jobs[0].net_cents, 19);
+    assert.equal(state.jobs[0].amount_cents, 50);
+    assertSafeLogs();
+  });
+
+  test("tax collected on the charge stays off the transfer", async () => {
+    reset();
+    logs.length = 0;
+    state.jobs[0].amount_cents = 1000;
+    chargeState.amount = 1080;
+    chargeState.fee = 66;
+    chargeState.net = 1014;
+    const result = await api.processPendingPayouts();
+    assert.equal(result.paid, 1);
+    assert.equal(transfers[0].amount, "934");
+    assert.equal(state.jobs[0].stripe_fee_cents, 66);
+    assert.equal(state.jobs[0].net_cents, 934);
+    assertSafeLogs();
+  });
+
+  test("the transfer is capped at the platform net", async () => {
+    reset();
+    state.jobs[0].amount_cents = 1000;
+    chargeState.amount = 1000;
+    chargeState.fee = 59;
+    chargeState.net = 100;
+    const result = await api.processPendingPayouts();
+    assert.equal(result.paid, 1);
+    assert.equal(transfers[0].amount, "100");
+    assert.equal(state.jobs[0].net_cents, 100);
+  });
+
+  test("a partial refund reduces the transfer by the refunded cents", async () => {
+    reset();
+    state.jobs[0].amount_cents = 1000;
+    chargeState.amount = 1000;
+    chargeState.fee = 59;
+    chargeState.net = 941;
+    chargeState.refunded = 200;
+    const result = await api.processPendingPayouts();
+    assert.equal(result.paid, 1);
+    assert.equal(transfers[0].amount, "741");
+    assert.equal(state.jobs[0].net_cents, 741);
+    assert.equal(state.jobs[0].stripe_fee_cents, 59);
+  });
+
+  test("a missing balance transaction stays pending and is not a failed transfer", async () => {
+    reset();
+    logs.length = 0;
+    chargeState.balanceTransaction = false;
+    const waiting = await api.processPendingPayouts();
+    assert.equal(waiting.pending, 1);
+    assert.equal(waiting.failed, 0);
+    assert.equal(waiting.paid, 0);
+    assert.equal(transfers.length, 0);
+    assert.equal(state.jobs[0].status, "pending");
+    assert.equal(state.jobs[0].error, "processing_fee_unavailable");
+    chargeState.balanceTransaction = "id";
+    const paid = await api.processPendingPayouts();
+    assert.equal(paid.paid, 1);
+    assert.equal(transfers[0].amount, String(FIXTURE_CENTS - FEE_CENTS));
+    assertSafeLogs();
+  });
+
+  test("a non-positive net, a refund, and a dispute do not create a transfer", async () => {
+    reset();
+    logs.length = 0;
+    chargeState.fee = FIXTURE_CENTS;
+    chargeState.net = 0;
+    const eaten = await api.processPendingPayouts();
+    assert.equal(eaten.skipped, 1);
+    assert.equal(eaten.failed, 0);
+    assert.equal(transfers.length, 0);
+    assert.equal(state.jobs[0].status, "skipped");
+    assert.equal(state.jobs[0].error, "net_non_positive");
+    assert.equal(state.jobs[0].stripe_fee_cents, FIXTURE_CENTS);
+    assert.equal(state.jobs[0].net_cents, 0);
+
+    reset();
+    chargeState.fullyRefunded = true;
+    const refunded = await api.processPendingPayouts();
+    assert.equal(refunded.skipped, 1);
+    assert.equal(transfers.length, 0);
+    assert.equal(state.jobs[0].error, "not_payable");
+
+    reset();
+    chargeState.disputed = true;
+    const disputed = await api.processPendingPayouts();
+    assert.equal(disputed.skipped, 1);
+    assert.equal(transfers.length, 0);
+    assert.equal(state.jobs[0].status, "skipped");
+    assertSafeLogs();
+  });
+
+  test("a fee in another currency is not converted into a transfer", async () => {
+    reset();
+    logs.length = 0;
+    chargeState.currency = "eur";
+    const result = await api.processPendingPayouts();
+    assert.equal(result.skipped, 1);
+    assert.equal(result.paid, 0);
+    assert.equal(transfers.length, 0);
+    assert.equal(state.jobs[0].status, "skipped");
+    assert.equal(state.jobs[0].error, "fee_currency_mismatch");
+    assert.equal(state.jobs[0].stripe_fee_cents, undefined);
+    assertSafeLogs();
+  });
+
+  test("a failed transfer retries the same net, and a legacy failed row keeps its original amount", async () => {
+    reset();
+    logs.length = 0;
+    failTransfer = true;
+    const failed = await api.processPendingPayouts();
+    assert.equal(failed.failed, 1);
+    assert.equal(transfers[0].amount, String(FIXTURE_CENTS - FEE_CENTS));
+    assert.equal(state.jobs[0].status, "failed");
+    assert.equal(state.jobs[0].net_cents, FIXTURE_CENTS - FEE_CENTS);
+    failTransfer = false;
+    const retried = await api.retryFailedPayouts({ confirm: true });
+    assert.equal(retried.paid, 1);
+    assert.equal(transfers.length, 2);
+    assert.equal(transfers[1].amount, String(FIXTURE_CENTS - FEE_CENTS));
+    assert.equal(transfers[1].idempotencyKey, "payout_job_701");
+    const cron = await api.processPendingPayouts();
+    assert.equal(cron.paid, 0);
+    assert.equal(transfers.length, 2);
+
+    reset();
+    state.jobs[0].status = "failed";
+    const legacy = await api.retryFailedPayouts({ confirm: true });
+    assert.equal(legacy.paid, 1);
+    assert.equal(transfers[0].amount, String(FIXTURE_CENTS));
+    assertSafeLogs();
+  });
+
+  test("a payout still transfers the net when the fee columns are not migrated", async () => {
+    reset();
+    logs.length = 0;
+    rejectFeeColumns = true;
+    const result = await api.processPendingPayouts();
+    assert.equal(result.paid, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(transfers[0].amount, String(FIXTURE_CENTS - FEE_CENTS));
+    assert.equal(state.jobs[0].status, "paid");
+    assert.equal(state.jobs[0].stripe_fee_cents, undefined);
+    assert.equal(state.jobs[0].net_cents, undefined);
+    assertSafeLogs();
   });
 });
 

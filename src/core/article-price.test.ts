@@ -39,7 +39,7 @@ describe("article price", () => {
 
   it("estimates card net and leaves USDC at the price", () => {
     assert.equal(cardNetCents(50), 19);
-    assert.equal(priceNetLine(50), "Card: you get ~$0.19 · USDC: ~$0.50");
+    assert.equal(priceNetLine(50), "Card: you get ~$0.19 after Stripe's fee · USDC: ~$0.50");
     assert.equal(formatUsdFromCents(100), "$1.00");
     assert.equal(usdcAtomicForCents(50), 500_000n);
     assert.equal(usdcAtomicForCents(250), 2_500_000n);
