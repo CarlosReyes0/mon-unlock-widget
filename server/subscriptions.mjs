@@ -404,14 +404,31 @@ async function upsertSubscriptionRow(row) {
   }
 }
 
+function positiveCents(value) {
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+/**
+ * Pre-tax subscription sale. Tax collected for the platform is not part of the writer sale.
+ * Prefers total_excluding_tax, then subtotal, then the amount paid.
+ * @param {object | null | undefined} invoice
+ */
+export function subscriptionSaleCents(invoice) {
+  return (
+    positiveCents(invoice?.total_excluding_tax) ??
+    positiveCents(invoice?.subtotal) ??
+    positiveCents(invoice?.amount_paid) ??
+    positiveCents(invoice?.amount_due) ??
+    0
+  );
+}
+
 async function queueSubscriptionPayout({ subscriptionId, writer, amountCents, chargeId }) {
-  const feeBps = Math.max(0, Number(process.env.STRIPE_PLATFORM_FEE_BPS || "0") || 0);
-  const fee = Math.floor((amountCents * feeBps) / 10_000);
-  const payoutCents = Math.max(0, amountCents - fee);
-  if (payoutCents <= 0) return null;
+  // Queued amount is the sale. The payout run subtracts Stripe's fee on the charge.
+  if (!Number.isInteger(amountCents) || amountCents <= 0) return null;
   const row = {
     publisher: writer,
-    amount_cents: payoutCents,
+    amount_cents: amountCents,
     currency: "usd",
     status: "pending",
     subscription_id: subscriptionId,
@@ -574,7 +591,7 @@ export async function applyStripeSubscriptionEvent(event) {
     const periodEnd = subscription.current_period_end
       ? new Date(subscription.current_period_end * 1000).toISOString()
       : new Date(Date.now() + CRYPTO_PERIOD_MS).toISOString();
-    const amountCents = invoice.amount_paid || invoice.amount_due || 0;
+    const amountCents = subscriptionSaleCents(invoice);
     const customerId =
       typeof subscription.customer === "string"
         ? subscription.customer
