@@ -6,7 +6,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifyMessage } from 'https://esm.sh/viem@2.57.7';
-import { parseArticlePriceCents, usdcAtomicForCents } from '../../../src/core/article-price.ts';
+import {
+  articlePriceErrorMessage,
+  parseArticlePriceCents,
+  usdcAtomicForCents,
+} from '../../../src/core/article-price.ts';
 import { isBlockedPublisher } from '../../../src/core/blocked-publishers.ts';
 import {
   buildListingAuthMessage,
@@ -81,7 +85,10 @@ Deno.serve(async (req) => {
     if (priceCentsInput !== undefined && priceCentsInput !== null && priceCentsInput !== '') {
       const parsed = parseArticlePriceCents(priceCentsInput);
       if (!parsed.ok) {
-        return new Response(JSON.stringify({ error: parsed.error }), { status: 400, headers });
+        return new Response(
+          JSON.stringify({ error: parsed.error, message: articlePriceErrorMessage(parsed.error) }),
+          { status: 400, headers }
+        );
       }
       priceCents = parsed.cents;
     }

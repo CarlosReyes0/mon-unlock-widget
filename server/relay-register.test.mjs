@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test, beforeEach } from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import { keccak256, toBytes } from "viem";
-import { buildEmbedSignMessage, MAINNET_USDC_UNLOCK_CONTRACT } from "./embed-signature.mjs";
+import { buildEmbedSignMessage, MAINNET_UNLOCK_CONTRACT, MAINNET_USDC_UNLOCK_CONTRACT } from "./embed-signature.mjs";
 import { allowedFiatUnlockContracts } from "./embed-signature.mjs";
 import {
   articleIdFromSlug,
@@ -64,6 +64,41 @@ test("parseRelayRequest fills USDC contract and checks hash", () => {
   assert.equal(parsed.contract, CONTRACT);
   assert.equal(parsed.articleIdHash, HASH);
   assert.equal(parsed.priceWei, PRICE);
+});
+
+test("parseRelayRequest allows $1,000.00 USDC and rejects $1,000.01", () => {
+  const atCap = parseRelayRequest({
+    slug: SLUG,
+    articleIdHash: HASH,
+    priceWei: "1000000000",
+    publisher: publisher.address,
+    embedSig: "0xsig",
+    paymentAsset: "usdc",
+  });
+  assert.equal(atCap.priceWei, 1_000_000_000n);
+  assert.throws(
+    () =>
+      parseRelayRequest({
+        slug: SLUG,
+        articleIdHash: HASH,
+        priceWei: "1000010000",
+        publisher: publisher.address,
+        embedSig: "0xsig",
+        paymentAsset: "usdc",
+      }),
+    (err) => err.message === "price_above_maximum" && err.publicMessage === "Maximum is $1,000.00."
+  );
+  const mon = parseRelayRequest({
+    slug: SLUG,
+    articleIdHash: HASH,
+    priceWei: "1000000000000000000000",
+    publisher: publisher.address,
+    embedSig: "0xsig",
+    paymentAsset: "mon",
+    contract: MAINNET_UNLOCK_CONTRACT,
+  });
+  assert.equal(mon.paymentAsset, "mon");
+  assert.equal(mon.priceWei, 1000000000000000000000n);
 });
 
 test("parseRelayRequest rejects hash mismatch", () => {

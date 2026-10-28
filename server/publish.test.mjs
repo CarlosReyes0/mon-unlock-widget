@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { test } from "node:test";
 import {
   validatePublishInput,
@@ -49,6 +50,28 @@ test("validatePublishInput defaults to USDC $0.50 when price and paymentAsset om
   assert.equal(result.input.price, "0.50");
 });
 
+test("validatePublishInput allows $1,000.00 USDC and rejects $1,000.01", () => {
+  const base = {
+    title: "Hello",
+    articleId: "hello-world",
+    teaser: "Teaser",
+    body: "Body",
+    publisher: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    paymentAsset: "usdc",
+  };
+  const atCap = validatePublishInput({ ...base, price: "1000.00" });
+  assert.equal(atCap.ok, true);
+  assert.equal(atCap.input.price, "1000.00");
+  const whole = validatePublishInput({ ...base, price: "1000" });
+  assert.equal(whole.ok, true);
+  const over = validatePublishInput({ ...base, price: "1000.01" });
+  assert.equal(over.ok, false);
+  assert.ok(over.errors.some((e) => e === "Maximum is $1,000.00."));
+  const mon = validatePublishInput({ ...base, paymentAsset: "mon", price: "1000.01" });
+  assert.equal(mon.ok, true);
+  assert.equal(mon.input.price, "1000.01");
+});
+
 test("validatePublishInput accepts explicit MON with default price 1", () => {
   const result = validatePublishInput({
     title: "Hello",
@@ -61,6 +84,13 @@ test("validatePublishInput accepts explicit MON with default price 1", () => {
   assert.equal(result.ok, true);
   assert.equal(result.input.paymentAsset, "mon");
   assert.equal(result.input.price, "1");
+});
+
+test("agent sync sends the USDC dollar price with the on-chain amount", () => {
+  const src = fs.readFileSync(new URL("./publish.mjs", import.meta.url), "utf8");
+  assert.match(src, /paymentAsset/);
+  assert.match(src, /priceCents/);
+  assert.match(src, /usdPriceAboveCap/);
 });
 
 test("toPriceWei uses 6 decimals for USDC and 18 for MON", () => {

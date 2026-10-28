@@ -30,6 +30,13 @@ test("usdcAtomicForListing falls back for MON listings", () => {
   assert.equal(usdcAtomicForListing("1000000000000000000", "mon"), usdToUsdcAtomic("0.50"));
 });
 
+test("usdcAtomicForListing allows $1,000.00 and refuses $1,000.01", () => {
+  assert.equal(usdcAtomicForListing("1000000000", "usdc"), "1000000000");
+  assert.equal(usdcAtomicForListing("1000000000", "usdc", 100_000), "1000000000");
+  assert.equal(usdcAtomicForListing("1000010000", "usdc"), null);
+  assert.equal(usdcAtomicForListing("500000", "usdc", 100_001), null);
+});
+
 test("decodeJsonB64OrJson accepts raw JSON and base64", () => {
   const obj = { x402Version: 1, scheme: "exact" };
   assert.deepEqual(decodeJsonB64OrJson(JSON.stringify(obj)), obj);

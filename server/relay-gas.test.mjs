@@ -186,6 +186,74 @@ test("relayGasDrip rejects a signature for an article that does not exist", asyn
   assert.equal(sent, false);
 });
 
+test("relayGasDrip allows a $1,000 article and rejects $1,000.01", async () => {
+  const body = await signedBody(account, READER);
+  const atCap = await relayGasDrip(
+    body,
+    {},
+    fundedDeps({
+      lookupArticle: async () => ({ article_id: ARTICLE, price_cents: 100_000, price_wei: "0" }),
+    })
+  );
+  assert.equal(atCap.ok, true);
+  let sent = false;
+  await assert.rejects(
+    () =>
+      relayGasDrip(
+        body,
+        {},
+        fundedDeps({
+          lookupArticle: async () => ({ article_id: ARTICLE, price_cents: 100_001, price_wei: "0" }),
+          sendNative: async () => {
+            sent = true;
+            return "0xno";
+          },
+        })
+      ),
+    (err) => err.status === 403 && err.message === "price_above_maximum" && err.publicMessage === "Maximum is $1,000.00."
+  );
+  assert.equal(sent, false);
+  await assert.rejects(
+    () =>
+      relayGasDrip(
+        body,
+        {},
+        fundedDeps({
+          lookupArticle: async () => ({
+            article_id: ARTICLE,
+            payment_asset: "usdc",
+            price_wei: "1000010000",
+          }),
+        })
+      ),
+    (err) => err.message === "price_above_maximum"
+  );
+  const mon = await relayGasDrip(
+    body,
+    {},
+    fundedDeps({
+      lookupArticle: async () => ({
+        article_id: ARTICLE,
+        payment_asset: "mon",
+        price_wei: "1000000000000000000000",
+      }),
+    })
+  );
+  assert.equal(mon.ok, true);
+  const usdcAtCap = await relayGasDrip(
+    body,
+    {},
+    fundedDeps({
+      lookupArticle: async () => ({
+        article_id: ARTICLE,
+        payment_asset: "usdc",
+        price_wei: "1000000000",
+      }),
+    })
+  );
+  assert.equal(usdcAtCap.ok, true);
+});
+
 test("relayGasDrip rejects an article with no price and a lookup outage", async () => {
   const unpriced = await signedBody(account, READER);
   await assert.rejects(

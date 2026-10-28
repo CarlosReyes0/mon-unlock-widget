@@ -3,6 +3,7 @@
  * Wallet signing itself requires MetaMask and is out of scope here.
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { test, after } from "node:test";
@@ -47,6 +48,12 @@ test("register.html exposes Copy signed embed UI", async () => {
   assert.match(html, /Approve the embed signature/);
   assert.match(html, /tryRelayRegister/);
   assert.match(html, /\/api\/relay\/register/);
+  assert.match(html, /Maximum is \$1,000\.00\./);
+  assert.match(html, /MAX_PRICE_CENTS = 100000/);
+  const dash = fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8");
+  assert.match(dash, /Maximum \$1,000\.00 per month\./);
+  assert.match(dash, /Maximum is \$1,000\.00 per month\./);
+  assert.match(dash, /cents > 100000/);
   // Literal </script> inside the inline module would truncate the page script in browsers.
   // The server may stamp a CSP nonce onto the tag: <script nonce="…" type="module">.
   const open = html.match(/<script\b(?![^>]*\bsrc\s*=)[^>]*type="module"[^>]*>/);

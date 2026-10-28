@@ -43,6 +43,10 @@ test("indexer rejects callers that do not present INDEXER_SECRET", () => {
   assert.match(edge, /BLOCKED_PUBLISHERS/);
   assert.match(edge, /decideArticleRegistration/);
   assert.match(edge, /registrationUpdatePatch/);
+  assert.match(edge, /ArticleUpdated/);
+  assert.match(edge, /priceUpdatePatch/);
+  assert.match(edge, /applyPriceUpdate/);
+  assert.match(edge, /indexer: price above cap|priced\.warn|warn/);
   assert.match(read("src/core/indexer-registration.ts"), /from "\.\/blocked-publishers\.ts"/);
   assert.doesNotMatch(read("src/core/indexer-registration.ts"), /blocked-publishers\.js/);
   assert.match(edge, /PUBLISHER_LEFT_UNCHANGED_WARNING|decision\.warn/);

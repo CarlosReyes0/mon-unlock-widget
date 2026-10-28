@@ -35,6 +35,7 @@ import {
   listingsSupabaseConfigured,
   markArticleRegistered,
 } from "./listings-api.mjs";
+import { PRICE_ABOVE_MAXIMUM_MESSAGE, usdcAtomicAboveCap } from "./article-price.mjs";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -219,6 +220,11 @@ export function parseRelayRequest(body) {
 
   const paymentAssetRaw = String(parsed.paymentAsset || "").trim().toLowerCase();
   const paymentAsset = paymentAssetRaw === "mon" ? "mon" : "usdc";
+  if (paymentAsset === "usdc" && usdcAtomicAboveCap(priceWei)) {
+    const err = httpError("price_above_maximum");
+    err.publicMessage = PRICE_ABOVE_MAXIMUM_MESSAGE;
+    throw err;
+  }
 
   const contract = String(parsed.contract || "").trim().toLowerCase() ||
     (paymentAsset === "usdc" ? MAINNET_USDC_UNLOCK_CONTRACT.toLowerCase() : "");

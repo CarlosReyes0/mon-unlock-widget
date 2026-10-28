@@ -148,9 +148,15 @@
           const body = await res.json().catch(() => ({}));
           if (res.ok) return { ok: true, ...body };
           if (res.status === 503 || body.fallback) {
-            return { ok: false, fallback: true, error: body.error };
+            return { ok: false, fallback: true, error: body.error, message: body.message };
           }
-          return { ok: false, fallback: false, error: body.error || `HTTP ${res.status}`, taken: body.error === "slug_taken" };
+          return {
+            ok: false,
+            fallback: false,
+            error: body.error || `HTTP ${res.status}`,
+            message: body.message,
+            taken: body.error === "slug_taken",
+          };
         } catch {
           return { ok: false, fallback: true };
         }
@@ -208,7 +214,7 @@
           return {
             ok: false,
             error: err.error || `HTTP ${res.status}`,
-            message: err.message,
+            message: err.message || (err.error === "price_above_maximum" ? "Maximum is $1,000.00." : ""),
             takenBy: err.publisher,
           };
         } catch (e) {
@@ -222,6 +228,20 @@
       const paymentAsset = paymentAssetRaw === "mon" ? "mon" : "usdc";
       const defaultPrice = paymentAsset === "usdc" ? "0.50" : "1";
       const price = (params.get("price") || defaultPrice).trim();
+      const MAX_PRICE_CENTS = 100000;
+      function usdCents(raw) {
+        const trimmed = String(raw || "").trim().replace(/^\$/, "");
+        if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+        const parts = trimmed.split(".");
+        return Number(parts[0]) * 100 + Number((parts[1] || "").padEnd(2, "0"));
+      }
+      function priceCapMessageFor(asset, raw) {
+        if (asset !== "usdc") return "";
+        const cents = usdCents(raw);
+        if (cents != null && cents > MAX_PRICE_CENTS) return "Maximum is $1,000.00.";
+        return "";
+      }
+      const capMessage = priceCapMessageFor(paymentAsset, price);
       const title = (params.get("title") || "").trim() || slug;
       const author = (params.get("author") || "").trim() || "Author";
       const teaser = (params.get("teaser") || "").trim();
@@ -254,6 +274,7 @@
           titleRow.style.display = "block";
           titleEl.textContent = title;
         }
+        if (capMessage) setStatus(capMessage, false);
       }
 
       let wallet = null;
@@ -383,8 +404,12 @@ ${teaserBlock}
           const accounts = await eth.request({ method: "eth_requestAccounts" });
           wallet = accounts[0];
           connectBtn.textContent = wallet.slice(0, 6) + "…" + wallet.slice(-4);
-          registerBtn.disabled = !slug;
-          setStatus("Wallet connected. Click Register on Monad — approve the signature.", true);
+          registerBtn.disabled = !slug || Boolean(capMessage);
+          if (capMessage) {
+            setStatus(capMessage, false);
+          } else {
+            setStatus("Wallet connected. Click Register on Monad — approve the signature.", true);
+          }
         } catch (e) {
           setStatus(e.message || "Connection failed.", false);
         }
@@ -392,6 +417,11 @@ ${teaserBlock}
 
       registerBtn.onclick = async () => {
         if (!slug || !wallet) return;
+        if (capMessage) {
+          setStatus(capMessage, false);
+          registerBtn.disabled = true;
+          return;
+        }
         const eth = window.ethereum;
         if (!eth) return;
 
@@ -406,6 +436,11 @@ ${teaserBlock}
           const priceWei = paymentAsset === "usdc"
             ? parseUnits(price || "0.50", 6)
             : parseEther(price || "1");
+          if (paymentAsset === "usdc" && priceWei > 100000n * 10000n) {
+            setStatus("Maximum is $1,000.00.", false);
+            registerBtn.disabled = true;
+            return;
+          }
           const contractAddress = activeContract();
 
           const publicClient = createPublicClient({
@@ -422,6 +457,11 @@ ${teaserBlock}
             publisher: wallet,
             teaser,
           });
+          if (!reserved.ok && (reserved.error === "price_above_maximum" || reserved.message === "Maximum is $1,000.00.")) {
+            setStatus(reserved.message || "Maximum is $1,000.00.", false);
+            registerBtn.disabled = true;
+            return;
+          }
           if (!reserved.ok && reserved.error === "slug_taken") {
             setStatus(
               reserved.message ||
@@ -494,7 +534,7 @@ ${teaserBlock}
             return;
           }
           if (!relayed.ok && !relayed.fallback) {
-            setStatus(relayed.error || "Registration failed.", false);
+            setStatus(relayed.message || relayed.error || "Registration failed.", false);
             registerBtn.disabled = false;
             return;
           }

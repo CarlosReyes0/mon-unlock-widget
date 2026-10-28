@@ -526,7 +526,7 @@ export function buildOpenApiDocument() {
             price: {
               type: "string",
               description:
-                "Article price as a string. USD amount when paymentAsset is usdc (default 0.50); MON amount when paymentAsset is mon (default 1).",
+                "Article price as a string. USD amount when paymentAsset is usdc (default 0.50, maximum 1000.00). MON amount when paymentAsset is mon (default 1). MON is not converted to dollars.",
               default: "0.50",
             },
             paymentAsset: {

@@ -4,6 +4,8 @@
  */
 
 export const DEFAULT_MONTHLY_CENTS = 500;
+export const MAX_MONTHLY_CENTS = 100_000;
+export const MONTHLY_PRICE_ABOVE_MAX_MESSAGE = "Maximum is $1,000.00 per month.";
 export const DEFAULT_MONTHLY_USDC = 5_000_000; // $5.00, 6 decimals
 export const CRYPTO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -76,7 +78,12 @@ export function evaluateAccess(input = {}) {
 export function normalizeMonthlyCents(cents) {
   const n = Math.round(Number(cents));
   if (!Number.isFinite(n) || n < 50) return DEFAULT_MONTHLY_CENTS;
-  if (n > 100_000) return 100_000;
+  if (n > MAX_MONTHLY_CENTS) {
+    const err = new Error(MONTHLY_PRICE_ABOVE_MAX_MESSAGE);
+    err.status = 400;
+    err.code = "price_above_maximum";
+    throw err;
+  }
   return n;
 }
 

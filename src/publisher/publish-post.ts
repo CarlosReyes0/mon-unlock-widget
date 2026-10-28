@@ -10,7 +10,12 @@ import {
   type Address,
   type Hash,
 } from "viem";
-import { formatUsdFromCents, parseArticlePriceCents, usdcAtomicForCents } from "../core/article-price.js";
+import {
+  articlePriceErrorMessage,
+  formatUsdFromCents,
+  parseArticlePriceCents,
+  usdcAtomicForCents,
+} from "../core/article-price.js";
 import { buildEmbedSignMessage } from "../core/embed-signature.js";
 import { buildPublishAuthMessage, supabaseFunctionHeaders } from "../core/publish-auth.js";
 import { MAINNET_USDC_UNLOCK_CONTRACT } from "../core/payment-asset.js";
@@ -213,7 +218,11 @@ export async function publishPost(input: PublishPostInput): Promise<{ slug: stri
   if (!teaser || !body) throw new Error("Write, or paste, the piece.");
 
   const priced = parseArticlePriceCents(input.priceCents);
-  if (!priced.ok) throw new Error("Minimum price is $0.50.");
+  if (!priced.ok) {
+    throw new Error(
+      priced.error === "price_below_minimum" ? "Minimum price is $0.50." : articlePriceErrorMessage(priced.error)
+    );
+  }
   const priceCents = priced.cents;
   const priceWei = usdcAtomicForCents(priceCents);
   const status = input.onStatus;

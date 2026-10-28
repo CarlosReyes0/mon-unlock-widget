@@ -265,6 +265,15 @@ export function PublisherApp() {
   }
 
   async function savePlan() {
+    const cents = Math.round(Number(priceDollars) * 100);
+    if (!Number.isFinite(cents) || cents < 50) {
+      setPlanMsg("Minimum is $0.50.");
+      return;
+    }
+    if (cents > 100_000) {
+      setPlanMsg("Maximum is $1,000.00 per month.");
+      return;
+    }
     const publisher = address();
     if (!publisher) return;
     const provider = window.__monPublisherProvider as Eip1193Provider | undefined;
@@ -273,7 +282,6 @@ export function PublisherApp() {
       return;
     }
     setPlanMsg("Approve the plan signature…");
-    const cents = Math.round(Number(priceDollars) * 100);
     const allowALaCarte = allowBuy;
     try {
       const issuedAt = new Date().toISOString();
@@ -399,11 +407,13 @@ export function PublisherApp() {
               <label className="mon-pub-shell__field-label" htmlFor="planPrice">
                 Monthly price (USD)
               </label>
+              <p className="mon-pub-auth__hint">Maximum $1,000.00 per month.</p>
               <input
                 id="planPrice"
                 type="number"
                 min="0.50"
-                step="0.50"
+                max="1000"
+                step="0.01"
                 value={priceDollars}
                 onChange={(e) => setPriceDollars(e.target.value)}
                 className="mon-pub-shell__input"

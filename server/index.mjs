@@ -44,6 +44,7 @@ import {
 import {
   publishArticleForAgent,
   validatePublishInput,
+  publishRejectedForPriceCap,
   quoteFingerprint,
   parsePublishPaste,
 } from "./publish.mjs";
@@ -885,6 +886,10 @@ const server = http.createServer(guardRequest(async (req, res) => {
     if (!validated.ok && hasPaymentCredential) {
       return sendJson(res, 400, { ok: false, errors: validated.errors });
     }
+    // An over-cap price is not an unpaid probe. Reject it before the payment gate.
+    if (publishRejectedForPriceCap(validated)) {
+      return sendJson(res, 400, { ok: false, errors: validated.errors });
+    }
 
     cors(res);
     return withMppCharge(req, res, {
@@ -1189,6 +1194,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
       }
       const status = e?.status || 500;
       const payload = { error: e?.message || "relay_failed" };
+      if (e?.publicMessage) payload.message = e.publicMessage;
       if (e?.fallback) payload.fallback = true;
       return sendJson(res, status, payload);
     }
@@ -1209,6 +1215,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
       }
       const status = e?.status || 500;
       const payload = { error: e?.message || "gas_drip_failed" };
+      if (e?.publicMessage) payload.message = e.publicMessage;
       if (e?.fallback) payload.fallback = true;
       return sendJson(res, status, payload);
     }

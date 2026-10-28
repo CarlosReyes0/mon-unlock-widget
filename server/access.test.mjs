@@ -99,6 +99,11 @@ test("article false overrides writer true for à la carte", () => {
 
 test("cents map to USDC 6-decimal units", () => {
   assert.equal(normalizeMonthlyCents(500), 500);
+  assert.equal(normalizeMonthlyCents(100_000), 100_000);
+  assert.throws(
+    () => normalizeMonthlyCents(100_001),
+    (err) => err.message === "Maximum is $1,000.00 per month." && err.status === 400
+  );
   assert.equal(centsToUsdcUnits(500), 5_000_000);
   assert.equal(centsToUsdcUnits(50), 500_000);
 });
