@@ -58,6 +58,57 @@ function followerTokenWallet(token: string) {
   return "";
 }
 
+export function cardPayoutHint(
+  directCharges: boolean,
+  connectModel: "direct" | "legacy" | null
+): string {
+  if (directCharges && connectModel === "direct") {
+    return "Card: readers pay your Stripe account. Stripe's fee is deducted, then the rest goes to your bank.";
+  }
+  if (directCharges && connectModel === "legacy") {
+    return "Card: connect payments, then money goes to your bank. Stripe's fee is deducted. You can switch so readers pay your Stripe account directly. You confirm your details again. Card sales you already made still pay out the original way.";
+  }
+  return "Card: connect payments, then money goes to your bank. Stripe's fee is deducted.";
+}
+
+export async function requestConnectOnboarding(input: {
+  publisher: string;
+  provider: Eip1193Provider;
+  reonboard?: boolean;
+}): Promise<string> {
+  const reonboard = input.reonboard === true;
+  const returnUrl = new URL("/account.html", window.location.origin);
+  returnUrl.searchParams.set("stripe_onboard", "return");
+  const refreshUrl = new URL("/account.html", window.location.origin);
+  refreshUrl.searchParams.set("stripe_onboard", "refresh");
+  const issuedAt = new Date().toISOString();
+  const message = buildConnectAuthMessage({ publisher: input.publisher, issuedAt, reonboard });
+  const account = input.publisher as Address;
+  const walletClient = createWalletClient({
+    account,
+    chain: monadMainnet,
+    transport: custom(input.provider),
+  });
+  const connectSig = await walletClient.signMessage({ account, message });
+  const res = await fetch("/api/stripe/connect/onboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      publisher: input.publisher,
+      issuedAt,
+      connectSig,
+      returnUrl: returnUrl.toString(),
+      refreshUrl: refreshUrl.toString(),
+      reonboard,
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+  if (!res.ok || !body.url) {
+    throw new Error(body.error || `onboard_failed_${res.status}`);
+  }
+  return body.url;
+}
+
 function renewalLabel(iso: string | null) {
   if (!iso) return "";
   const date = new Date(iso);
@@ -77,6 +128,8 @@ export function PublisherApp() {
   const [allowBuy, setAllowBuy] = useState(true);
   const [planMsg, setPlanMsg] = useState("");
   const [resume, setResume] = useState<ResumableDraft | null>(null);
+  const [directCharges, setDirectCharges] = useState(false);
+  const [connectModel, setConnectModel] = useState<"direct" | "legacy" | null>(null);
 
   const address = () => window.__monPublisherAddress || "";
 
@@ -186,6 +239,40 @@ export function PublisherApp() {
   }, []);
 
   useEffect(() => {
+    const publisher = address();
+    if (!signedIn || !publisher) {
+      setDirectCharges(false);
+      setConnectModel(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/stripe/connect/status?publisher=${encodeURIComponent(publisher)}`
+        );
+        const data = (await res.json()) as {
+          directCharges?: boolean;
+          connectModel?: string | null;
+        };
+        if (cancelled || !res.ok) return;
+        setDirectCharges(data.directCharges === true);
+        setConnectModel(
+          data.connectModel === "direct" || data.connectModel === "legacy" ? data.connectModel : null
+        );
+      } catch {
+        if (!cancelled) {
+          setDirectCharges(false);
+          setConnectModel(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
+
+  useEffect(() => {
     if (roster) return;
     const writers = subs.filter((s) => s.live).map((s) => s.writer);
     if (!writers.length) {
@@ -213,7 +300,7 @@ export function PublisherApp() {
     };
   }, [roster, subs]);
 
-  async function setupStripePayouts() {
+  async function setupStripePayouts(reonboard = false) {
     const publisher = address();
     if (!publisher) {
       setPayoutMsg("Sign in first.");
@@ -227,36 +314,8 @@ export function PublisherApp() {
     setPayoutBusy(true);
     setPayoutMsg("Approve the payout signature…");
     try {
-      const returnUrl = new URL("/account.html", window.location.origin);
-      returnUrl.searchParams.set("stripe_onboard", "return");
-      const refreshUrl = new URL("/account.html", window.location.origin);
-      refreshUrl.searchParams.set("stripe_onboard", "refresh");
-      const issuedAt = new Date().toISOString();
-      const message = buildConnectAuthMessage({ publisher, issuedAt });
-      const account = publisher as Address;
-      const walletClient = createWalletClient({
-        account,
-        chain: monadMainnet,
-        transport: custom(provider),
-      });
-      const connectSig = await walletClient.signMessage({ account, message });
-
-      const res = await fetch("/api/stripe/connect/onboard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          publisher,
-          issuedAt,
-          connectSig,
-          returnUrl: returnUrl.toString(),
-          refreshUrl: refreshUrl.toString(),
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!res.ok || !body.url) {
-        throw new Error(body.error || `onboard_failed_${res.status}`);
-      }
-      window.location.href = body.url;
+      const url = await requestConnectOnboarding({ publisher, provider, reonboard });
+      window.location.href = url;
     } catch (e) {
       setPayoutMsg(e instanceof Error ? e.message : "Could not start payouts");
     } finally {
@@ -389,9 +448,7 @@ export function PublisherApp() {
           <>
             <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
               <h2 className="mon-pub-shell__card-title">Get paid</h2>
-              <p className="mon-pub-auth__hint">
-                Card: connect payments, then money goes to your bank. Stripe's fee is deducted.
-              </p>
+              <p className="mon-pub-auth__hint">{cardPayoutHint(directCharges, connectModel)}</p>
               <p className="mon-pub-auth__hint">
                 USDC: a reader pays, it goes to the wallet you are signed in with. Automatic. No extra
                 setup.
@@ -424,10 +481,20 @@ export function PublisherApp() {
                   type="button"
                   className="mon-pub-auth__btn mon-pub-auth__btn--primary"
                   disabled={payoutBusy}
-                  onClick={() => void setupStripePayouts()}
+                  onClick={() => void setupStripePayouts(false)}
                 >
                   {payoutBusy ? "Opening…" : "Connect payments"}
                 </button>
+                {directCharges && connectModel === "legacy" ? (
+                  <button
+                    type="button"
+                    className="mon-pub-auth__btn"
+                    disabled={payoutBusy}
+                    onClick={() => void setupStripePayouts(true)}
+                  >
+                    Switch card payments
+                  </button>
+                ) : null}
               </div>
               {planMsg ? <p className="mon-pub-auth__hint">{planMsg}</p> : null}
               {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}

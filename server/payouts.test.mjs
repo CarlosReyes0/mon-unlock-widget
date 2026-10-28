@@ -37,6 +37,7 @@ const payoutPatches = [];
 let failTransfer = false;
 let flipOnTransfer = false;
 let rejectFeeColumns = false;
+let rejectConnectColumns = false;
 const chargeState = {
   fee: FEE_CENTS,
   net: null,
@@ -112,6 +113,7 @@ function reset() {
   failTransfer = false;
   flipOnTransfer = false;
   rejectFeeColumns = false;
+  rejectConnectColumns = false;
   chargeState.fee = FEE_CENTS;
   chargeState.net = null;
   chargeState.amount = null;
@@ -228,6 +230,14 @@ const supabase = http.createServer(async (req, res) => {
     return;
   }
   if (req.method === "GET" && url.pathname === "/rest/v1/publisher_accounts") {
+    const select = url.searchParams.get("select") || "";
+    if (rejectConnectColumns && select.includes("connect_model")) {
+      sendJson(res, 400, {
+        message: "Could not find the 'connect_model' column of 'publisher_accounts' in the schema cache",
+        code: "PGRST204",
+      });
+      return;
+    }
     const rows = state.accounts.filter((account) => matches(account, url.searchParams));
     sendJson(res, 200, rows.map((account) => ({ ...account })));
     return;
@@ -449,6 +459,25 @@ describe("writer card payouts", { concurrency: false }, () => {
     assert.ok(payoutPatches.some((query) => query.includes("status=eq.pending") && query.includes("stripe_transfer_id=is.null")));
     assert.match(payoutLogs().join("\n"), /status=ran paid=1/);
     assertSafeLogs();
+  });
+
+  test("a direct-model writer still pays an already-pending row to the legacy account", async () => {
+    reset();
+    state.accounts[0].connect_model = "direct";
+    state.accounts[0].legacy_stripe_account_id = "acct_legacy_destination";
+    state.accounts[0].stripe_account_id = "acct_direct_new";
+    const result = await api.processPendingPayouts();
+    assert.equal(result.paid, 1);
+    assert.equal(transfers[0].destination, "acct_legacy_destination");
+    assert.equal(state.jobs[0].status, "paid");
+  });
+
+  test("pending payouts still transfer when the connect_model column is absent", async () => {
+    reset();
+    rejectConnectColumns = true;
+    const result = await api.processPendingPayouts();
+    assert.equal(result.paid, 1);
+    assert.equal(transfers[0].destination, ACCOUNT);
   });
 
   test("a second overlapping run cannot transfer the same row", async () => {

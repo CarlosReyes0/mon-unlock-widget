@@ -71,14 +71,18 @@ export function buildALaCarteAuthMessage(input) {
 
 /**
  * Binds the writer wallet and the time the onboarding request was signed.
- * @param {{ publisher: unknown, issuedAt: unknown }} input
+ * `reonboard: true` is part of the message so a normal onboarding signature
+ * cannot be replayed as a switch onto a new direct-charge account.
+ * @param {{ publisher: unknown, issuedAt: unknown, reonboard?: boolean }} input
  */
 export function buildConnectAuthMessage(input) {
-  return [
+  const lines = [
     CONNECT_AUTH_PREFIX,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `issuedAt:${asText(input.issuedAt).trim()}`,
-  ].join("\n");
+  ];
+  if (input.reonboard === true) lines.push("reonboard:true");
+  return lines.join("\n");
 }
 
 /** Same 10-minute window as follower signatures. */
@@ -136,7 +140,7 @@ export async function assertWriterMutationSignature(input, now = Date.now()) {
  * EIP-191 proof that `publisher` just asked to open Stripe Connect onboarding.
  * Missing, bad, wrong-wallet, and stale signatures are all 401. Call this
  * before any Stripe or publisher_accounts lookup.
- * @param {{ publisher: unknown, issuedAt: unknown, connectSig: unknown }} input
+ * @param {{ publisher: unknown, issuedAt: unknown, connectSig: unknown, reonboard?: boolean }} input
  * @param {number} [now]
  */
 export async function assertConnectOnboardingAuth(input, now = Date.now()) {
@@ -144,7 +148,11 @@ export async function assertConnectOnboardingAuth(input, now = Date.now()) {
   assertPublisherNotBlocked(publisher);
   const issuedAt = asText(input?.issuedAt).trim();
   if (!connectIssuedAtFresh(issuedAt, now)) throw httpError("unauthorized", 401);
-  const message = buildConnectAuthMessage({ publisher, issuedAt });
+  const message = buildConnectAuthMessage({
+    publisher,
+    issuedAt,
+    reonboard: input?.reonboard === true,
+  });
   try {
     await assertPublisherSignature(publisher, message, input?.connectSig);
   } catch {

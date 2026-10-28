@@ -342,15 +342,18 @@ export function buildALaCarteAuthMessage(input: ALaCarteAuthFields): string {
 export type ConnectAuthFields = {
   publisher: unknown;
   issuedAt: unknown;
+  reonboard?: boolean;
 };
 
 /** Binds the writer and the issuedAt that POST /api/stripe/connect/onboard checks. */
 export function buildConnectAuthMessage(input: ConnectAuthFields): string {
-  return [
+  const lines = [
     CONNECT_AUTH_PREFIX,
     `publisher:${asText(input.publisher).trim().toLowerCase()}`,
     `issuedAt:${asText(input.issuedAt).trim()}`,
-  ].join("\n");
+  ];
+  if (input.reonboard === true) lines.push("reonboard:true");
+  return lines.join("\n");
 }
 
 export type RecentWalletAuthFields = {

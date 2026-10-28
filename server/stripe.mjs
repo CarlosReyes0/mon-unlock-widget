@@ -9,6 +9,8 @@
  * Env:
  *   STRIPE_SECRET_KEY
  *   STRIPE_WEBHOOK_SECRET
+ *   STRIPE_CONNECT_WEBHOOK_SECRET — Connect endpoint (events on connected accounts)
+ *   STRIPE_CONNECT_DIRECT_CHARGES — "true" enables direct charges for new accounts
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  *   STRIPE_PAYOUT_CRON_SECRET — required to call the payout endpoints
@@ -19,6 +21,8 @@
  * The writer transfer is the queued sale minus the Stripe processing fee on that
  * charge (balance transaction fee), capped at what the platform netted. The
  * platform does not add a cut. The fee is read at payout time, not estimated.
+ * Direct-charge sales (connect_model = direct) are not queued: Stripe fees and
+ * payouts stay on the connected account.
  */
 import Stripe from "stripe";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -79,6 +83,106 @@ export function getStripe() {
     stripeSingleton = mock ? new Stripe(STRIPE_SECRET_KEY, mock) : new Stripe(STRIPE_SECRET_KEY);
   }
   return stripeSingleton;
+}
+
+/**
+ * Accounts v1 preview that allows Express dashboard + fees.payer=account
+ * + losses.payments=stripe. Sent only on direct-model account creation.
+ * Other Stripe calls keep the client's default API version.
+ */
+export const DIRECT_CONNECT_API_VERSION = "2026-06-24.preview";
+
+export const CONNECT_MODEL_DIRECT = "direct";
+
+/** Direct charges stay off unless this is exactly "true". */
+export function directChargesEnabled(env = process.env) {
+  return String(env.STRIPE_CONNECT_DIRECT_CHARGES ?? "").trim().toLowerCase() === "true";
+}
+
+/**
+ * Platform fee in cents for a direct charge.
+ * Zero omits application_fee_amount. There is no platform fee today.
+ * @param {number} _amountUsdCents
+ */
+export function directChargeApplicationFeeCents(_amountUsdCents) {
+  return 0;
+}
+
+/**
+ * Platform fee percent for a direct-charge subscription.
+ * Zero omits application_fee_percent.
+ */
+export function directSubscriptionApplicationFeePercent() {
+  return 0;
+}
+
+/**
+ * TODO(tax): a tax advisor is still deciding who is liable on direct charges.
+ * Platform charges send liability "self" (the platform). A Checkout Session
+ * created on the connected account would make "self" the writer, so this
+ * omits liability until STRIPE_DIRECT_TAX_LIABILITY is set.
+ *   account  — { type: "self" } on the connected account (writer liable)
+ *   platform — { type: "application" } (gated platform-liable direct charges)
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+export function directChargeAutomaticTax(env = process.env) {
+  const choice = String(env.STRIPE_DIRECT_TAX_LIABILITY ?? "").trim().toLowerCase();
+  if (choice === "account") return { enabled: true, liability: { type: "self" } };
+  if (choice === "platform") return { enabled: true, liability: { type: "application" } };
+  return { enabled: true };
+}
+
+/**
+ * Express dashboard, the connected account pays Stripe fees, and Stripe owns
+ * negative balances. fees.payer stays "account". Stripe issues 1099-Ks for a
+ * connected account when that account pays fees, and does not when the payer
+ * is application or application_express.
+ * https://docs.stripe.com/connect/tax-reporting
+ * @param {string} publisher
+ */
+export function directConnectAccountParams(publisher) {
+  return {
+    controller: {
+      stripe_dashboard: { type: "express" },
+      fees: { payer: "account" },
+      losses: { payments: "stripe" },
+      requirement_collection: "stripe",
+    },
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+    metadata: { publisher, product: "mon_unlock", connect_model: CONNECT_MODEL_DIRECT },
+  };
+}
+
+/** @param {string} publisher */
+export function legacyConnectAccountParams(publisher) {
+  return {
+    type: "express",
+    capabilities: {
+      transfers: { requested: true },
+    },
+    metadata: { publisher, product: "mon_unlock" },
+  };
+}
+
+function normalizeConnectedAccountId(value) {
+  const id = String(value || "").trim();
+  return /^acct_[A-Za-z0-9_]+$/.test(id) ? id : "";
+}
+
+function stripeAccountOptions(stripeAccount) {
+  const id = normalizeConnectedAccountId(stripeAccount);
+  return id ? { stripeAccount: id } : undefined;
+}
+
+function appendReturnQuery(raw, key, value) {
+  const hashAt = raw.indexOf("#");
+  const before = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
+  const hash = hashAt >= 0 ? raw.slice(hashAt) : "";
+  const join = before.includes("?") ? "&" : "?";
+  return `${before}${join}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash}`;
 }
 
 /**
@@ -296,12 +400,14 @@ function normalizeCheckoutReturnUrl(returnUrl) {
  *   buyerEmail?: string,
  *   integrationId?: string,
  *   excludedPaymentMethodTypes?: string[],
+ *   directCharge?: boolean,
  * }} input
  */
 export function articleUnlockCheckoutSessionParams(input) {
   const title = input.title
     ? `Unlock: ${String(input.title).slice(0, 120)}`
     : `Unlock article ${input.articleId}`;
+  const directCharge = input.directCharge === true;
   const metadata = {
     articleId: input.articleId,
     articleIdHash: input.hash,
@@ -310,11 +416,15 @@ export function articleUnlockCheckoutSessionParams(input) {
     amountUsdCents: String(input.amountUsdCents),
     product: "mon_unlock_fiat",
     ...(input.reader ? { reader: input.reader } : {}),
+    ...(directCharge ? { connectModel: CONNECT_MODEL_DIRECT } : {}),
   };
+  const applicationFeeCents = directCharge ? directChargeApplicationFeeCents(input.amountUsdCents) : 0;
   return {
     ui_mode: "elements",
     mode: "payment",
-    automatic_tax: { enabled: true, liability: { type: "self" } },
+    automatic_tax: directCharge
+      ? directChargeAutomaticTax()
+      : { enabled: true, liability: { type: "self" } },
     integration_identifier: input.integrationId || checkoutIntegrationId("op_article_unlock"),
     return_url: input.returnUrl,
     customer_email: input.buyerEmail,
@@ -333,6 +443,7 @@ export function articleUnlockCheckoutSessionParams(input) {
     payment_intent_data: {
       description: title,
       metadata,
+      ...(applicationFeeCents > 0 ? { application_fee_amount: applicationFeeCents } : {}),
     },
     ...(input.excludedPaymentMethodTypes?.length
       ? { excluded_payment_method_types: input.excludedPaymentMethodTypes }
@@ -356,13 +467,18 @@ export async function createArticleCheckoutSession(input) {
   const stripe = getStripe();
   const prepared = await prepareArticleFiatCharge(input);
   const returnUrl = normalizeCheckoutReturnUrl(input.returnUrl);
-  const methods = await checkoutMethodVisibilityForAccount(stripe);
+  const directAccountId = await directChargeAccountForCheckout(prepared.publisher);
+  const methods = await checkoutMethodVisibilityForAccount(stripe, directAccountId || undefined);
   const session = await stripe.checkout.sessions.create(
     articleUnlockCheckoutSessionParams({
       ...prepared,
-      returnUrl,
+      returnUrl: directAccountId
+        ? appendReturnQuery(returnUrl, "stripe_account", directAccountId)
+        : returnUrl,
       excludedPaymentMethodTypes: methods.excludedPaymentMethodTypes,
-    })
+      directCharge: Boolean(directAccountId),
+    }),
+    directAccountId ? { stripeAccount: directAccountId } : undefined
   );
 
   return {
@@ -373,6 +489,7 @@ export async function createArticleCheckoutSession(input) {
     publisher: prepared.publisher,
     articleIdHash: prepared.hash,
     expressPaymentMethods: methods.expressPaymentMethods,
+    ...(directAccountId ? { stripeAccountId: directAccountId } : {}),
   };
 }
 
@@ -578,9 +695,11 @@ export async function grantFiatUnlockFromIntent(intent) {
 
   // Queued amount is the listed sale. Stripe's fee is deducted when the transfer is created.
   // A reader who already paid still gets the unlock. No new payout row is
-  // queued when that article's publisher is on BLOCKED_PUBLISHERS.
+  // queued when that article's publisher is on BLOCKED_PUBLISHERS, or when
+  // the charge was a direct charge on the writer's connected account.
   // Pending and failed rows are left alone.
-  if (amountCents > 0 && !isBlockedPublisher(publisher)) {
+  const directSale = intent.metadata?.connectModel === CONNECT_MODEL_DIRECT;
+  if (amountCents > 0 && !isBlockedPublisher(publisher) && !directSale) {
     const payoutRow = {
       fiat_unlock_id: unlock.id,
       publisher,
@@ -639,11 +758,14 @@ export async function grantFiatUnlockFromCheckoutSession(session) {
  */
 export async function confirmFiatPayment(input) {
   const stripe = getStripe();
+  const opts = stripeAccountOptions(input?.stripeAccountId);
   const sessionId = String(input.sessionId || "").trim();
   if (sessionId.startsWith("cs_")) {
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["payment_intent"],
-    });
+    const session = await stripe.checkout.sessions.retrieve(
+      sessionId,
+      { expand: ["payment_intent"] },
+      opts
+    );
     return grantFiatUnlockFromCheckoutSession(session);
   }
   const paymentIntentId = String(input.paymentIntentId || "").trim();
@@ -652,7 +774,7 @@ export async function confirmFiatPayment(input) {
     err.status = 400;
     throw err;
   }
-  const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  const intent = await stripe.paymentIntents.retrieve(paymentIntentId, {}, opts);
   return grantFiatUnlockFromIntent(intent);
 }
 
@@ -663,27 +785,19 @@ export async function confirmPaymentIntent(paymentIntentId) {
   return confirmFiatPayment({ paymentIntentId });
 }
 
+function connectWebhookSecret() {
+  return (process.env.STRIPE_CONNECT_WEBHOOK_SECRET || "").trim();
+}
+
 /**
- * @param {string} rawBody
- * @param {string | string[] | undefined} signature
+ * @param {import("stripe").Stripe.Event} event
+ * @param {string} [stripeAccount]
  */
-export async function handleStripeWebhook(rawBody, signature) {
-  const stripe = getStripe();
-  if (!STRIPE_WEBHOOK_SECRET) {
-    const err = new Error("stripe_webhook_not_configured");
-    err.status = 503;
-    throw err;
-  }
-  const sig = Array.isArray(signature) ? signature[0] : signature;
-  if (!sig) {
-    const err = new Error("missing_signature");
-    err.status = 400;
-    throw err;
-  }
-
-  const event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
-
-  if (event.type === "checkout.session.completed") {
+async function dispatchStripeEvent(event, stripeAccount) {
+  if (
+    event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.async_payment_succeeded"
+  ) {
     const session = event.data.object;
     const result = await grantFiatUnlockFromCheckoutSession(session);
     return { received: true, type: event.type, ...result };
@@ -701,7 +815,7 @@ export async function handleStripeWebhook(rawBody, signature) {
     event.type === "customer.subscription.deleted"
   ) {
     const { applyStripeSubscriptionEvent } = await import("./subscriptions.mjs");
-    const result = await applyStripeSubscriptionEvent(event);
+    const result = await applyStripeSubscriptionEvent(event, { stripeAccount: stripeAccount || "" });
     return { received: true, type: event.type, ...result };
   }
 
@@ -719,12 +833,208 @@ export async function handleStripeWebhook(rawBody, signature) {
 }
 
 /**
+ * @param {string} rawBody
+ * @param {string | string[] | undefined} signature
+ * @param {string} secret
+ */
+function constructStripeEvent(rawBody, signature, secret) {
+  const stripe = getStripe();
+  const sig = Array.isArray(signature) ? signature[0] : signature;
+  if (!sig) {
+    const err = new Error("missing_signature");
+    err.status = 400;
+    throw err;
+  }
+  return stripe.webhooks.constructEvent(rawBody, sig, secret);
+}
+
+/**
+ * Platform webhook. Objects live on the platform account.
+ * @param {string} rawBody
+ * @param {string | string[] | undefined} signature
+ */
+export async function handleStripeWebhook(rawBody, signature) {
+  if (!STRIPE_WEBHOOK_SECRET) {
+    const err = new Error("stripe_webhook_not_configured");
+    err.status = 503;
+    throw err;
+  }
+  const event = constructStripeEvent(rawBody, signature, STRIPE_WEBHOOK_SECRET);
+  return dispatchStripeEvent(event, "");
+}
+
+/**
+ * Connect webhook. Events are for connected accounts (`event.account`).
+ * Direct-charge retrieves pass that account. Idempotent with the platform handler.
+ * @param {string} rawBody
+ * @param {string | string[] | undefined} signature
+ */
+export async function handleStripeConnectWebhook(rawBody, signature) {
+  const secret = connectWebhookSecret();
+  if (!secret) {
+    const err = new Error("stripe_connect_webhook_not_configured");
+    err.status = 503;
+    throw err;
+  }
+  const event = constructStripeEvent(rawBody, signature, secret);
+  const stripeAccount = normalizeConnectedAccountId(event.account);
+  if (!stripeAccount) {
+    return { received: true, type: event.type, ignored: true, reason: "missing_account" };
+  }
+  return dispatchStripeEvent(event, stripeAccount);
+}
+
+let connectModelColumns = true;
+
+const PUBLISHER_ACCOUNT_COLUMNS =
+  "stripe_account_id,onboarded_at,connect_model,legacy_stripe_account_id";
+const PUBLISHER_ACCOUNT_COLUMNS_LEGACY = "stripe_account_id,onboarded_at";
+
+function publisherAccountColumns() {
+  return connectModelColumns ? PUBLISHER_ACCOUNT_COLUMNS : PUBLISHER_ACCOUNT_COLUMNS_LEGACY;
+}
+
+function connectColumnMissing(err) {
+  return isUnknownColumn(err, "connect_model") || isUnknownColumn(err, "legacy_stripe_account_id");
+}
+
+/**
+ * @param {string} publisher
+ */
+export async function lookupPublisherAccount(publisher) {
+  const cols = publisherAccountColumns();
+  try {
+    const rows = await supabase(
+      `publisher_accounts?select=${encodeURIComponent(cols)}&publisher=eq.${encodeURIComponent(publisher)}&limit=1`
+    );
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  } catch (e) {
+    if (connectModelColumns && connectColumnMissing(e)) {
+      connectModelColumns = false;
+      return lookupPublisherAccount(publisher);
+    }
+    throw e;
+  }
+}
+
+async function connectModelStorageReady() {
+  if (!connectModelColumns) return false;
+  try {
+    await supabase("publisher_accounts?select=connect_model,legacy_stripe_account_id&limit=1");
+    return true;
+  } catch (e) {
+    if (connectColumnMissing(e)) {
+      connectModelColumns = false;
+      return false;
+    }
+    throw e;
+  }
+}
+
+/**
+ * Connected account id for a direct-charge Checkout Session.
+ * Empty string means the platform charge path (flag off, or a legacy account).
+ * A writer with no account while the flag is on cannot take cards.
+ * @param {string} publisher
+ */
+async function directChargeAccountForCheckout(publisher) {
+  if (!directChargesEnabled()) return "";
+  const row = await lookupPublisherAccount(publisher);
+  if (!row?.stripe_account_id || row.connect_model !== CONNECT_MODEL_DIRECT) {
+    if (!row?.stripe_account_id) {
+      const err = new Error("publisher_not_payable");
+      err.status = 409;
+      throw err;
+    }
+    return "";
+  }
+  const stripe = getStripe();
+  let acct;
+  try {
+    acct = await stripe.accounts.retrieve(row.stripe_account_id);
+  } catch {
+    const err = new Error("publisher_not_payable");
+    err.status = 409;
+    throw err;
+  }
+  if (!acct?.charges_enabled) {
+    const err = new Error("publisher_not_payable");
+    err.status = 409;
+    throw err;
+  }
+  return row.stripe_account_id;
+}
+
+/**
+ * @param {object} row
+ */
+async function savePublisherAccount(row) {
+  try {
+    await supabase("publisher_accounts?on_conflict=publisher", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: [row],
+    });
+  } catch (e) {
+    if (connectModelColumns && connectColumnMissing(e) && row.connect_model === CONNECT_MODEL_DIRECT) {
+      connectModelColumns = false;
+      const err = new Error("connect_model_migration_required");
+      err.status = 503;
+      throw err;
+    }
+    throw e;
+  }
+}
+
+/**
+ * Where a queued platform transfer is sent.
+ * After a writer re-onboards, already-pending rows still use the previous account.
+ * @param {object | null | undefined} account
+ */
+export function payoutTransferDestination(account) {
+  if (
+    account?.connect_model === CONNECT_MODEL_DIRECT &&
+    typeof account.legacy_stripe_account_id === "string" &&
+    account.legacy_stripe_account_id.startsWith("acct_")
+  ) {
+    return account.legacy_stripe_account_id;
+  }
+  return typeof account?.stripe_account_id === "string" ? account.stripe_account_id : "";
+}
+
+/**
+ * Writer-facing Connect state. Does not include Stripe account ids.
+ * @param {string} publisherRaw
+ */
+export async function getConnectStatus(publisherRaw) {
+  const directCharges = directChargesEnabled();
+  if (!directCharges) return { directCharges: false };
+  const publisher = String(publisherRaw || "").trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(publisher) || isBlockedPublisher(publisher)) {
+    return { directCharges: true, connectModel: null, needsReonboard: false, payable: false };
+  }
+  const row = await lookupPublisherAccount(publisher);
+  if (row?.connect_model === CONNECT_MODEL_DIRECT && row.stripe_account_id) {
+    return {
+      directCharges: true,
+      connectModel: CONNECT_MODEL_DIRECT,
+      needsReonboard: false,
+      payable: Boolean(row.onboarded_at),
+    };
+  }
+  if (row?.stripe_account_id) {
+    return { directCharges: true, connectModel: "legacy", needsReonboard: true, payable: false };
+  }
+  return { directCharges: true, connectModel: null, needsReonboard: false, payable: false };
+}
+
+/**
  * Create / reuse Connect Express account and return onboarding link.
  * Publisher links a wallet in Express for USDC stablecoin payouts (private preview).
  * Requires a fresh EIP-191 signature from that wallet. Auth runs before Stripe
  * and before the publisher_accounts lookup, so a failed proof never returns a
  * link or an existing account id.
- * @param {{ publisher: string, refreshUrl: string, returnUrl: string, issuedAt?: string, connectSig?: string }} input
+ * @param {{ publisher: string, refreshUrl: string, returnUrl: string, issuedAt?: string, connectSig?: string, reonboard?: boolean }} input
  */
 export async function createConnectOnboardingLink(input) {
   const publisherPreview = String(input?.publisher || "").trim().toLowerCase();
@@ -733,10 +1043,12 @@ export async function createConnectOnboardingLink(input) {
     err.status = 403;
     throw err;
   }
+  const reonboard = input?.reonboard === true;
   await assertConnectOnboardingAuth({
     publisher: input.publisher,
     issuedAt: input.issuedAt,
     connectSig: input.connectSig,
+    reonboard,
   });
   const stripe = getStripe();
   const publisher = String(input.publisher || "").trim().toLowerCase();
@@ -747,30 +1059,37 @@ export async function createConnectOnboardingLink(input) {
   }
 
   let accountId;
-  const existing = await supabase(
-    `publisher_accounts?select=stripe_account_id&publisher=eq.${encodeURIComponent(publisher)}&limit=1`
-  );
-  if (Array.isArray(existing) && existing[0]?.stripe_account_id) {
-    accountId = existing[0].stripe_account_id;
-  } else {
-    const account = await stripe.accounts.create({
-      type: "express",
-      capabilities: {
-        transfers: { requested: true },
-      },
-      metadata: { publisher, product: "mon_unlock" },
+  const existing = await lookupPublisherAccount(publisher);
+  const direct = directChargesEnabled();
+  const model = existing?.connect_model === CONNECT_MODEL_DIRECT ? CONNECT_MODEL_DIRECT : "legacy";
+  const replacing = direct && reonboard && existing?.stripe_account_id && model !== CONNECT_MODEL_DIRECT;
+  if (existing?.stripe_account_id && !replacing) {
+    accountId = existing.stripe_account_id;
+  } else if (direct) {
+    if (!(await connectModelStorageReady())) {
+      const err = new Error("connect_model_migration_required");
+      err.status = 503;
+      throw err;
+    }
+    const account = await stripe.accounts.create(directConnectAccountParams(publisher), {
+      apiVersion: DIRECT_CONNECT_API_VERSION,
     });
     accountId = account.id;
-    await supabase("publisher_accounts?on_conflict=publisher", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: [
-        {
-          publisher,
-          stripe_account_id: accountId,
-          updated_at: new Date().toISOString(),
-        },
-      ],
+    await savePublisherAccount({
+      publisher,
+      stripe_account_id: accountId,
+      connect_model: CONNECT_MODEL_DIRECT,
+      legacy_stripe_account_id: replacing ? existing.stripe_account_id : null,
+      onboarded_at: null,
+      updated_at: new Date().toISOString(),
+    });
+  } else {
+    const account = await stripe.accounts.create(legacyConnectAccountParams(publisher));
+    accountId = account.id;
+    await savePublisherAccount({
+      publisher,
+      stripe_account_id: accountId,
+      updated_at: new Date().toISOString(),
     });
   }
 
@@ -994,6 +1313,7 @@ function feeAuditPatch(settlement) {
 export function resetPayoutColumnSupportForTests() {
   payoutFeeColumns = true;
   payoutChargeColumn = true;
+  connectModelColumns = true;
 }
 
 async function transitionPayout(id, fromStatus, patch) {
@@ -1235,11 +1555,9 @@ async function settlePayoutJob(job, stripe, counts, fromStatus) {
       return;
     }
 
-    const accounts = await supabase(
-      `publisher_accounts?select=stripe_account_id,onboarded_at&publisher=eq.${encodeURIComponent(claimed.publisher)}&limit=1`
-    );
-    const account = Array.isArray(accounts) ? accounts[0] : null;
-    if (!account?.stripe_account_id) {
+    const account = await lookupPublisherAccount(claimed.publisher);
+    const destinationId = payoutTransferDestination(account);
+    if (!destinationId) {
       await transitionPayout(claimed.id, "processing", { status: "pending", error: "publisher_not_onboarded" });
       counts.pending++;
       return;
@@ -1247,7 +1565,7 @@ async function settlePayoutJob(job, stripe, counts, fromStatus) {
 
     let stripeAccount;
     try {
-      stripeAccount = await stripe.accounts.retrieve(account.stripe_account_id);
+      stripeAccount = await stripe.accounts.retrieve(destinationId);
     } catch {
       await transitionPayout(claimed.id, "processing", { status: "pending", error: "account_lookup_failed" });
       counts.pending++;
@@ -1319,7 +1637,7 @@ async function settlePayoutJob(job, stripe, counts, fromStatus) {
       {
         amount: decision.transferCents,
         currency: claimed.currency || "usd",
-        destination: account.stripe_account_id,
+        destination: destinationId,
         source_transaction: chargeId,
         metadata: {
           payout_job_id: String(claimed.id),

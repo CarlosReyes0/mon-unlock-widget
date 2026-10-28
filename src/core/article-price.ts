@@ -2,7 +2,10 @@
  * Per-article USD price for Write, publish, and listing edits.
  * Stripe's USD minimum is $0.50. There is no product maximum.
  * The card figure estimates 2.9% + $0.30 so a writer can pick a price.
- * The payout deducts Stripe's fee on that charge, not this estimate. USDC net is the price.
+ * That is Stripe's processing fee. The writer pays it on the transfer path
+ * and on direct charges. Connect account fees are not in this line.
+ * The legacy payout deducts the charge's real fee, not this estimate.
+ * USDC net is the price.
  */
 
 export const MIN_ARTICLE_PRICE_CENTS = 50;

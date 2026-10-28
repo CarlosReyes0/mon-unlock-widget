@@ -220,5 +220,14 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_PRIVY_APP_ID": JSON.stringify(env.VITE_PRIVY_APP_ID || ""),
       "import.meta.env.VITE_WALLETCONNECT_PROJECT_ID": JSON.stringify(walletConnectProjectId),
     },
+    ...(process.env.VITE_API_ORIGIN
+      ? {
+          server: {
+            proxy: {
+              "/api": { target: process.env.VITE_API_ORIGIN, changeOrigin: false },
+            },
+          },
+        }
+      : {}),
   };
 });
