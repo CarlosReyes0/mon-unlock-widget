@@ -278,6 +278,12 @@ test("client and server sign the same plan and a-la-carte messages", () => {
   assert.match(serverPlanMessage(plan), /issuedAt:2026-10-17T03:10:00\.000Z/);
   assert.match(serverALaCarteMessage(article), /issuedAt:2026-10-17T03:10:00\.000Z/);
   assert.equal(serverConnectMessage(connect), clientConnectMessage(connect));
+  assert.equal(
+    serverConnectMessage({ ...connect, reonboard: true }),
+    clientConnectMessage({ ...connect, reonboard: true })
+  );
+  assert.match(serverConnectMessage({ ...connect, reonboard: true }), /reonboard:true$/);
+  assert.doesNotMatch(serverConnectMessage(connect), /reonboard/);
   assert.equal(serverGasMessage(gas), clientGasMessage(gas));
   assert.equal(serverMediaMessage(recent), clientMediaMessage(recent));
   assert.equal(serverVoiceMessage(recent), clientVoiceMessage(recent));

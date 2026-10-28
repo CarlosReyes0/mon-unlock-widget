@@ -29,6 +29,7 @@ const other = privateKeyToAccount(OTHER_KEY);
 const sbHits = [];
 const stripeCalls = [];
 let existingAccount = false;
+let accountCreateBody = "";
 
 function readReqBody(req) {
   return new Promise((resolve, reject) => {
@@ -60,8 +61,9 @@ const supabase = http.createServer(async (req, res) => {
 
 const stripe = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://127.0.0.1:${STRIPE_PORT}`);
-  if (req.method !== "GET" && req.method !== "HEAD") await readReqBody(req);
+  const raw = req.method === "GET" || req.method === "HEAD" ? "" : await readReqBody(req);
   stripeCalls.push({ method: req.method, path: url.pathname });
+  if (req.method === "POST" && url.pathname === "/v1/accounts") accountCreateBody = raw;
 
   if (req.method === "GET" && url.pathname === "/mock-onboarding") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -116,6 +118,7 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
     STRIPE_SECRET_KEY: "sk_test_mock_openpaywall_local_only",
     STRIPE_WEBHOOK_SECRET: "",
     STRIPE_CONNECT_WEBHOOK_SECRET: "",
+    STRIPE_CONNECT_DIRECT_CHARGES: "",
     STRIPE_MOCK_BASE_URL: `http://127.0.0.1:${STRIPE_PORT}`,
     MPP_SECRET_KEY: "",
     MPP_TEMPO_RECIPIENT: "",
@@ -147,6 +150,7 @@ function reset() {
   sbHits.length = 0;
   stripeCalls.length = 0;
   existingAccount = true;
+  accountCreateBody = "";
 }
 
 async function post(body) {
@@ -255,6 +259,8 @@ test("a valid signature creates an onboarding link against the mock", async () =
   assert.equal(res.body.stripeAccountId, NEW_ACCOUNT);
   assert.equal(stripeCalls.some((call) => call.method === "POST" && call.path === "/v1/accounts"), true);
   assert.equal(stripeCalls.some((call) => call.method === "POST" && call.path === "/v1/account_links"), true);
+  assert.match(accountCreateBody, /type=express|\"type\":\"express\"/);
+  assert.doesNotMatch(accountCreateBody, /fees\[payer\]=account|payer.{0,12}account/);
 });
 
 test("a valid signature returns the existing account link and not a new account", async () => {

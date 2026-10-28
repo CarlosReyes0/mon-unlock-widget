@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { loadStripe, type Stripe, type StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
 import { checkoutConfirmOptions, DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS } from "../core/stripe-confirm.js";
 import {
@@ -12,12 +12,18 @@ import {
 const publishableKey =
   (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined)?.trim() ?? "";
 
-let stripePromise: Promise<Stripe | null> | null = null;
+const stripePromises = new Map<string, Promise<Stripe | null>>();
 
-function getStripePromise() {
+function stripePromiseFor(stripeAccountId?: string) {
   if (!publishableKey) return null;
-  if (!stripePromise) stripePromise = loadStripe(publishableKey);
-  return stripePromise;
+  const key = stripeAccountId || "";
+  const cached = stripePromises.get(key);
+  if (cached) return cached;
+  const promise = stripeAccountId
+    ? loadStripe(publishableKey, { stripeAccount: stripeAccountId })
+    : loadStripe(publishableKey);
+  stripePromises.set(key, promise);
+  return promise;
 }
 
 export function stripeFiatEnabled(): boolean {
@@ -29,6 +35,7 @@ type CreateCheckoutResult = {
   sessionId: string;
   sessionToken: string;
   amountUsdCents: number;
+  stripeAccountId?: string;
   expressPaymentMethods?: typeof DEFAULT_EXPRESS_CHECKOUT_PAYMENT_METHODS;
 };
 
@@ -43,9 +50,29 @@ function fiatIntentErrorMessage(code: string | undefined): string {
       return "This article is not registered for payments yet.";
     case "a_la_carte_disabled":
       return "This writer only offers subscriptions.";
+    case "publisher_not_payable":
+      return "card_unavailable";
     default:
       return code || "Could not start card checkout.";
   }
+}
+
+class CardFrameBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed) {
+      return <p className="checkout-error">Card checkout isn’t available right now. You can pay with USDC.</p>;
+    }
+    return this.props.children;
+  }
+}
+
+function stripeAccountFromLocation(): string {
+  const id = new URLSearchParams(window.location.search).get("stripe_account")?.trim() ?? "";
+  return /^acct_[A-Za-z0-9]+$/.test(id) ? id : "";
 }
 
 function checkoutReturnUrl(): string {
@@ -100,7 +127,11 @@ async function createCheckout(input: {
   return data;
 }
 
-async function confirmUnlock(input: { sessionId?: string; paymentIntentId?: string }): Promise<string> {
+async function confirmUnlock(input: {
+  sessionId?: string;
+  paymentIntentId?: string;
+  stripeAccountId?: string;
+}): Promise<string> {
   const res = await fetch("/api/stripe/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -267,8 +298,12 @@ export function StripeFiatPay({
   onError,
   onBusy = () => {},
 }: Props) {
-  const promise = useMemo(() => getStripePromise(), []);
   const [session, setSession] = useState<CreateCheckoutResult | null>(null);
+  const stripeReady = Boolean(publishableKey);
+  const promise = useMemo(
+    () => (session ? stripePromiseFor(session.stripeAccountId) : null),
+    [session]
+  );
   const [bootError, setBootError] = useState<string | null>(null);
   const [finishingRedirect, setFinishingRedirect] = useState(false);
 
@@ -283,7 +318,10 @@ export function StripeFiatPay({
         if ("status" in redirected && redirected.status && redirected.status !== "succeeded") {
           throw new Error("Payment was not completed. You can try again.");
         }
-        const sessionToken = await confirmUnlock(redirected);
+        const sessionToken = await confirmUnlock({
+          ...redirected,
+          stripeAccountId: stripeAccountFromLocation() || undefined,
+        });
         if (!cancelled) onUnlocked(sessionToken);
       } catch (e) {
         if (!cancelled) {
@@ -306,7 +344,7 @@ export function StripeFiatPay({
   useEffect(() => {
     if (finishingRedirect) return;
     if (readReturnedCheckout()) return;
-    if (!promise || amountUsdCents < 50) return;
+    if (!stripeReady || amountUsdCents < 50) return;
     let cancelled = false;
     onBusy(true);
     void createCheckout({ articleId, title, amountUsdCents, embedSig, contract })
@@ -325,7 +363,7 @@ export function StripeFiatPay({
       cancelled = true;
     };
   }, [
-    promise,
+    stripeReady,
     articleId,
     title,
     amountUsdCents,
@@ -336,7 +374,7 @@ export function StripeFiatPay({
     finishingRedirect,
   ]);
 
-  if (!promise) return null;
+  if (!stripeReady) return null;
 
   if (finishingRedirect) {
     return <p className="checkout-status">Confirming payment…</p>;
@@ -346,11 +384,16 @@ export function StripeFiatPay({
     return <p className="checkout-error">{bootError}</p>;
   }
 
-  if (!session) {
+  if (!session || !promise) {
     return <p className="checkout-status">Preparing card checkout…</p>;
   }
 
   return (
+    <>
+      {session.stripeAccountId ? (
+        <p className="checkout-hint">Card payments are collected by this writer&apos;s Stripe account.</p>
+      ) : null}
+      <CardFrameBoundary>
     <CheckoutElementsProvider
       stripe={promise}
       options={{
@@ -374,5 +417,7 @@ export function StripeFiatPay({
         onBusy={onBusy}
       />
     </CheckoutElementsProvider>
+      </CardFrameBoundary>
+    </>
   );
 }

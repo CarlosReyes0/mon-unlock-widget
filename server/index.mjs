@@ -33,7 +33,10 @@ import {
   createArticleCheckoutSession,
   confirmFiatPayment,
   handleStripeWebhook,
+  handleStripeConnectWebhook,
   createConnectOnboardingLink,
+  getConnectStatus,
+  directChargesEnabled,
   processPendingPayouts,
   retryFailedPayouts,
   payoutsCronEnabled,
@@ -602,7 +605,18 @@ const server = http.createServer(guardRequest(async (req, res) => {
       ok: true,
       stripeConfigured: stripeConfigured(),
       supabaseConfigured: supabaseConfigured(),
+      directCharges: directChargesEnabled(),
     });
+  }
+
+  if ((method === "GET" || method === "HEAD") && url.pathname === "/api/stripe/connect/status") {
+    try {
+      const result = await getConnectStatus(url.searchParams.get("publisher") || "");
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 500;
+      return sendJson(res, status, { error: e?.message || "status_failed" });
+    }
   }
 
   if (method === "POST" && url.pathname === "/api/stripe/create-intent") {
@@ -642,6 +656,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
       const result = await confirmFiatPayment({
         paymentIntentId: parsed.paymentIntentId,
         sessionId: parsed.sessionId,
+        stripeAccountId: parsed.stripeAccountId,
       });
       return sendJson(res, 200, result);
     } catch (e) {
@@ -659,6 +674,18 @@ const server = http.createServer(guardRequest(async (req, res) => {
     } catch (e) {
       const status = e?.status || 400;
       console.error("[stripe] webhook:", e?.message || e);
+      return sendJson(res, status, { error: e?.message || "webhook_failed" });
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/api/stripe/connect-webhook") {
+    try {
+      const raw = await readBody(req, 256_000);
+      const result = await handleStripeConnectWebhook(raw, req.headers["stripe-signature"]);
+      return sendJson(res, 200, result);
+    } catch (e) {
+      const status = e?.status || 400;
+      console.error("[stripe] connect webhook:", e?.message || e);
       return sendJson(res, status, { error: e?.message || "webhook_failed" });
     }
   }
@@ -704,6 +731,7 @@ const server = http.createServer(guardRequest(async (req, res) => {
         publisher: parsed.publisher,
         issuedAt: parsed.issuedAt,
         connectSig: parsed.connectSig,
+        reonboard: parsed.reonboard === true,
         refreshUrl: safeUrl(parsed.refreshUrl, `${origin}/dashboard.html`),
         returnUrl: safeUrl(parsed.returnUrl, `${origin}/dashboard.html`),
       });

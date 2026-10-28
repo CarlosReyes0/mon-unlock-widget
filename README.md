@@ -215,6 +215,8 @@ On **/write**, tap **Add a photo, video, or audio** or drop a file into the draf
 
 Set `STRIPE_PAYOUT_CRON_SECRET` on Railway, and store that same value in Supabase Vault as `stripe_payout_cron_secret` when you apply `supabase/migrations/0018_payout_source_charge.sql`. That migration is not applied automatically. `supabase/migrations/20261027053000_payout_processing_fee.sql` adds nullable `stripe_fee_cents` and `net_cents` on `payout_jobs` and is not applied automatically. Leave `PAYOUTS_CRON_ENABLED` unset or `false` until you want pending transfers to run. Retry of failed rows uses `PAYOUT_RETRY_SECRET` and `scripts/retry-failed-payouts.mjs`; the schedule never calls it. Without Connect onboarding, jobs stay `pending` with `publisher_not_onboarded`.
 
+Direct charges are off unless `STRIPE_CONNECT_DIRECT_CHARGES=true`. With the flag on, a new writer account is an Express connected account where the writer pays Stripe fees and Stripe owns negative balances. Card checkout and subscriptions are created on that account, and those sales are not queued for a platform transfer. `supabase/migrations/20261028053000_publisher_connect_model.sql` adds nullable `connect_model` and `legacy_stripe_account_id` on `publisher_accounts` and is not applied automatically. Existing Express accounts stay on the transfer path until the writer chooses **Switch card payments** and onboards again. Apply the migration, create a Connect webhook endpoint (`POST /api/stripe/connect-webhook`) and set `STRIPE_CONNECT_WEBHOOK_SECRET`, then turn the flag on. Account creation for the new model sends Stripe API version `2026-06-24.preview`.
+
 ### Privy checkout setup
 
 1. Create an app at [dashboard.privy.io](https://dashboard.privy.io).

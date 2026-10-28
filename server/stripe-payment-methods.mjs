@@ -147,21 +147,28 @@ export function checkoutMethodVisibilityOrFallback(config) {
   return visibilityFromInactive(UNACTIVATED_PREVIEW_METHODS);
 }
 
-let pmcCache = { at: 0, config: null };
+/** @type {Map<string, { at: number, config: object | null }>} */
+const pmcCaches = new Map();
 const PMC_TTL_MS = 60_000;
 
 /**
  * @param {import("stripe").default} stripe
+ * @param {string} [stripeAccount] connected account for a direct charge
  * @returns {Promise<object | null>}
  */
-export async function loadDefaultPaymentMethodConfiguration(stripe) {
-  if (pmcCache.config && Date.now() - pmcCache.at < PMC_TTL_MS) {
-    return pmcCache.config;
+export async function loadDefaultPaymentMethodConfiguration(stripe, stripeAccount) {
+  const key = stripeAccount || "platform";
+  const cached = pmcCaches.get(key);
+  if (cached && Date.now() - cached.at < PMC_TTL_MS) {
+    return cached.config;
   }
   try {
-    const list = await stripe.paymentMethodConfigurations.list({ limit: 20 });
+    const list = await stripe.paymentMethodConfigurations.list(
+      { limit: 20 },
+      stripeAccount ? { stripeAccount } : undefined
+    );
     const config = list.data.find((row) => row.is_default) || list.data[0] || null;
-    pmcCache = { at: Date.now(), config };
+    pmcCaches.set(key, { at: Date.now(), config });
     return config;
   } catch (err) {
     console.warn("[stripe] payment method configuration:", err instanceof Error ? err.message : err);
@@ -171,13 +178,14 @@ export async function loadDefaultPaymentMethodConfiguration(stripe) {
 
 /**
  * @param {import("stripe").default} stripe
+ * @param {string} [stripeAccount]
  */
-export async function checkoutMethodVisibilityForAccount(stripe) {
-  const config = await loadDefaultPaymentMethodConfiguration(stripe);
+export async function checkoutMethodVisibilityForAccount(stripe, stripeAccount) {
+  const config = await loadDefaultPaymentMethodConfiguration(stripe, stripeAccount);
   return checkoutMethodVisibilityOrFallback(config);
 }
 
 /** Test helper — drop the PMC cache. */
 export function resetPaymentMethodConfigurationCache() {
-  pmcCache = { at: 0, config: null };
+  pmcCaches.clear();
 }

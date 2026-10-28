@@ -16,8 +16,12 @@ import {
 import {
   articleIdHash,
   checkoutIntegrationId,
+  directChargeAutomaticTax,
+  directChargesEnabled,
+  directSubscriptionApplicationFeePercent,
   getStripe,
   isUniqueViolation,
+  lookupPublisherAccount,
   stripeChargeId,
   supabaseConfigured,
 } from "./stripe.mjs";
@@ -51,28 +55,32 @@ export function subscriptionContractAddress() {
  *   cancelUrl: string,
  *   integrationId?: string,
  *   excludedPaymentMethodTypes?: string[],
+ *   directCharge?: boolean,
  * }} input
  */
 export function writerSubscriptionCheckoutSessionParams(input) {
+  const directCharge = input.directCharge === true;
+  const feePercent = directCharge ? directSubscriptionApplicationFeePercent() : 0;
+  const metadata = {
+    reader: input.reader,
+    writer: input.writer,
+    product: "writer_subscription",
+    ...(directCharge ? { connectModel: "direct" } : {}),
+  };
   return {
     mode: "subscription",
     line_items: [{ price: input.priceId, quantity: 1 }],
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
     client_reference_id: `${input.reader}:${input.writer}`,
-    automatic_tax: { enabled: true, liability: { type: "self" } },
+    automatic_tax: directCharge
+      ? directChargeAutomaticTax()
+      : { enabled: true, liability: { type: "self" } },
     integration_identifier: input.integrationId || checkoutIntegrationId("op_writer_sub"),
-    metadata: {
-      reader: input.reader,
-      writer: input.writer,
-      product: "writer_subscription",
-    },
+    metadata,
     subscription_data: {
-      metadata: {
-        reader: input.reader,
-        writer: input.writer,
-        product: "writer_subscription",
-      },
+      metadata,
+      ...(feePercent > 0 ? { application_fee_percent: feePercent } : {}),
     },
     ...(input.excludedPaymentMethodTypes?.length
       ? { excluded_payment_method_types: input.excludedPaymentMethodTypes }
@@ -456,33 +464,87 @@ async function queueSubscriptionPayout({ subscriptionId, writer, amountCents, ch
   }
 }
 
-async function ensureStripePrice(plan, writer) {
+/**
+ * Direct-charge account for this writer, or "" for the platform charge path.
+ * No account while the flag is on cannot take a card subscription.
+ * @param {string} writer
+ */
+async function subscriptionDirectAccount(writer) {
+  if (!directChargesEnabled()) return "";
+  const row = await lookupPublisherAccount(writer);
+  if (!row?.stripe_account_id || row.connect_model !== "direct") {
+    if (!row?.stripe_account_id) throw httpError("publisher_not_payable", 409);
+    return "";
+  }
   const stripe = getStripe();
+  let acct;
+  try {
+    acct = await stripe.accounts.retrieve(row.stripe_account_id);
+  } catch {
+    throw httpError("publisher_not_payable", 409);
+  }
+  if (!acct?.charges_enabled) throw httpError("publisher_not_payable", 409);
+  return row.stripe_account_id;
+}
+
+/** Account id for cancel, without refusing a writer who is not payable yet. */
+async function directAccountIdForCancel(writer) {
+  if (!directChargesEnabled()) return "";
+  try {
+    const row = await lookupPublisherAccount(writer);
+    if (row?.connect_model === "direct" && row.stripe_account_id) return row.stripe_account_id;
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+async function ensureStripePrice(plan, writer, stripeAccount) {
+  const stripe = getStripe();
+  const opts = stripeAccount ? { stripeAccount } : undefined;
   if (plan.stripe_price_id && plan.monthly_price_cents === normalizeMonthlyCents(plan.monthly_price_cents)) {
     // Price objects are immutable; reuse if cents match our stored amount.
   }
   const cents = normalizeMonthlyCents(plan.monthly_price_cents);
   if (plan.stripe_price_id && Number(plan.monthly_price_cents) === cents) {
-    return { productId: plan.stripe_product_id, priceId: plan.stripe_price_id };
+    if (!stripeAccount) {
+      return { productId: plan.stripe_product_id, priceId: plan.stripe_price_id };
+    }
+    try {
+      await stripe.prices.retrieve(plan.stripe_price_id, {}, opts);
+      return { productId: plan.stripe_product_id, priceId: plan.stripe_price_id };
+    } catch {
+      /* Stored price lives on the platform. Create one on the connected account. */
+    }
   }
 
-  let productId = plan.stripe_product_id;
+  let productId = stripeAccount ? null : plan.stripe_product_id;
   if (!productId) {
-    const product = await stripe.products.create({
-      name: `Open Paywall — ${writer.slice(0, 8)}…`,
-      metadata: { writer, product: "writer_subscription" },
-    });
+    const product = await stripe.products.create(
+      {
+        name: `Open Paywall — ${writer.slice(0, 8)}…`,
+        metadata: { writer, product: "writer_subscription" },
+      },
+      opts
+    );
     productId = product.id;
   }
 
-  const price = await stripe.prices.create({
-    currency: "usd",
-    unit_amount: cents,
-    recurring: { interval: "month" },
-    product: productId,
-    tax_behavior: "exclusive",
-    metadata: { writer, product: "writer_subscription" },
-  });
+  const price = await stripe.prices.create(
+    {
+      currency: "usd",
+      unit_amount: cents,
+      recurring: { interval: "month" },
+      product: productId,
+      tax_behavior: "exclusive",
+      metadata: {
+        writer,
+        product: "writer_subscription",
+        ...(stripeAccount ? { connectModel: "direct" } : {}),
+      },
+    },
+    opts
+  );
 
   await supabase(`writer_plans?publisher=eq.${encodeURIComponent(writer)}`, {
     method: "PATCH",
@@ -519,9 +581,10 @@ export async function createStripeSubscriptionCheckout(input) {
   const row = Array.isArray(stored) ? stored[0] : null;
   if (!row) throw httpError("plan_not_offered", 404);
 
-  const { priceId } = await ensureStripePrice(row, writer);
+  const stripeAccount = await subscriptionDirectAccount(writer);
+  const { priceId } = await ensureStripePrice(row, writer, stripeAccount);
   const stripe = getStripe();
-  const methods = await checkoutMethodVisibilityForAccount(stripe);
+  const methods = await checkoutMethodVisibilityForAccount(stripe, stripeAccount || undefined);
   const session = await stripe.checkout.sessions.create(
     writerSubscriptionCheckoutSessionParams({
       reader,
@@ -530,10 +593,16 @@ export async function createStripeSubscriptionCheckout(input) {
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
       excludedPaymentMethodTypes: methods.excludedPaymentMethodTypes,
-    })
+      directCharge: Boolean(stripeAccount),
+    }),
+    stripeAccount ? { stripeAccount } : undefined
   );
 
-  return { url: session.url, sessionId: session.id };
+  return {
+    url: session.url,
+    sessionId: session.id,
+    ...(stripeAccount ? { stripeAccountId: stripeAccount } : {}),
+  };
 }
 
 async function activateStripeSubscription({
@@ -544,6 +613,7 @@ async function activateStripeSubscription({
   periodEnd,
   amountCents,
   chargeId,
+  skipPayout,
 }) {
   const row = await upsertSubscriptionRow({
     reader,
@@ -555,7 +625,7 @@ async function activateStripeSubscription({
     current_period_end: periodEnd,
     canceled_at: null,
   });
-  if (row?.id && amountCents > 0) {
+  if (row?.id && amountCents > 0 && !skipPayout) {
     await queueSubscriptionPayout({
       subscriptionId: row.id,
       writer,
@@ -569,9 +639,15 @@ async function activateStripeSubscription({
 /**
  * Stripe Billing webhooks. Safe to call for unrelated events (returns ignored).
  * @param {import("stripe").Stripe.Event} event
+ * @param {{ stripeAccount?: string }} [context]
  */
-export async function applyStripeSubscriptionEvent(event) {
+export async function applyStripeSubscriptionEvent(event, context = {}) {
   if (!event?.type) return { ignored: true };
+  const stripeAccount =
+    typeof context.stripeAccount === "string" && context.stripeAccount.startsWith("acct_")
+      ? context.stripeAccount
+      : "";
+  const requestOptions = stripeAccount ? { stripeAccount } : undefined;
 
   if (event.type === "invoice.paid") {
     const invoice = event.data.object;
@@ -582,7 +658,7 @@ export async function applyStripeSubscriptionEvent(event) {
     if (!subId) return { ignored: true, reason: "no_subscription" };
 
     const stripe = getStripe();
-    const subscription = await stripe.subscriptions.retrieve(subId);
+    const subscription = await stripe.subscriptions.retrieve(subId, {}, requestOptions);
     if (subscription.metadata?.product !== "writer_subscription") {
       return { ignored: true, reason: "wrong_product" };
     }
@@ -607,6 +683,7 @@ export async function applyStripeSubscriptionEvent(event) {
       periodEnd,
       amountCents,
       chargeId: stripeChargeId(invoice),
+      skipPayout: subscription.metadata?.connectModel === "direct",
     });
     return { applied: true, type: event.type, subscriptionId: row?.id };
   }
@@ -774,7 +851,18 @@ export async function cancelWriterSubscription({ reader: readerRaw, writer: writ
     if (row.source === "stripe" && row.stripe_subscription_id) {
       try {
         const stripe = getStripe();
-        await stripe.subscriptions.cancel(row.stripe_subscription_id);
+        const directId = await directAccountIdForCancel(writer);
+        if (directId) {
+          try {
+            await stripe.subscriptions.cancel(row.stripe_subscription_id, {}, { stripeAccount: directId });
+          } catch (e) {
+            const code = e?.code || e?.raw?.code;
+            if (code !== "resource_missing") throw e;
+            await stripe.subscriptions.cancel(row.stripe_subscription_id);
+          }
+        } else {
+          await stripe.subscriptions.cancel(row.stripe_subscription_id);
+        }
       } catch {
         /* local cancel still wins */
       }

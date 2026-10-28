@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { publicPlan, writerSubscriptionCheckoutSessionParams } from "./subscriptions.mjs";
-import { checkoutIntegrationId } from "./stripe.mjs";
+import { checkoutIntegrationId, directSubscriptionApplicationFeePercent } from "./stripe.mjs";
 import { DEFAULT_MONTHLY_CENTS } from "./access.mjs";
 
 test("publicPlan treats a missing row as not offered", () => {
@@ -63,6 +63,25 @@ test("writer subscription Checkout excludes inactive payment methods when provid
   });
   assert.deepEqual(params.excluded_payment_method_types, ["klarna", "cashapp"]);
   assert.equal("payment_method_types" in params, false);
+});
+
+test("direct-charge subscription Checkout omits the platform fee percent", () => {
+  const params = writerSubscriptionCheckoutSessionParams({
+    reader: "0x1111111111111111111111111111111111111111",
+    writer: "0x2222222222222222222222222222222222222222",
+    priceId: "price_test",
+    successUrl: "https://example.com/ok",
+    cancelUrl: "https://example.com/no",
+    integrationId: "op_writer_sub_abcdefgh",
+    directCharge: true,
+  });
+  assert.equal(params.metadata.connectModel, "direct");
+  assert.equal(params.subscription_data.metadata.connectModel, "direct");
+  assert.equal("application_fee_percent" in params.subscription_data, false);
+  assert.equal(directSubscriptionApplicationFeePercent(), 0);
+  assert.deepEqual(params.automatic_tax, { enabled: true });
+  assert.equal("payment_method_types" in params, false);
+  assert.equal(params.mode, "subscription");
 });
 
 test("checkoutIntegrationId uses a prefix plus 8 letters", () => {

@@ -168,6 +168,19 @@ describe("subscription sale before tax", () => {
   });
 });
 
+test("connect model migration is additive and does not touch payout rows", () => {
+  const sql = fs.readFileSync(
+    path.join(ROOT, "supabase/migrations/20261028053000_publisher_connect_model.sql"),
+    "utf8"
+  );
+  assert.match(sql, /connect_model/);
+  assert.match(sql, /legacy_stripe_account_id/);
+  assert.match(sql, /publisher_accounts_connect_model_check/);
+  assert.doesNotMatch(sql, /update\s+public\.payout_jobs/i);
+  assert.doesNotMatch(sql, /delete\s+from\s+public\.payout_jobs/i);
+  assert.doesNotMatch(sql, /payouts\/retry|sk_live|whsec_|rk_live/);
+});
+
 test("processing fee migration is additive and does not touch payout rows", () => {
   const sql = fs.readFileSync(
     path.join(ROOT, "supabase/migrations/20261027053000_payout_processing_fee.sql"),
