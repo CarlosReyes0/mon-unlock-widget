@@ -300,13 +300,10 @@
         const teaserBlock = teaser
           ? `  <div slot="teaser">\n${teaserEsc}\n  </div>`
           : `  <div slot="teaser">\n  </div>`;
-        // Avoid literal script tags in this file. An HTML parser (the browser, or Vite)
-        // would truncate the page at the first one.
-        const scriptOpen =
-          "<" + "script type=\"module\" src=\"" + CDN_BASE + "/dist/openpaywall.js?v=" + WIDGET_VERSION + "\">";
+        // Avoid a literal script-close tag in this file; the HTML parser would truncate early.
         const scriptClose = "</" + "script>";
         return `<link rel="stylesheet" href="${CDN_BASE}/dist/openpaywall.css" />
-` + scriptOpen + scriptClose + `
+<script type="module" src="${CDN_BASE}/dist/openpaywall.js?v=${WIDGET_VERSION}">${scriptClose}
 
 <open-paywall
   article-id="${slug}"
