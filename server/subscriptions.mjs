@@ -203,12 +203,13 @@ export async function upsertWriterPlan(input) {
     signature: input.planSig,
     issuedAt: input.issuedAt,
   });
+  // Reject an over-cap price before the signature is spent.
+  const cents = normalizeMonthlyCents(input.monthlyPriceCents);
   await claimWriterSignature({
     signature: input.planSig,
     wallet: publisher,
     purpose: "plan",
   });
-  const cents = normalizeMonthlyCents(input.monthlyPriceCents);
   const allowALaCarte = input.allowALaCarte !== false;
   const rows = await supabase("writer_plans?on_conflict=publisher", {
     method: "POST",

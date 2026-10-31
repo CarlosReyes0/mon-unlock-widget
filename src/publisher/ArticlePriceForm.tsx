@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   ARTICLE_PRICE_PRESETS_CENTS,
+  MAX_ARTICLE_PRICE_CENTS,
   MIN_ARTICLE_PRICE_CENTS,
+  PRICE_ABOVE_MAXIMUM_MESSAGE,
   formatUsdFromCents,
   needsHighPriceConfirm,
   parseUsdToCents,
@@ -50,6 +52,11 @@ export function ArticlePriceForm({
     }
     if (parsed < MIN_ARTICLE_PRICE_CENTS) {
       setError("Minimum is $0.50.");
+      setPending(null);
+      return;
+    }
+    if (parsed > MAX_ARTICLE_PRICE_CENTS) {
+      setError(PRICE_ABOVE_MAXIMUM_MESSAGE);
       setPending(null);
       return;
     }

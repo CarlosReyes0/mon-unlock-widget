@@ -5,6 +5,11 @@
 import { createHash } from "node:crypto";
 import { assertPublisherNotBlocked } from "./blocked-publishers.mjs";
 import { keccak256, toBytes, parseEther, parseUnits } from "viem";
+import {
+  PRICE_ABOVE_MAXIMUM_MESSAGE,
+  parseUsdToCents,
+  usdPriceAboveCap,
+} from "./article-price.mjs";
 
 export const CDN_BASE =
   process.env.CDN_BASE || "https://openpaywall.app";
@@ -242,6 +247,14 @@ ${teaserEsc}
 </open-paywall>`;
 }
 
+export function publishRejectedForPriceCap(result) {
+  return (
+    result?.ok === false &&
+    Array.isArray(result.errors) &&
+    result.errors.includes(PRICE_ABOVE_MAXIMUM_MESSAGE)
+  );
+}
+
 export function validatePublishInput(raw) {
   const errors = [];
   const title = typeof raw?.title === "string" ? raw.title.trim() : "";
@@ -274,6 +287,8 @@ export function validatePublishInput(raw) {
         ? "price must be a USD amount (USDC)"
         : "price must be a MON amount"
     );
+  } else if (paymentAsset === "usdc" && usdPriceAboveCap(price)) {
+    errors.push(PRICE_ABOVE_MAXIMUM_MESSAGE);
   }
 
   if (errors.length) return { ok: false, errors };
@@ -309,18 +324,24 @@ export async function syncMetadataToSupabase(input, options = {}) {
       Authorization: `Bearer ${anonKey}`,
     };
     if (publishSecret) headers["x-publish-secret"] = publishSecret;
+    const registerBody = {
+      slug,
+      articleIdHash,
+      priceWei,
+      publisher: input.publisher.toLowerCase(),
+      teaser: input.teaser.trim(),
+      body: input.body.trim(),
+      paymentAsset,
+      confirmRegistered: Boolean(options.confirmRegistered),
+    };
+    if (paymentAsset === "usdc") {
+      const cents = parseUsdToCents(input.price || defaultPriceForAsset(paymentAsset));
+      if (cents != null) registerBody.priceCents = cents;
+    }
     const res = await fetch(REGISTER_ARTICLE_URL, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        slug,
-        articleIdHash,
-        priceWei,
-        publisher: input.publisher.toLowerCase(),
-        teaser: input.teaser.trim(),
-        body: input.body.trim(),
-        confirmRegistered: Boolean(options.confirmRegistered),
-      }),
+      body: JSON.stringify(registerBody),
     });
 
     if (res.ok) {

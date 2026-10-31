@@ -1,12 +1,16 @@
 // Supabase Edge Function: Indexer
-// Scans ArticleRegistered / ArticleUnlocked on MON and USDC unlock contracts.
+// Scans ArticleRegistered / ArticleUpdated / ArticleUnlocked on MON and USDC unlock contracts.
+// ArticleUpdated is the on-chain updatePrice event. USDC amounts within $0.50–$1,000
+// become price_cents. An amount over $1,000 is flagged and not stored as the card price.
 // Caller must send x-indexer-secret matching INDEXER_SECRET.
 // Authorization stays the public anon JWT so verify_jwt can stay enabled.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createPublicClient, http, parseAbiItem } from "https://esm.sh/viem@2.57.7";
 import {
+  chainPriceFields,
   decideArticleRegistration,
+  priceUpdatePatch,
   registrationUpdatePatch,
 } from "../../../src/core/indexer-registration.ts";
 import { requestHasSecret } from "../../../src/core/publish-auth.ts";
@@ -40,6 +44,9 @@ const publicClient = createPublicClient({
 const registeredEvent = parseAbiItem(
   "event ArticleRegistered(bytes32 indexed articleId, uint256 priceWei, address indexed publisher)"
 );
+const updatedEvent = parseAbiItem(
+  "event ArticleUpdated(bytes32 indexed articleId, uint256 priceWei)"
+);
 const unlockedEvent = parseAbiItem(
   "event ArticleUnlocked(address indexed reader, bytes32 indexed articleId, uint256 amount, address indexed publisher)"
 );
@@ -55,7 +62,7 @@ async function upsertArticle(log: any, paymentAsset: PaymentAsset) {
 
   const { data: existing, error: lookupError } = await supabase
     .from("articles")
-    .select("id, publisher")
+    .select("id, publisher, price_cents")
     .eq("article_id_hash", articleIdHash)
     .maybeSingle();
   if (lookupError) throw new Error(`Lookup article failed: ${lookupError.message}`);
@@ -77,8 +84,11 @@ async function upsertArticle(log: any, paymentAsset: PaymentAsset) {
       eventPublisher: publisher,
       priceWei,
       paymentAsset,
+      storedPriceCents: existing?.price_cents,
       now: new Date().toISOString(),
     });
+    const priced = chainPriceFields(paymentAsset, priceWei, existing?.price_cents);
+    if (priced.warn) console.warn(priced.warn);
     const { error } = await supabase
       .from("articles")
       .update(patch)
@@ -87,7 +97,9 @@ async function upsertArticle(log: any, paymentAsset: PaymentAsset) {
     return;
   }
 
-  const { error } = await supabase.from("articles").insert({
+  const priced = chainPriceFields(paymentAsset, priceWei);
+  if (priced.warn) console.warn(priced.warn);
+  const row: Record<string, unknown> = {
     article_id: null,
     article_id_hash: articleIdHash,
     publisher,
@@ -96,8 +108,44 @@ async function upsertArticle(log: any, paymentAsset: PaymentAsset) {
     active: true,
     registration_status: "registered",
     registered_at: new Date().toISOString(),
-  });
+  };
+  if ("price_cents" in priced) row.price_cents = priced.price_cents;
+  const { error } = await supabase.from("articles").insert(row);
   if (error) throw new Error(`Insert article failed: ${error.message}`);
+}
+
+async function applyPriceUpdate(log: any, paymentAsset: PaymentAsset) {
+  const articleIdHash = log.args.articleId as string;
+  const priceWei = log.args.priceWei.toString();
+  const { data: existing, error: lookupError } = await supabase
+    .from("articles")
+    .select("id, publisher, price_cents")
+    .eq("article_id_hash", articleIdHash)
+    .maybeSingle();
+  if (lookupError) throw new Error(`Lookup article failed: ${lookupError.message}`);
+  if (!existing) {
+    console.warn("indexer: price update ignored");
+    return;
+  }
+  const decision = decideArticleRegistration({
+    rowExists: true,
+    existingPublisher: existing.publisher,
+    eventPublisher: String(existing.publisher || ""),
+    blockedList: Deno.env.get("BLOCKED_PUBLISHERS"),
+  });
+  if (decision.action === "skip") {
+    if (decision.warn) console.warn(decision.warn);
+    return;
+  }
+  const { patch, warn } = priceUpdatePatch({
+    paymentAsset,
+    priceWei,
+    storedPriceCents: existing.price_cents,
+    now: new Date().toISOString(),
+  });
+  if (warn) console.warn(warn);
+  const { error } = await supabase.from("articles").update(patch).eq("article_id_hash", articleIdHash);
+  if (error) throw new Error(`Update article price failed: ${error.message}`);
 }
 
 async function insertUnlock(log: any, paymentAsset: PaymentAsset) {
@@ -160,6 +208,7 @@ async function indexContract(
   }
 
   const registeredLogs: any[] = [];
+  const updatedLogs: any[] = [];
   const unlockedLogs: any[] = [];
   let scannedUpTo = fromBlock - 1n;
 
@@ -176,6 +225,14 @@ async function indexContract(
     });
     registeredLogs.push(...regChunk);
 
+    const updatedChunk = await publicClient.getLogs({
+      address: contract,
+      event: updatedEvent,
+      fromBlock: from,
+      toBlock: to,
+    });
+    updatedLogs.push(...updatedChunk);
+
     const unlockChunk = await publicClient.getLogs({
       address: contract,
       event: unlockedEvent,
@@ -187,13 +244,14 @@ async function indexContract(
   }
 
   for (const log of registeredLogs) await upsertArticle(log, paymentAsset);
+  for (const log of updatedLogs) await applyPriceUpdate(log, paymentAsset);
   for (const log of unlockedLogs) await insertUnlock(log, paymentAsset);
 
   if (scannedUpTo >= fromBlock) {
     await setLastIndexedBlock(contract, scannedUpTo);
   }
 
-  return `${paymentAsset}: ${registeredLogs.length} articles, ${unlockedLogs.length} unlocks through ${scannedUpTo}`;
+  return `${paymentAsset}: ${registeredLogs.length} articles, ${updatedLogs.length} price updates, ${unlockedLogs.length} unlocks through ${scannedUpTo}`;
 }
 
 Deno.serve(async (req) => {

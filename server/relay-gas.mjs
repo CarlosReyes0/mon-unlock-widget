@@ -19,7 +19,7 @@
  * only. It does not include the address or the balance.
  */
 import { createPublicClient, createWalletClient, http, keccak256, parseEther, toBytes } from "viem";
-import { storedPriceCents } from "./article-price.mjs";
+import { articleAbovePriceCap, storedPriceCents, PRICE_ABOVE_MAXIMUM_MESSAGE } from "./article-price.mjs";
 import { monadRpcUrl, relayerAccount, relayerConfigured } from "./relay-register.mjs";
 import {
   assertRecentWalletSignature,
@@ -31,7 +31,7 @@ const DEFAULT_LOW_BALANCE_WEI = parseEther("1");
 const LOW_BALANCE_LOG_MS = 10 * 60 * 1000;
 const GAS_DROP = parseEther("0.05");
 const GAS_NEED = parseEther("0.05");
-const ARTICLE_COLS = "article_id,article_id_hash,price_wei,price_cents";
+const ARTICLE_COLS = "article_id,article_id_hash,price_wei,price_cents,payment_asset";
 const lowBalanceState = { at: 0 };
 
 function httpError(message, status = 400, fallback = false) {
@@ -276,6 +276,11 @@ export async function relayGasDrip(body, ctx = {}, deps = {}) {
     throw httpError("article_lookup_unavailable", 503, true);
   }
   if (!article) throw httpError("article_not_found", 403);
+  if (articleAbovePriceCap(article)) {
+    const err = httpError("price_above_maximum", 403);
+    err.publicMessage = PRICE_ABOVE_MAXIMUM_MESSAGE;
+    throw err;
+  }
   if (!articleHasUnlockPrice(article)) throw httpError("article_unpriced", 403);
 
   if (!(deps.configured ?? relayerConfigured)()) {

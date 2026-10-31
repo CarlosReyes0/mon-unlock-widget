@@ -192,8 +192,9 @@ async function prepareArticleFiatCharge(input) {
 
   const priced = resolveUnlockChargeCents(article, input.amountUsdCents);
   if (!priced.ok) {
-    const err = new Error(priced.error);
+    const err = new Error(priced.error === "amount_too_large" ? "Maximum is $1,000.00." : priced.error);
     err.status = 400;
+    err.code = priced.error;
     throw err;
   }
   const amountUsdCents = priced.cents;

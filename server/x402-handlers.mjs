@@ -3,7 +3,7 @@
  * Payment gating lives in x402.mjs; this file maps paid requests onto
  * existing publishArticleForAgent / gated body loaders.
  */
-import { publishArticleForAgent, validatePublishInput } from "./publish.mjs";
+import { publishArticleForAgent, publishRejectedForPriceCap, validatePublishInput } from "./publish.mjs";
 import { resolveAllowALaCarte } from "./access.mjs";
 import {
   getWriterPlan,
@@ -65,6 +65,9 @@ export async function handleX402Publish(req, res, { readBody, sendJson }) {
   );
 
   if (!validated.ok && paymentPresent) {
+    return sendJson(res, 400, { ok: false, errors: validated.errors });
+  }
+  if (publishRejectedForPriceCap(validated)) {
     return sendJson(res, 400, { ok: false, errors: validated.errors });
   }
 
@@ -219,6 +222,12 @@ export async function handleX402Unlock(req, res, { url, readBody, sendJson }) {
   }
 
   const amountAtomic = usdcAtomicForListing(meta.price_wei, meta.payment_asset, meta.price_cents);
+  if (amountAtomic == null) {
+    return sendJson(res, 400, {
+      error: "price_above_maximum",
+      message: "Maximum is $1,000.00.",
+    });
+  }
   const origin = publicOriginFromReq(req);
   const listingNote =
     String(meta.payment_asset || "usdc").toLowerCase() === "usdc"

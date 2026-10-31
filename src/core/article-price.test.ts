@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   DEFAULT_ARTICLE_PRICE_CENTS,
+  MAX_ARTICLE_PRICE_CENTS,
   MIN_ARTICLE_PRICE_CENTS,
   cardNetCents,
   formatUsdFromCents,
@@ -10,6 +11,7 @@ import {
   parseUsdToCents,
   priceNetLine,
   readLastPublishedPriceCents,
+  usdcAtomicAboveCap,
   usdcAtomicForCents,
   writeLastPublishedPriceCents,
 } from "./article-price.js";
@@ -23,7 +25,15 @@ describe("article price", () => {
     assert.deepEqual(parseArticlePriceCents("0.50"), { ok: false, error: "invalid_price" });
     assert.deepEqual(parseArticlePriceCents(50.5), { ok: false, error: "invalid_price" });
     assert.deepEqual(parseArticlePriceCents(50), { ok: true, cents: 50 });
-    assert.deepEqual(parseArticlePriceCents("250000"), { ok: true, cents: 250000 });
+    assert.equal(MAX_ARTICLE_PRICE_CENTS, 100_000);
+    assert.deepEqual(parseArticlePriceCents(100_000), { ok: true, cents: 100_000 });
+    assert.deepEqual(parseArticlePriceCents("100000"), { ok: true, cents: 100_000 });
+    assert.deepEqual(parseArticlePriceCents(100_001), { ok: false, error: "price_above_maximum" });
+    assert.deepEqual(parseArticlePriceCents("100001"), { ok: false, error: "price_above_maximum" });
+    assert.equal(usdcAtomicAboveCap(1_000_000_000n), false);
+    assert.equal(usdcAtomicAboveCap("1000000000"), false);
+    assert.equal(usdcAtomicAboveCap(1_000_010_000n), true);
+    assert.equal(usdcAtomicAboveCap("1000010000"), true);
   });
 
   it("parses a USD field into cents", () => {

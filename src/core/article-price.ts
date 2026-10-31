@@ -1,11 +1,13 @@
 /**
  * Per-article USD price for Write, publish, and listing edits.
- * Stripe's USD minimum is $0.50. There is no product maximum.
+ * Stripe's USD minimum is $0.50. The product maximum is $1,000.00.
  * The card figure estimates 2.9% + $0.30 so a writer can pick a price.
  * The payout deducts Stripe's fee on that charge, not this estimate. USDC net is the price.
  */
 
 export const MIN_ARTICLE_PRICE_CENTS = 50;
+export const MAX_ARTICLE_PRICE_CENTS = 100_000;
+export const PRICE_ABOVE_MAXIMUM_MESSAGE = "Maximum is $1,000.00.";
 export const DEFAULT_ARTICLE_PRICE_CENTS = 50;
 /** Soft confirm when a typed price is above this. $25.00 itself does not confirm. */
 export const HIGH_PRICE_CONFIRM_CENTS = 2500;
@@ -43,9 +45,17 @@ export function parseUsdToCents(raw: string): number | null {
   return cents;
 }
 
+export type ArticlePriceError = "invalid_price" | "price_below_minimum" | "price_above_maximum";
+
+export function articlePriceErrorMessage(error: ArticlePriceError): string {
+  if (error === "price_above_maximum") return PRICE_ABOVE_MAXIMUM_MESSAGE;
+  if (error === "price_below_minimum") return "Minimum is $0.50.";
+  return "Enter a USD amount.";
+}
+
 export function parseArticlePriceCents(
   value: unknown
-): { ok: true; cents: number } | { ok: false; error: "invalid_price" | "price_below_minimum" } {
+): { ok: true; cents: number } | { ok: false; error: ArticlePriceError } {
   let cents: number;
   if (typeof value === "number") {
     cents = value;
@@ -56,7 +66,18 @@ export function parseArticlePriceCents(
   }
   if (!Number.isSafeInteger(cents)) return { ok: false, error: "invalid_price" };
   if (cents < MIN_ARTICLE_PRICE_CENTS) return { ok: false, error: "price_below_minimum" };
+  if (cents > MAX_ARTICLE_PRICE_CENTS) return { ok: false, error: "price_above_maximum" };
   return { ok: true, cents };
+}
+
+/** True when a USDC amount (6 decimals) is above $1,000.00. $1,000.00 itself is allowed. */
+export function usdcAtomicAboveCap(value: bigint | string | number): boolean {
+  try {
+    const atomic = typeof value === "bigint" ? value : BigInt(String(value).trim());
+    return atomic > BigInt(MAX_ARTICLE_PRICE_CENTS) * 10_000n;
+  } catch {
+    return false;
+  }
 }
 
 /** USDC base units (6 decimals). $0.50 → 500_000n. */

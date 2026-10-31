@@ -265,15 +265,26 @@ export function PublisherApp() {
   }
 
   async function savePlan() {
+    const cents = Math.round(Number(priceDollars) * 100);
+    if (!Number.isFinite(cents) || cents < 50) {
+      setPlanMsg("Minimum is $0.50.");
+      return;
+    }
+    if (cents > 100_000) {
+      setPlanMsg("Maximum is $1,000.00 per month.");
+      return;
+    }
     const publisher = address();
-    if (!publisher) return;
+    if (!publisher) {
+      setPlanMsg("Connect a wallet to save the plan.");
+      return;
+    }
     const provider = window.__monPublisherProvider as Eip1193Provider | undefined;
     if (!provider) {
       setPlanMsg("Connect a wallet to save the plan.");
       return;
     }
     setPlanMsg("Approve the plan signature…");
-    const cents = Math.round(Number(priceDollars) * 100);
     const allowALaCarte = allowBuy;
     try {
       const issuedAt = new Date().toISOString();
@@ -385,54 +396,62 @@ export function PublisherApp() {
           <PublisherAuth variant="page" onReadyChange={onReadyChange} />
         </div>
 
+        <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
+          <h2 className="mon-pub-shell__card-title">Get paid</h2>
+          <p className="mon-pub-auth__hint">
+            Card: connect payments, then money goes to your bank. Stripe's fee is deducted.
+          </p>
+          <p className="mon-pub-auth__hint">
+            USDC: a reader pays, it goes to the wallet you are signed in with. Automatic. No extra
+            setup.
+          </p>
+          <label className="mon-pub-shell__field-label" htmlFor="planPrice">
+            Monthly price (USD)
+          </label>
+          <p className="mon-pub-auth__hint">Maximum $1,000.00 per month.</p>
+          <input
+            id="planPrice"
+            type="number"
+            min="0.50"
+            max="1000"
+            step="0.01"
+            value={priceDollars}
+            onChange={(e) => setPriceDollars(e.target.value)}
+            className="mon-pub-shell__input"
+          />
+          <label className="mon-pub-shell__check">
+            <input
+              type="checkbox"
+              checked={allowBuy}
+              onChange={(e) => setAllowBuy(e.target.checked)}
+            />
+            Allow pay-per-article
+          </label>
+          <div className="mon-pub-shell__links">
+            <button type="button" className="mon-pub-auth__btn" onClick={() => void savePlan()}>
+              Save
+            </button>
+            {signedIn ? (
+              <button
+                type="button"
+                className="mon-pub-auth__btn mon-pub-auth__btn--primary"
+                disabled={payoutBusy}
+                onClick={() => void setupStripePayouts()}
+              >
+                {payoutBusy ? "Opening…" : "Connect payments"}
+              </button>
+            ) : null}
+          </div>
+          {planMsg ? (
+            <p className={planMsg.startsWith("Maximum") || planMsg.startsWith("Minimum") ? "mon-pub-auth__error" : "mon-pub-auth__hint"}>
+              {planMsg}
+            </p>
+          ) : null}
+          {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}
+        </div>
+
         {signedIn ? (
           <>
-            <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
-              <h2 className="mon-pub-shell__card-title">Get paid</h2>
-              <p className="mon-pub-auth__hint">
-                Card: connect payments, then money goes to your bank. Stripe's fee is deducted.
-              </p>
-              <p className="mon-pub-auth__hint">
-                USDC: a reader pays, it goes to the wallet you are signed in with. Automatic. No extra
-                setup.
-              </p>
-              <label className="mon-pub-shell__field-label" htmlFor="planPrice">
-                Monthly price (USD)
-              </label>
-              <input
-                id="planPrice"
-                type="number"
-                min="0.50"
-                step="0.50"
-                value={priceDollars}
-                onChange={(e) => setPriceDollars(e.target.value)}
-                className="mon-pub-shell__input"
-              />
-              <label className="mon-pub-shell__check">
-                <input
-                  type="checkbox"
-                  checked={allowBuy}
-                  onChange={(e) => setAllowBuy(e.target.checked)}
-                />
-                Allow pay-per-article
-              </label>
-              <div className="mon-pub-shell__links">
-                <button type="button" className="mon-pub-auth__btn" onClick={() => void savePlan()}>
-                  Save
-                </button>
-                <button
-                  type="button"
-                  className="mon-pub-auth__btn mon-pub-auth__btn--primary"
-                  disabled={payoutBusy}
-                  onClick={() => void setupStripePayouts()}
-                >
-                  {payoutBusy ? "Opening…" : "Connect payments"}
-                </button>
-              </div>
-              {planMsg ? <p className="mon-pub-auth__hint">{planMsg}</p> : null}
-              {payoutMsg ? <p className="mon-pub-auth__error">{payoutMsg}</p> : null}
-            </div>
-
             <div className="mon-pub-shell__card" style={{ marginTop: "1.25rem" }}>
               <h2 className="mon-pub-shell__card-title">Following & memberships</h2>
               {rows.length === 0 ? (

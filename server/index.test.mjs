@@ -665,6 +665,40 @@ test("POST /api/agents/publish/validate rejects bad payload", async () => {
   assert.ok(Array.isArray(body.errors));
 });
 
+test("POST /api/agents/publish/validate allows $1,000.00 and rejects $1,000.01", async () => {
+  const base = {
+    title: "Agent demo",
+    articleId: "agent-demo-cap",
+    teaser: "Preview",
+    body: "Full body",
+    publisher: "0x1111111111111111111111111111111111111111",
+    paymentAsset: "usdc",
+  };
+  const atCap = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...base, price: "1000.00" }),
+  });
+  assert.equal(atCap.status, 200);
+  const over = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...base, price: "1000.01" }),
+  });
+  assert.equal(over.status, 400);
+  const body = await over.json();
+  assert.equal(body.ok, false);
+  assert.ok(body.errors.includes("Maximum is $1,000.00."));
+  const publish = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...base, price: "1000.01" }),
+  });
+  assert.equal(publish.status, 400);
+  const published = await publish.json();
+  assert.ok(published.errors.includes("Maximum is $1,000.00."));
+});
+
 test("POST /api/agents/publish/validate accepts valid payload", async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/api/agents/publish/validate`, {
     method: "POST",
